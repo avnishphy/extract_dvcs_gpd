@@ -1,0 +1,38 @@
+name: cpu-ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./tests/run.sh static
+  cpu-image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: containers/Dockerfile
+          target: runtime
+          load: true
+          tags: extract-dvcs-gpd:ci-cpu
+          build-args: TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
+      - run: docker run --rm extract-dvcs-gpd:ci-cpu partons-bridge --self-test
+      - run: docker run --rm extract-dvcs-gpd:ci-cpu shell -lc 'python -c "import torch,sbi,extract_dvcs_cff; assert not torch.cuda.is_available()" && pip check'
+      - uses: anchore/sbom-action@v0
+        with:
+          image: extract-dvcs-gpd:ci-cpu
+          format: spdx-json
+          output-file: sbom-cpu.spdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cpu-sbom
+          path: sbom-cpu.spdx.json

@@ -1,0 +1,8 @@
+# Generated relocatable bridge configuration. One process, one worker.
+log.file.path = @BRIDGE_LOGGER_PATH@
+xml.schema.file.path = @PARTONS_SCHEMA_PATH@
+computation.nb.processor = 1
+gpd.service.batch.size = 1000
+collinear_distribution.service.batch.size = 1000
+ccf.service.batch.size = 1000
+observable.service.batch.size = 1000

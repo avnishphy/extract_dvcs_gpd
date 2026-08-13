@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "extract-dvcs-gpd"
+version = "0.1.0"
+description = "Containerized posterior inference workflow for proton GPDs"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy==1.26.4",
+  "PyYAML==6.0.3",
+  "munch==4.0.0",
+  "particle==0.26.1",
+]
+
+[project.optional-dependencies]
+neural = [
+  "matplotlib==3.10.8",
+  "scipy==1.17.1",
+  "torch==2.11.0",
+  "sbi==0.26.1",
+  "zuko==1.6.0",
+  "optuna==4.5.0",
+  "tqdm==4.70.0",
+]
+
+[project.scripts]
+dvcs-pseudodata = "extract_dvcs_cff.cli.pseudodata:main"
+dvcs-infer = "extract_dvcs_cff.cli.user:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(extract_dvcs_gpd VERSION 0.1.0 LANGUAGES CXX)
+include(GNUInstallDirs)
+option(DVCS_BUILD_NATIVE_TESTS "Build retained native physics tests" ON)
+add_subdirectory(cpp/partons_bridge)

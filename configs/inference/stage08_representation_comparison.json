@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "campaign": "stage08_zero_skewness_representation_comparison_v1",
+  "truth": {
+    "alpha": -0.55,
+    "beta": 3.4,
+    "normalization_nuisance": 0.35
+  },
+  "fixed_parameters": {
+    "conformal_trajectory_slope": {"value": 1.0, "unit": "GeV-2"},
+    "dd_profile_b": 2.0,
+    "dd_t_slope": {"value": 1.0, "unit": "GeV-2"}
+  },
+  "priors": {
+    "common_small_x_shape": {
+      "minimum": 0.1,
+      "maximum": 1.0,
+      "distribution": "uniform",
+      "conformal_mapping": "a=-alpha"
+    },
+    "large_x_shape": {
+      "minimum": 2.0,
+      "maximum": 6.0,
+      "distribution": "uniform",
+      "conformal_mapping": "c=beta"
+    },
+    "normalization_nuisance": {
+      "distribution": "standard_normal"
+    }
+  },
+  "grid": [
+    {"x": 0.04, "xi": 0.0, "t_GeV2": -0.10},
+    {"x": 0.08, "xi": 0.0, "t_GeV2": -0.20},
+    {"x": 0.15, "xi": 0.0, "t_GeV2": -0.30},
+    {"x": 0.23, "xi": 0.0, "t_GeV2": -0.10},
+    {"x": 0.35, "xi": 0.0, "t_GeV2": -0.25},
+    {"x": 0.48, "xi": 0.0, "t_GeV2": -0.20},
+    {"x": 0.65, "xi": 0.0, "t_GeV2": -0.35},
+    {"x": 0.82, "xi": 0.0, "t_GeV2": -0.15}
+  ],
+  "uncertainty": {
+    "relative_sigma": 0.07,
+    "absolute_floor": 0.025,
+    "correlation": 0.25,
+    "normalization_response": 0.03,
+    "covariance_policy": "fixed_at_main_truth_for_all_trials"
+  },
+  "numerics": {
+    "parameter_grid_points_per_axis": 81,
+    "bridge_parameter_chunk_size": 64,
+    "posterior_draws": 4000,
+    "exact_reevaluation_draws": 32
+  },
+  "seeds": {
+    "pseudodata": 8082026,
+    "posterior": 8082027,
+    "posterior_predictive": 8082028,
+    "calibration": 8082029
+  },
+  "calibration": {
+    "trials": 100,
+    "rank_bins": 10,
+    "chi_square_maximum": 21.67,
+    "coverage_levels": [0.5, 0.8, 0.9],
+    "maximum_standard_error_deviation": 3.5
+  },
+  "gates": {
+    "main_truth_in_90_percent": true,
+    "posterior_predictive_minimum_points_in_90_percent": 6,
+    "posterior_predictive_p_value_interval": [0.02, 0.98],
+    "exact_backend_max_abs_difference": 1e-12,
+    "invalid_simulation_rate_maximum": 0.0
+  }
+}

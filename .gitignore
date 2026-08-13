@@ -1,0 +1,15 @@
+.dvcs/
+workspace/
+results/
+cache/
+build/
+dist/
+*.sif
+*.partial
+*.log
+__pycache__/
+*.py[cod]
+.pytest_cache/
+jobs/jlab_ifarm/resources.env
+jobs/jlab_ifarm/logs/
+user/workspaces/

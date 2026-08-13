@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "operation": "batch_evaluate_evolved_dd_gpd",
+  "requests": [
+    {
+      "request_id": "stage06-q0",
+      "representation": "stage06_lo_apfel_evolved_reduced_dd_v1",
+      "gpd_type": "H",
+      "flavor": "up",
+      "parton_content": "reduced_up_valence_input_evolved_fixed_nf3",
+      "parameters": {
+        "a": 0.55,
+        "c": 3.4,
+        "profile_b": 2.0,
+        "t_slope": {"value": 1.0, "unit": "GeV-2"}
+      },
+      "quadrature_order": 128,
+      "kinematics": {
+        "x": 0.2,
+        "xi": 0.1,
+        "t": {"value": -0.2, "unit": "GeV2"},
+        "q0_squared": {"value": 4.0, "unit": "GeV2"},
+        "mu_f_squared": {"value": 4.0, "unit": "GeV2"}
+      },
+      "evolution_configuration": {
+        "module": "GPDEvolutionApfel",
+        "gpd_evolution_order": "LO",
+        "factorization_scheme": "MSbar",
+        "alpha_s": {
+          "module": "RunningAlphaStrongApfel",
+          "order": "LO",
+          "scheme": "MSbar",
+          "reference_value": 0.118,
+          "reference_scale": {"value": 91.1876, "unit": "GeV"},
+          "thresholds": [0, 0, 0]
+        },
+        "active_flavors": {
+          "module": "ActiveFlavorsThresholdsConstant",
+          "n_flavors": 3
+        },
+        "coefficient_function_order": null,
+        "renormalization_scale": null,
+        "twist": null
+      }
+    },
+    {
+      "request_id": "stage06-muf2-16",
+      "representation": "stage06_lo_apfel_evolved_reduced_dd_v1",
+      "gpd_type": "H",
+      "flavor": "up",
+      "parton_content": "reduced_up_valence_input_evolved_fixed_nf3",
+      "parameters": {
+        "a": 0.55,
+        "c": 3.4,
+        "profile_b": 2.0,
+        "t_slope": {"value": 1.0, "unit": "GeV-2"}
+      },
+      "quadrature_order": 128,
+      "kinematics": {
+        "x": 0.2,
+        "xi": 0.1,
+        "t": {"value": -0.2, "unit": "GeV2"},
+        "q0_squared": {"value": 4.0, "unit": "GeV2"},
+        "mu_f_squared": {"value": 16.0, "unit": "GeV2"}
+      },
+      "evolution_configuration": {
+        "module": "GPDEvolutionApfel",
+        "gpd_evolution_order": "LO",
+        "factorization_scheme": "MSbar",
+        "alpha_s": {
+          "module": "RunningAlphaStrongApfel",
+          "order": "LO",
+          "scheme": "MSbar",
+          "reference_value": 0.118,
+          "reference_scale": {"value": 91.1876, "unit": "GeV"},
+          "thresholds": [0, 0, 0]
+        },
+        "active_flavors": {
+          "module": "ActiveFlavorsThresholdsConstant",
+          "n_flavors": 3
+        },
+        "coefficient_function_order": null,
+        "renormalization_scale": null,
+        "twist": null
+      }
+    }
+  ]
+}

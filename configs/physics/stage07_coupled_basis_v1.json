@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "configuration_id": "stage07_lo_apfel_coupled_fixed_nf3_msbar_v1",
+  "status": "verified_component_contract",
+  "representation": "stage07_coupled_basis_dd_v1",
+  "input_scale_squared": {
+    "value": 4.0,
+    "unit": "GeV2"
+  },
+  "input_basis": {
+    "name": "apfel_nf3_sigma_t3_gluon",
+    "components": [
+      "sigma",
+      "t3",
+      "gluon"
+    ],
+    "light_flavors": [
+      "up",
+      "down",
+      "strange"
+    ],
+    "heavy_input": "zero",
+    "quark_convention": "APFEL++ evolves x times q and x times qbar",
+    "gluon_convention": "BasisInjectionGPD stores x times H_g in the PARTONS gluon field"
+  },
+  "gpd_type": "H",
+  "gpd_evolution": {
+    "module": "GPDEvolutionApfel",
+    "order": "LO",
+    "scheme": "MSbar",
+    "factorization_scale_squared_range": {
+      "minimum": 4.0,
+      "maximum": 16.0,
+      "unit": "GeV2"
+    }
+  },
+  "alpha_s": {
+    "module": "RunningAlphaStrongApfel",
+    "order": "LO",
+    "scheme": "MSbar",
+    "reference_value": 0.118,
+    "reference_scale": {
+      "value": 91.1876,
+      "unit": "GeV"
+    },
+    "argument": "factorization_scale",
+    "thresholds": [
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "active_flavors": {
+    "module": "ActiveFlavorsThresholdsConstant",
+    "n_flavors": 3,
+    "variable_flavor_threshold_crossing": false
+  },
+  "coefficient_function_order": null,
+  "renormalization_scale": null,
+  "twist": null,
+  "analysis_order_label": null
+}

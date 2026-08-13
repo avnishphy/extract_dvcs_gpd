@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "operation": "batch_evaluate_shadow_dvcs",
+  "requests": [
+    {
+      "request_id": "stage09-batch-baseline",
+      "representation": "stage09_gk16_plus_bdmms21_shadow_v1",
+      "parameters": {
+        "baseline_coefficient": 1.0,
+        "shadow_coefficient": 0.0
+      },
+      "gpd_diagnostic_kinematics": {
+        "x": 0.35,
+        "xi": 0.1,
+        "t": {"value": -0.1, "unit": "GeV2"},
+        "mu_f_squared": {"value": 4.0, "unit": "GeV2"},
+        "mu_r_squared": {"value": 4.0, "unit": "GeV2"}
+      },
+      "observable_kinematics": {
+        "x_b": 0.2,
+        "t": {"value": -0.1, "unit": "GeV2"},
+        "Q2": {"value": 2.0, "unit": "GeV2"},
+        "beam_energy": {"value": 6.0, "unit": "GeV"},
+        "phi": {"value": 0.0, "unit": "rad"}
+      },
+      "theory_configuration": {
+        "cff_module": "DVCSCFFStandard",
+        "process_module": "DVCSProcessGV08",
+        "observable_module": "DVCSCrossSectionUUMinus",
+        "xi_converter_module": "DVCSXiConverterXBToXi",
+        "scales_module": "DVCSScalesQ2Multiplier",
+        "coefficient_function_order": "NLO",
+        "gpd_evolution_order": null,
+        "alpha_s": {
+          "module": "RunningAlphaStrongStandard",
+          "implementation_order": "four_loop",
+          "scheme": "MSbar",
+          "reference_value": 0.1184,
+          "reference_scale": {"value": 91.1876, "unit": "GeV"},
+          "flavor_threshold_source": "installed_quark_masses",
+          "threshold_matching_verified": false
+        },
+        "factorization_scale_squared": "Q2",
+        "renormalization_scale_squared": "Q2",
+        "twist": null,
+        "analysis_order_label": null
+      }
+    },
+    {
+      "request_id": "stage09-batch-shadow",
+      "representation": "stage09_gk16_plus_bdmms21_shadow_v1",
+      "parameters": {
+        "baseline_coefficient": 1.0,
+        "shadow_coefficient": 1.0
+      },
+      "gpd_diagnostic_kinematics": {
+        "x": 0.35,
+        "xi": 0.1,
+        "t": {"value": -0.1, "unit": "GeV2"},
+        "mu_f_squared": {"value": 4.0, "unit": "GeV2"},
+        "mu_r_squared": {"value": 4.0, "unit": "GeV2"}
+      },
+      "observable_kinematics": {
+        "x_b": 0.2,
+        "t": {"value": -0.1, "unit": "GeV2"},
+        "Q2": {"value": 2.0, "unit": "GeV2"},
+        "beam_energy": {"value": 6.0, "unit": "GeV"},
+        "phi": {"value": 0.0, "unit": "rad"}
+      },
+      "theory_configuration": {
+        "cff_module": "DVCSCFFStandard",
+        "process_module": "DVCSProcessGV08",
+        "observable_module": "DVCSCrossSectionUUMinus",
+        "xi_converter_module": "DVCSXiConverterXBToXi",
+        "scales_module": "DVCSScalesQ2Multiplier",
+        "coefficient_function_order": "NLO",
+        "gpd_evolution_order": null,
+        "alpha_s": {
+          "module": "RunningAlphaStrongStandard",
+          "implementation_order": "four_loop",
+          "scheme": "MSbar",
+          "reference_value": 0.1184,
+          "reference_scale": {"value": 91.1876, "unit": "GeV"},
+          "flavor_threshold_source": "installed_quark_masses",
+          "threshold_matching_verified": false
+        },
+        "factorization_scale_squared": "Q2",
+        "renormalization_scale_squared": "Q2",
+        "twist": null,
+        "analysis_order_label": null
+      }
+    }
+  ]
+}

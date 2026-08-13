@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+config="${root}/.dvcs/install.env"
+if [[ ! -f "${config}" ]]; then
+    echo "not installed; run ./install.sh --profile local --accelerator auto" >&2
+    exit 2
+fi
+# Job scripts and interactive callers may override the install-time defaults.
+runtime_accelerator="${DVCS_ACCELERATOR-}"
+runtime_accelerator_set="${DVCS_ACCELERATOR+x}"
+runtime_workspace="${DVCS_WORKSPACE-}"
+runtime_workspace_set="${DVCS_WORKSPACE+x}"
+runtime_results="${DVCS_RESULTS-}"
+runtime_results_set="${DVCS_RESULTS+x}"
+runtime_cache="${DVCS_CACHE-}"
+runtime_cache_set="${DVCS_CACHE+x}"
+runtime_database="${DVCS_DATABASE-}"
+runtime_database_set="${DVCS_DATABASE+x}"
+# shellcheck disable=SC1090
+source "${config}"
+[[ -n "${runtime_accelerator_set}" ]] && DVCS_ACCELERATOR="${runtime_accelerator}"
+[[ -n "${runtime_workspace_set}" ]] && DVCS_WORKSPACE="${runtime_workspace}"
+[[ -n "${runtime_results_set}" ]] && DVCS_RESULTS="${runtime_results}"
+[[ -n "${runtime_cache_set}" ]] && DVCS_CACHE="${runtime_cache}"
+[[ -n "${runtime_database_set}" ]] && DVCS_DATABASE="${runtime_database}"
+
+if [[ "${DVCS_PROFILE}" == jlab_ifarm ]]; then
+    apptainer_gpu_args=()
+    if [[ "${DVCS_ACCELERATOR}" == cuda ]]; then
+        apptainer_gpu_args=(--nv)
+    elif [[ "${DVCS_ACCELERATOR}" == auto ]] && \
+         [[ -n "${CUDA_VISIBLE_DEVICES:-}" ]] && \
+         [[ "${CUDA_VISIBLE_DEVICES}" != NoDevFiles ]]; then
+        apptainer_gpu_args=(--nv)
+    fi
+    exec apptainer run --cleanenv "${apptainer_gpu_args[@]}" \
+      --bind "${DVCS_WORKSPACE}:/workspace" --bind "${DVCS_RESULTS}:/results" \
+      --bind "${DVCS_CACHE}:/cache" --bind "${DVCS_DATABASE}:/database:ro" \
+      --env "DVCS_ACCELERATOR=${DVCS_ACCELERATOR}" \
+      --env "DVCS_IMAGE_DIGEST=${DVCS_IMAGE_DIGEST}" "${DVCS_IMAGE}" "$@"
+fi
+container_gpu_args=()
+container_engine_args=()
+if [[ "${DVCS_ENGINE}" == podman ]]; then
+    container_engine_args=(--security-opt label=disable)
+fi
+if [[ "${DVCS_ACCELERATOR}" == cuda ]] || \
+   { [[ "${DVCS_ACCELERATOR}" == auto ]] && [[ -n "${DVCS_CONTAINER_GPU_ARGS:-}" ]]; }; then
+    if [[ "${DVCS_ENGINE}" == podman ]]; then
+        container_gpu_args=(--device nvidia.com/gpu=all)
+    else
+        container_gpu_args=(--gpus all)
+    fi
+fi
+exec "${DVCS_ENGINE}" run --rm --user "$(id -u):$(id -g)" \
+  "${container_engine_args[@]}" \
+  --cpuset-cpus "$(python3 -c 'import os; print(",".join(map(str,sorted(os.sched_getaffinity(0)))))')" \
+  "${container_gpu_args[@]}" \
+  -e "DVCS_ACCELERATOR=${DVCS_ACCELERATOR}" \
+  -e "DVCS_IMAGE_DIGEST=${DVCS_IMAGE_DIGEST}" \
+  -v "${DVCS_WORKSPACE}:/workspace" -v "${DVCS_RESULTS}:/results" \
+  -v "${DVCS_CACHE}:/cache" -v "${DVCS_DATABASE}:/database:ro" \
+  "${DVCS_IMAGE}" "$@"

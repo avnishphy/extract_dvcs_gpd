@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "operation": "evaluate_dd_gpd",
+  "request_id": "stage03-reference",
+  "representation": "stage03_fixed_scale_up_valence_v1",
+  "gpd_type": "H",
+  "flavor": "up",
+  "parton_content": "reduced_up_valence_forward_input_no_gluon_no_sea",
+  "parameters": {
+    "a": 0.5,
+    "c": 3.0,
+    "profile_b": 2.0,
+    "t_slope": {"value": 1.0, "unit": "GeV-2"}
+  },
+  "quadrature_order": 128,
+  "kinematics": {
+    "x": 0.05,
+    "xi": 0.3,
+    "t": {"value": -0.2, "unit": "GeV2"},
+    "q0_squared": {"value": 4.0, "unit": "GeV2"},
+    "mu_f_squared": {"value": 4.0, "unit": "GeV2"}
+  }
+}

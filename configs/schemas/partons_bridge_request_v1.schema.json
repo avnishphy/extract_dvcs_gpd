@@ -1,0 +1,2115 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://local.invalid/extract_dvcs_cff/partons_bridge_request_v1.schema.json",
+    "title": "PARTONS bridge request v1",
+    "oneOf": [
+        {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "schema_version",
+                "operation",
+                "request_id",
+                "module",
+                "gpd_type",
+                "kinematics"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "evaluate_gpd"
+                },
+                "request_id": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "module": {
+                    "const": "GPDGK16"
+                },
+                "gpd_type": {
+                    "const": "H"
+                },
+                "kinematics": {
+                    "$ref": "#/$defs/kinematics"
+                }
+            }
+        },
+        {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "schema_version",
+                "operation",
+                "requests"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "batch_evaluate_gpd"
+                },
+                "requests": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/$defs/evaluation"
+                    }
+                }
+            }
+        },
+        {
+            "allOf": [
+                {
+                    "$ref": "#/$defs/native_model_holdout_evaluation"
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "schema_version",
+                        "operation"
+                    ],
+                    "properties": {
+                        "schema_version": {
+                            "const": 1
+                        },
+                        "operation": {
+                            "const": "evaluate_native_model_holdout_dvcs"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "schema_version",
+                "operation",
+                "requests"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "batch_evaluate_native_model_holdout_dvcs"
+                },
+                "requests": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/$defs/native_model_holdout_evaluation"
+                    }
+                }
+            }
+        },
+        {
+            "allOf": [
+                {
+                    "$ref": "#/$defs/dd_evaluation"
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "schema_version",
+                        "operation"
+                    ],
+                    "properties": {
+                        "schema_version": {
+                            "const": 1
+                        },
+                        "operation": {
+                            "const": "evaluate_dd_gpd"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "schema_version",
+                "operation",
+                "requests"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "batch_evaluate_dd_gpd"
+                },
+                "requests": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/$defs/dd_evaluation"
+                    }
+                }
+            }
+        },
+        {
+            "allOf": [
+                {
+                    "$ref": "#/$defs/evolved_dd_evaluation"
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "schema_version",
+                        "operation"
+                    ],
+                    "properties": {
+                        "schema_version": {
+                            "const": 1
+                        },
+                        "operation": {
+                            "const": "evaluate_evolved_dd_gpd"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "schema_version",
+                "operation",
+                "requests"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "batch_evaluate_evolved_dd_gpd"
+                },
+                "requests": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/$defs/evolved_dd_evaluation"
+                    }
+                }
+            }
+        },
+        {
+            "allOf": [
+                {
+                    "$ref": "#/$defs/coupled_basis_evaluation"
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "schema_version",
+                        "operation"
+                    ],
+                    "properties": {
+                        "schema_version": {
+                            "const": 1
+                        },
+                        "operation": {
+                            "const": "evaluate_coupled_basis_gpd"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "schema_version",
+                "operation",
+                "requests"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "batch_evaluate_coupled_basis_gpd"
+                },
+                "requests": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/$defs/coupled_basis_evaluation"
+                    }
+                }
+            }
+        },
+        {
+            "allOf": [
+                {
+                    "$ref": "#/$defs/conformal_moment_evaluation"
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "schema_version",
+                        "operation"
+                    ],
+                    "properties": {
+                        "schema_version": {
+                            "const": 1
+                        },
+                        "operation": {
+                            "const": "evaluate_conformal_moment_gpd"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "schema_version",
+                "operation",
+                "requests"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "batch_evaluate_conformal_moment_gpd"
+                },
+                "requests": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/$defs/conformal_moment_evaluation"
+                    }
+                }
+            }
+        },
+        {
+            "allOf": [
+                {
+                    "$ref": "#/$defs/shadow_evaluation"
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "schema_version",
+                        "operation"
+                    ],
+                    "properties": {
+                        "schema_version": {
+                            "const": 1
+                        },
+                        "operation": {
+                            "const": "evaluate_shadow_dvcs"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "schema_version",
+                "operation",
+                "requests"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "batch_evaluate_shadow_dvcs"
+                },
+                "requests": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/$defs/shadow_evaluation"
+                    }
+                }
+            }
+        },
+        {
+            "allOf": [
+                {
+                    "$ref": "#/$defs/pseudodata_evaluation"
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "schema_version",
+                        "operation"
+                    ],
+                    "properties": {
+                        "schema_version": {
+                            "const": 1
+                        },
+                        "operation": {
+                            "const": "evaluate_pseudodata_dvcs"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "schema_version",
+                "operation",
+                "requests"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "batch_evaluate_pseudodata_dvcs"
+                },
+                "requests": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/$defs/pseudodata_evaluation"
+                    }
+                }
+            }
+        },
+        {
+            "allOf": [
+                {
+                    "$ref": "#/$defs/post_training_comparison_evaluation"
+                },
+                {
+                    "type": "object",
+                    "required": [
+                        "schema_version",
+                        "operation"
+                    ],
+                    "properties": {
+                        "schema_version": {
+                            "const": 1
+                        },
+                        "operation": {
+                            "const": "evaluate_post_training_comparison_dvcs"
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "schema_version",
+                "operation",
+                "requests"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "batch_evaluate_post_training_comparison_dvcs"
+                },
+                "requests": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/$defs/post_training_comparison_evaluation"
+                    }
+                }
+            }
+        }
+    ],
+    "$defs": {
+        "gev2_quantity": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "value",
+                "unit"
+            ],
+            "properties": {
+                "value": {
+                    "type": "number"
+                },
+                "unit": {
+                    "const": "GeV2"
+                }
+            }
+        },
+        "kinematics": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "x",
+                "xi",
+                "t",
+                "mu_f2",
+                "mu_r2"
+            ],
+            "properties": {
+                "x": {
+                    "type": "number",
+                    "minimum": -1,
+                    "maximum": 1
+                },
+                "xi": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                },
+                "t": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "maximum": 0
+                                }
+                            }
+                        }
+                    ]
+                },
+                "mu_f2": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "exclusiveMinimum": 0
+                                }
+                            }
+                        }
+                    ]
+                },
+                "mu_r2": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "exclusiveMinimum": 0
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "evaluation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "request_id",
+                "module",
+                "gpd_type",
+                "kinematics"
+            ],
+            "properties": {
+                "request_id": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "module": {
+                    "const": "GPDGK16"
+                },
+                "gpd_type": {
+                    "const": "H"
+                },
+                "kinematics": {
+                    "$ref": "#/$defs/kinematics"
+                }
+            }
+        },
+        "dd_parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "a",
+                "c",
+                "profile_b",
+                "t_slope"
+            ],
+            "properties": {
+                "a": {
+                    "type": "number",
+                    "minimum": 0.1,
+                    "maximum": 1
+                },
+                "c": {
+                    "type": "number",
+                    "minimum": 2,
+                    "maximum": 6
+                },
+                "profile_b": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 4
+                },
+                "t_slope": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "value",
+                        "unit"
+                    ],
+                    "properties": {
+                        "value": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 2
+                        },
+                        "unit": {
+                            "const": "GeV-2"
+                        }
+                    }
+                }
+            }
+        },
+        "dd_kinematics": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "x",
+                "xi",
+                "t",
+                "q0_squared",
+                "mu_f_squared"
+            ],
+            "properties": {
+                "x": {
+                    "type": "number",
+                    "minimum": -1,
+                    "maximum": 1
+                },
+                "xi": {
+                    "type": "number",
+                    "minimum": -1,
+                    "maximum": 1
+                },
+                "t": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "maximum": 0
+                                }
+                            }
+                        }
+                    ]
+                },
+                "q0_squared": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "const": 4
+                                }
+                            }
+                        }
+                    ]
+                },
+                "mu_f_squared": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "const": 4
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "dd_evaluation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "request_id",
+                "representation",
+                "gpd_type",
+                "flavor",
+                "parton_content",
+                "parameters",
+                "quadrature_order",
+                "kinematics"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "evaluate_dd_gpd"
+                },
+                "request_id": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "representation": {
+                    "const": "stage03_fixed_scale_up_valence_v1"
+                },
+                "gpd_type": {
+                    "const": "H"
+                },
+                "flavor": {
+                    "const": "up"
+                },
+                "parton_content": {
+                    "const": "reduced_up_valence_forward_input_no_gluon_no_sea"
+                },
+                "parameters": {
+                    "$ref": "#/$defs/dd_parameters"
+                },
+                "quadrature_order": {
+                    "type": "integer",
+                    "enum": [
+                        32,
+                        64,
+                        128,
+                        256
+                    ]
+                },
+                "kinematics": {
+                    "$ref": "#/$defs/dd_kinematics"
+                }
+            }
+        },
+        "evolved_dd_kinematics": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "x",
+                "xi",
+                "t",
+                "q0_squared",
+                "mu_f_squared"
+            ],
+            "properties": {
+                "x": {
+                    "type": "number",
+                    "minimum": 1e-05,
+                    "maximum": 0.95
+                },
+                "xi": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 0.8
+                },
+                "t": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "minimum": -1,
+                                    "maximum": 0
+                                }
+                            }
+                        }
+                    ]
+                },
+                "q0_squared": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "const": 4
+                                }
+                            }
+                        }
+                    ]
+                },
+                "mu_f_squared": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "minimum": 4,
+                                    "maximum": 16
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "evolution_configuration": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "module",
+                "gpd_evolution_order",
+                "factorization_scheme",
+                "alpha_s",
+                "active_flavors",
+                "coefficient_function_order",
+                "renormalization_scale",
+                "twist"
+            ],
+            "properties": {
+                "module": {
+                    "const": "GPDEvolutionApfel"
+                },
+                "gpd_evolution_order": {
+                    "const": "LO"
+                },
+                "factorization_scheme": {
+                    "const": "MSbar"
+                },
+                "alpha_s": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "module",
+                        "order",
+                        "scheme",
+                        "reference_value",
+                        "reference_scale",
+                        "thresholds"
+                    ],
+                    "properties": {
+                        "module": {
+                            "const": "RunningAlphaStrongApfel"
+                        },
+                        "order": {
+                            "const": "LO"
+                        },
+                        "scheme": {
+                            "const": "MSbar"
+                        },
+                        "reference_value": {
+                            "const": 0.118
+                        },
+                        "reference_scale": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                                "value",
+                                "unit"
+                            ],
+                            "properties": {
+                                "value": {
+                                    "const": 91.1876
+                                },
+                                "unit": {
+                                    "const": "GeV"
+                                }
+                            }
+                        },
+                        "thresholds": {
+                            "type": "array",
+                            "prefixItems": [
+                                {
+                                    "const": 0
+                                },
+                                {
+                                    "const": 0
+                                },
+                                {
+                                    "const": 0
+                                }
+                            ],
+                            "minItems": 3,
+                            "maxItems": 3
+                        }
+                    }
+                },
+                "active_flavors": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "module",
+                        "n_flavors"
+                    ],
+                    "properties": {
+                        "module": {
+                            "const": "ActiveFlavorsThresholdsConstant"
+                        },
+                        "n_flavors": {
+                            "const": 3
+                        }
+                    }
+                },
+                "coefficient_function_order": {
+                    "type": "null"
+                },
+                "renormalization_scale": {
+                    "type": "null"
+                },
+                "twist": {
+                    "type": "null"
+                }
+            }
+        },
+        "evolved_dd_evaluation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "request_id",
+                "representation",
+                "gpd_type",
+                "flavor",
+                "parton_content",
+                "parameters",
+                "quadrature_order",
+                "kinematics",
+                "evolution_configuration"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "evaluate_evolved_dd_gpd"
+                },
+                "request_id": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "representation": {
+                    "const": "stage06_lo_apfel_evolved_reduced_dd_v1"
+                },
+                "gpd_type": {
+                    "const": "H"
+                },
+                "flavor": {
+                    "const": "up"
+                },
+                "parton_content": {
+                    "const": "reduced_up_valence_input_evolved_fixed_nf3"
+                },
+                "parameters": {
+                    "$ref": "#/$defs/dd_parameters"
+                },
+                "quadrature_order": {
+                    "const": 128
+                },
+                "kinematics": {
+                    "$ref": "#/$defs/evolved_dd_kinematics"
+                },
+                "evolution_configuration": {
+                    "$ref": "#/$defs/evolution_configuration"
+                }
+            }
+        },
+        "basis_parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "shape",
+                "amplitudes"
+            ],
+            "properties": {
+                "shape": {
+                    "$ref": "#/$defs/dd_parameters"
+                },
+                "amplitudes": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "sigma",
+                        "t3",
+                        "gluon"
+                    ],
+                    "properties": {
+                        "sigma": {
+                            "type": "number",
+                            "minimum": -4,
+                            "maximum": 4
+                        },
+                        "t3": {
+                            "type": "number",
+                            "minimum": -4,
+                            "maximum": 4
+                        },
+                        "gluon": {
+                            "type": "number",
+                            "minimum": -4,
+                            "maximum": 4
+                        }
+                    }
+                }
+            }
+        },
+        "coupled_basis_evaluation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "request_id",
+                "representation",
+                "gpd_type",
+                "input_basis",
+                "parton_content",
+                "parameters",
+                "quadrature_order",
+                "kinematics",
+                "evolution_configuration"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "evaluate_coupled_basis_gpd"
+                },
+                "request_id": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "representation": {
+                    "const": "stage07_coupled_basis_dd_v1"
+                },
+                "gpd_type": {
+                    "const": "H"
+                },
+                "input_basis": {
+                    "const": "apfel_nf3_sigma_t3_gluon"
+                },
+                "parton_content": {
+                    "const": "explicit_sigma_t3_gluon_input_fixed_nf3"
+                },
+                "parameters": {
+                    "$ref": "#/$defs/basis_parameters"
+                },
+                "quadrature_order": {
+                    "const": 128
+                },
+                "kinematics": {
+                    "$ref": "#/$defs/evolved_dd_kinematics"
+                },
+                "evolution_configuration": {
+                    "$ref": "#/$defs/evolution_configuration"
+                }
+            }
+        },
+        "conformal_moment_parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "alpha",
+                "beta",
+                "trajectory_slope"
+            ],
+            "properties": {
+                "alpha": {
+                    "type": "number",
+                    "minimum": -1,
+                    "maximum": -0.1
+                },
+                "beta": {
+                    "type": "number",
+                    "minimum": 2,
+                    "maximum": 6
+                },
+                "trajectory_slope": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "value",
+                        "unit"
+                    ],
+                    "properties": {
+                        "value": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 2
+                        },
+                        "unit": {
+                            "const": "GeV-2"
+                        }
+                    }
+                }
+            }
+        },
+        "conformal_moment_kinematics": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "x",
+                "xi",
+                "t",
+                "q0_squared",
+                "mu_f_squared"
+            ],
+            "properties": {
+                "x": {
+                    "type": "number",
+                    "minimum": 1e-05,
+                    "maximum": 0.95
+                },
+                "xi": {
+                    "const": 0
+                },
+                "t": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "minimum": -0.5,
+                                    "maximum": 0
+                                }
+                            }
+                        }
+                    ]
+                },
+                "q0_squared": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "const": 4
+                                }
+                            }
+                        }
+                    ]
+                },
+                "mu_f_squared": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "const": 4
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "conformal_moment_evaluation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "request_id",
+                "representation",
+                "gpd_type",
+                "flavor",
+                "parton_content",
+                "parameters",
+                "integration_limit",
+                "kinematics"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "evaluate_conformal_moment_gpd"
+                },
+                "request_id": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "representation": {
+                    "const": "stage08_zero_skewness_conformal_moment_v1"
+                },
+                "gpd_type": {
+                    "const": "H"
+                },
+                "flavor": {
+                    "const": "up"
+                },
+                "parton_content": {
+                    "const": "reduced_up_valence_zero_skewness_no_gluon_no_sea"
+                },
+                "parameters": {
+                    "$ref": "#/$defs/conformal_moment_parameters"
+                },
+                "integration_limit": {
+                    "type": "integer",
+                    "enum": [
+                        256,
+                        512,
+                        1024,
+                        2048
+                    ]
+                },
+                "kinematics": {
+                    "$ref": "#/$defs/conformal_moment_kinematics"
+                }
+            }
+        },
+        "shadow_gpd_kinematics": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "x",
+                "xi",
+                "t",
+                "mu_f_squared",
+                "mu_r_squared"
+            ],
+            "properties": {
+                "x": {
+                    "type": "number",
+                    "anyOf": [
+                        {
+                            "minimum": -0.8,
+                            "maximum": -0.05
+                        },
+                        {
+                            "minimum": 0.05,
+                            "maximum": 0.8
+                        }
+                    ]
+                },
+                "xi": {
+                    "type": "number",
+                    "minimum": 0.05,
+                    "maximum": 0.2
+                },
+                "t": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "minimum": -0.2,
+                                    "maximum": -0.08
+                                }
+                            }
+                        }
+                    ]
+                },
+                "mu_f_squared": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "const": 4
+                                }
+                            }
+                        }
+                    ]
+                },
+                "mu_r_squared": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "const": 4
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "shadow_observable_kinematics": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "x_b",
+                "t",
+                "Q2",
+                "beam_energy",
+                "phi"
+            ],
+            "properties": {
+                "x_b": {
+                    "type": "number",
+                    "minimum": 0.12,
+                    "maximum": 0.28
+                },
+                "t": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "minimum": -0.2,
+                                    "maximum": -0.08
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Q2": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "const": 2
+                                }
+                            }
+                        }
+                    ]
+                },
+                "beam_energy": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "value",
+                        "unit"
+                    ],
+                    "properties": {
+                        "value": {
+                            "const": 6
+                        },
+                        "unit": {
+                            "const": "GeV"
+                        }
+                    }
+                },
+                "phi": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "value",
+                        "unit"
+                    ],
+                    "properties": {
+                        "value": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 6.283185307179586
+                        },
+                        "unit": {
+                            "const": "rad"
+                        }
+                    }
+                }
+            }
+        },
+        "shadow_theory_configuration": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "cff_module",
+                "process_module",
+                "observable_module",
+                "xi_converter_module",
+                "scales_module",
+                "coefficient_function_order",
+                "gpd_evolution_order",
+                "alpha_s",
+                "factorization_scale_squared",
+                "renormalization_scale_squared",
+                "twist",
+                "analysis_order_label"
+            ],
+            "properties": {
+                "cff_module": {
+                    "const": "DVCSCFFStandard"
+                },
+                "process_module": {
+                    "const": "DVCSProcessGV08"
+                },
+                "observable_module": {
+                    "const": "DVCSCrossSectionUUMinus"
+                },
+                "xi_converter_module": {
+                    "const": "DVCSXiConverterXBToXi"
+                },
+                "scales_module": {
+                    "const": "DVCSScalesQ2Multiplier"
+                },
+                "coefficient_function_order": {
+                    "const": "NLO"
+                },
+                "gpd_evolution_order": {
+                    "type": "null"
+                },
+                "alpha_s": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "module",
+                        "implementation_order",
+                        "scheme",
+                        "reference_value",
+                        "reference_scale",
+                        "flavor_threshold_source",
+                        "threshold_matching_verified"
+                    ],
+                    "properties": {
+                        "module": {
+                            "const": "RunningAlphaStrongStandard"
+                        },
+                        "implementation_order": {
+                            "const": "four_loop"
+                        },
+                        "scheme": {
+                            "const": "MSbar"
+                        },
+                        "reference_value": {
+                            "const": 0.1184
+                        },
+                        "reference_scale": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                                "value",
+                                "unit"
+                            ],
+                            "properties": {
+                                "value": {
+                                    "const": 91.1876
+                                },
+                                "unit": {
+                                    "const": "GeV"
+                                }
+                            }
+                        },
+                        "flavor_threshold_source": {
+                            "const": "installed_quark_masses"
+                        },
+                        "threshold_matching_verified": {
+                            "const": false
+                        }
+                    }
+                },
+                "factorization_scale_squared": {
+                    "const": "Q2"
+                },
+                "renormalization_scale_squared": {
+                    "const": "Q2"
+                },
+                "twist": {
+                    "type": "null"
+                },
+                "analysis_order_label": {
+                    "type": "null"
+                }
+            }
+        },
+        "shadow_evaluation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "request_id",
+                "representation",
+                "parameters",
+                "gpd_diagnostic_kinematics",
+                "observable_kinematics",
+                "theory_configuration"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "evaluate_shadow_dvcs"
+                },
+                "request_id": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "representation": {
+                    "const": "stage09_gk16_plus_bdmms21_shadow_v1"
+                },
+                "parameters": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "baseline_coefficient",
+                        "shadow_coefficient"
+                    ],
+                    "properties": {
+                        "baseline_coefficient": {
+                            "type": "number",
+                            "minimum": 0.8,
+                            "maximum": 1.2
+                        },
+                        "shadow_coefficient": {
+                            "type": "number",
+                            "minimum": -1,
+                            "maximum": 1
+                        }
+                    }
+                },
+                "gpd_diagnostic_kinematics": {
+                    "$ref": "#/$defs/shadow_gpd_kinematics"
+                },
+                "observable_kinematics": {
+                    "$ref": "#/$defs/shadow_observable_kinematics"
+                },
+                "theory_configuration": {
+                    "$ref": "#/$defs/shadow_theory_configuration"
+                }
+            }
+        },
+        "pseudodata_parameters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "gpd_shapes",
+                "shadow_coefficients",
+                "shadow_channel_amplitudes"
+            ],
+            "properties": {
+                "gpd_shapes": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "H",
+                        "E",
+                        "Htilde",
+                        "Etilde"
+                    ],
+                    "properties": {
+                        "H": {
+                            "$ref": "#/$defs/pseudodata_flavor_shapes"
+                        },
+                        "E": {
+                            "$ref": "#/$defs/pseudodata_flavor_shapes"
+                        },
+                        "Htilde": {
+                            "$ref": "#/$defs/pseudodata_flavor_shapes"
+                        },
+                        "Etilde": {
+                            "$ref": "#/$defs/pseudodata_flavor_shapes"
+                        }
+                    }
+                },
+                "shadow_coefficients": {
+                    "$ref": "#/$defs/pseudodata_shadow_coefficients"
+                },
+                "shadow_channel_amplitudes": {
+                    "$ref": "#/$defs/pseudodata_shadow_amplitudes"
+                }
+            }
+        },
+        "pseudodata_flavor_shapes": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "u",
+                "d",
+                "s",
+                "gluon"
+            ],
+            "properties": {
+                "u": {
+                    "$ref": "#/$defs/pseudodata_dd_shape"
+                },
+                "d": {
+                    "$ref": "#/$defs/pseudodata_dd_shape"
+                },
+                "s": {
+                    "$ref": "#/$defs/pseudodata_dd_shape"
+                },
+                "gluon": {
+                    "$ref": "#/$defs/pseudodata_dd_shape"
+                }
+            }
+        },
+        "pseudodata_shadow_coefficients": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "H",
+                "E",
+                "Htilde",
+                "Etilde"
+            ],
+            "properties": {
+                "H": {
+                    "type": "number",
+                    "minimum": -1,
+                    "maximum": 1
+                },
+                "E": {
+                    "type": "number",
+                    "minimum": -1,
+                    "maximum": 1
+                },
+                "Htilde": {
+                    "type": "number",
+                    "minimum": -1,
+                    "maximum": 1
+                },
+                "Etilde": {
+                    "type": "number",
+                    "minimum": -1,
+                    "maximum": 1
+                }
+            }
+        },
+        "pseudodata_shadow_amplitudes": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "H",
+                "E",
+                "Htilde",
+                "Etilde"
+            ],
+            "properties": {
+                "H": {
+                    "$ref": "#/$defs/pseudodata_shadow_channel_amplitudes"
+                },
+                "E": {
+                    "$ref": "#/$defs/pseudodata_shadow_channel_amplitudes"
+                },
+                "Htilde": {
+                    "$ref": "#/$defs/pseudodata_shadow_channel_amplitudes"
+                },
+                "Etilde": {
+                    "$ref": "#/$defs/pseudodata_shadow_channel_amplitudes"
+                }
+            }
+        },
+        "pseudodata_shadow_channel_amplitudes": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "u",
+                "d",
+                "s",
+                "gluon"
+            ],
+            "properties": {
+                "u": {
+                    "type": "number",
+                    "minimum": -4,
+                    "maximum": 4
+                },
+                "d": {
+                    "type": "number",
+                    "minimum": -4,
+                    "maximum": 4
+                },
+                "s": {
+                    "type": "number",
+                    "minimum": -4,
+                    "maximum": 4
+                },
+                "gluon": {
+                    "type": "number",
+                    "minimum": -4,
+                    "maximum": 4
+                }
+            }
+        },
+        "pseudodata_dd_shape": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "normalization",
+                "a",
+                "c",
+                "profile_b",
+                "t_slope"
+            ],
+            "properties": {
+                "normalization": {
+                    "type": "number",
+                    "minimum": -4,
+                    "maximum": 4
+                },
+                "a": {
+                    "type": "number",
+                    "exclusiveMinimum": 0.1,
+                    "exclusiveMaximum": 1
+                },
+                "c": {
+                    "type": "number",
+                    "exclusiveMinimum": 2,
+                    "exclusiveMaximum": 6
+                },
+                "profile_b": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 4
+                },
+                "t_slope": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "value",
+                        "unit"
+                    ],
+                    "properties": {
+                        "value": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 2
+                        },
+                        "unit": {
+                            "const": "GeV-2"
+                        }
+                    }
+                }
+            }
+        },
+        "pseudodata_observable_kinematics": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "x_b",
+                "t",
+                "Q2",
+                "beam_energy",
+                "phi"
+            ],
+            "properties": {
+                "x_b": {
+                    "type": "number",
+                    "minimum": 0.12,
+                    "maximum": 0.28
+                },
+                "t": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "minimum": -0.2,
+                                    "maximum": -0.08
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Q2": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "minimum": 1,
+                                    "maximum": 80
+                                }
+                            }
+                        }
+                    ]
+                },
+                "beam_energy": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "value",
+                        "unit"
+                    ],
+                    "properties": {
+                        "value": {
+                            "minimum": 3,
+                            "maximum": 200
+                        },
+                        "unit": {
+                            "const": "GeV"
+                        }
+                    }
+                },
+                "phi": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "value",
+                        "unit"
+                    ],
+                    "properties": {
+                        "value": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 6.283185307179586
+                        },
+                        "unit": {
+                            "const": "rad"
+                        }
+                    }
+                }
+            }
+        },
+        "pseudodata_theory_configuration": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "cff_module",
+                "process_module",
+                "observable_modules",
+                "xi_converter_module",
+                "scales_module",
+                "coefficient_function_order",
+                "factorization_scale_squared",
+                "renormalization_scale_squared",
+                "twist",
+                "analysis_order_label"
+            ],
+            "properties": {
+                "cff_module": {
+                    "const": "DVCSCFFStandard"
+                },
+                "process_module": {
+                    "const": "DVCSProcessGV08"
+                },
+                "observable_modules": {
+                    "type": "array",
+                    "prefixItems": [
+                        {
+                            "const": "DVCSCrossSectionUUMinus"
+                        },
+                        {
+                            "const": "DVCSCrossSectionDifferenceLUMinus"
+                        },
+                        {
+                            "const": "DVCSAc"
+                        },
+                        {
+                            "const": "DVCSAluMinus"
+                        },
+                        {
+                            "const": "DVCSAulMinus"
+                        },
+                        {
+                            "const": "DVCSAllMinus"
+                        }
+                    ],
+                    "minItems": 6,
+                    "maxItems": 6
+                },
+                "xi_converter_module": {
+                    "const": "DVCSXiConverterXBToXi"
+                },
+                "scales_module": {
+                    "const": "DVCSScalesQ2Multiplier"
+                },
+                "coefficient_function_order": {
+                    "const": "LO"
+                },
+                "factorization_scale_squared": {
+                    "const": "Q2"
+                },
+                "renormalization_scale_squared": {
+                    "const": "Q2"
+                },
+                "twist": {
+                    "type": "null"
+                },
+                "analysis_order_label": {
+                    "type": "null"
+                }
+            }
+        },
+        "pseudodata_evaluation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "request_id",
+                "representation",
+                "parameters",
+                "quadrature_order",
+                "q0_squared",
+                "observable_kinematics",
+                "evolution_configuration",
+                "theory_configuration"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "evaluate_pseudodata_dvcs"
+                },
+                "request_id": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "representation": {
+                    "const": "stage11_lo_multiq2_full_independent_dd_v1"
+                },
+                "parameters": {
+                    "$ref": "#/$defs/pseudodata_parameters"
+                },
+                "quadrature_order": {
+                    "const": 128
+                },
+                "q0_squared": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "const": 1
+                                }
+                            }
+                        }
+                    ]
+                },
+                "observable_kinematics": {
+                    "$ref": "#/$defs/pseudodata_observable_kinematics"
+                },
+                "gpd_diagnostic_x": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 129,
+                    "items": {
+                        "type": "number",
+                        "minimum": -1,
+                        "maximum": 1
+                    }
+                },
+                "evolution_configuration": {
+                    "$ref": "#/$defs/evolution_configuration"
+                },
+                "theory_configuration": {
+                    "$ref": "#/$defs/pseudodata_theory_configuration"
+                }
+            }
+        },
+        "native_model_holdout_evaluation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "request_id",
+                "representation",
+                "model",
+                "observable_kinematics",
+                "theory_configuration"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "evaluate_native_model_holdout_dvcs"
+                },
+                "request_id": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "representation": {
+                    "const": "stage11_native_model_holdout_v1"
+                },
+                "model": {
+                    "enum": [
+                        "GPDGK11",
+                        "GPDGK16",
+                        "GPDGK19",
+                        "GPDVGG99"
+                    ]
+                },
+                "observable_kinematics": {
+                    "$ref": "#/$defs/post_training_comparison_observable_kinematics"
+                },
+                "gpd_diagnostic_x": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 129,
+                    "items": {
+                        "type": "number",
+                        "minimum": -1,
+                        "maximum": 1
+                    }
+                },
+                "theory_configuration": {
+                    "$ref": "#/$defs/pseudodata_theory_configuration"
+                }
+            }
+        },
+        "post_training_comparison_observable_kinematics": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "x_b",
+                "t",
+                "Q2",
+                "beam_energy",
+                "phi"
+            ],
+            "properties": {
+                "x_b": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "exclusiveMaximum": 1
+                },
+                "t": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "minimum": -1,
+                                    "exclusiveMaximum": 0
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Q2": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "minimum": 1,
+                                    "maximum": 80
+                                }
+                            }
+                        }
+                    ]
+                },
+                "beam_energy": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "value",
+                        "unit"
+                    ],
+                    "properties": {
+                        "value": {
+                            "type": "number",
+                            "minimum": 3,
+                            "maximum": 200
+                        },
+                        "unit": {
+                            "const": "GeV"
+                        }
+                    }
+                },
+                "phi": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                        "value",
+                        "unit"
+                    ],
+                    "properties": {
+                        "value": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 6.283185307179586
+                        },
+                        "unit": {
+                            "const": "rad"
+                        }
+                    }
+                }
+            }
+        },
+        "post_training_comparison_evaluation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "request_id",
+                "representation",
+                "parameters",
+                "quadrature_order",
+                "q0_squared",
+                "observable_kinematics",
+                "evolution_configuration",
+                "theory_configuration"
+            ],
+            "properties": {
+                "schema_version": {
+                    "const": 1
+                },
+                "operation": {
+                    "const": "evaluate_post_training_comparison_dvcs"
+                },
+                "request_id": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "representation": {
+                    "const": "stage11_lo_multiq2_full_independent_dd_v1"
+                },
+                "parameters": {
+                    "$ref": "#/$defs/pseudodata_parameters"
+                },
+                "quadrature_order": {
+                    "const": 128
+                },
+                "q0_squared": {
+                    "allOf": [
+                        {
+                            "$ref": "#/$defs/gev2_quantity"
+                        },
+                        {
+                            "properties": {
+                                "value": {
+                                    "const": 1
+                                }
+                            }
+                        }
+                    ]
+                },
+                "observable_kinematics": {
+                    "$ref": "#/$defs/post_training_comparison_observable_kinematics"
+                },
+                "gpd_diagnostic_x": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 129,
+                    "items": {
+                        "type": "number",
+                        "minimum": -1,
+                        "maximum": 1
+                    }
+                },
+                "evolution_configuration": {
+                    "$ref": "#/$defs/evolution_configuration"
+                },
+                "theory_configuration": {
+                    "$ref": "#/$defs/pseudodata_theory_configuration"
+                }
+            }
+        }
+    }
+}

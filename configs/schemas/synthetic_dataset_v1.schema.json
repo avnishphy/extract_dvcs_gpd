@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/extract_dvcs_cff/synthetic_dataset_v1.schema.json",
+  "title": "Synthetic DVCS-like dataset v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "dataset_id",
+    "point_order",
+    "points",
+    "covariance",
+    "nuisance_groups",
+    "provenance"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "point_order": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "points": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/point"}
+    },
+    "covariance": {"$ref": "#/$defs/covariance"},
+    "nuisance_groups": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/nuisance"}
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "generator", "seed", "configuration_sha256"],
+      "properties": {
+        "kind": {"const": "synthetic"},
+        "generator": {"type": "string", "minLength": 1},
+        "seed": {"type": "integer", "minimum": 0},
+        "configuration_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "quantity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit"],
+      "properties": {
+        "value": {"type": "number"},
+        "unit": {"type": "string"}
+      }
+    },
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "point_id",
+        "experiment_id",
+        "dataset_id",
+        "observable_id",
+        "kinematics",
+        "beam_charge",
+        "beam_helicity",
+        "target_polarization",
+        "measurement",
+        "kinematic_valid"
+      ],
+      "properties": {
+        "point_id": {"type": "string", "minLength": 1},
+        "experiment_id": {"type": "string", "minLength": 1},
+        "dataset_id": {"type": "string", "minLength": 1},
+        "observable_id": {"type": "string", "minLength": 1},
+        "kinematics": {"$ref": "#/$defs/kinematics"},
+        "beam_charge": {"enum": [-1, 1]},
+        "beam_helicity": {"enum": [-1, 0, 1]},
+        "target_polarization": {
+          "type": "number",
+          "minimum": -1,
+          "maximum": 1
+        },
+        "measurement": {
+          "allOf": [
+            {"$ref": "#/$defs/quantity"},
+            {"properties": {"unit": {"const": "1"}}}
+          ]
+        },
+        "kinematic_valid": {"type": "boolean"}
+      }
+    },
+    "covariance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "matrix",
+        "point_order",
+        "observable_unit_squared",
+        "construction",
+        "diagnostics",
+        "regularization"
+      ],
+      "properties": {
+        "matrix": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "number"}
+          }
+        },
+        "point_order": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "observable_unit_squared": {"const": "1^2"},
+        "construction": {"type": "string", "minLength": 1},
+        "diagnostics": {"$ref": "#/$defs/covariance_diagnostics"},
+        "regularization": {"type": "null"}
+      }
+    },
+    "nuisance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "group_id",
+        "mode",
+        "response",
+        "response_unit",
+        "prior"
+      ],
+      "properties": {
+        "group_id": {"type": "string", "minLength": 1},
+        "mode": {"enum": ["additive", "multiplicative"]},
+        "response": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "number"}
+        },
+        "response_unit": {"enum": ["observable", "1"]},
+        "prior": {"const": "standard_normal"}
+      }
+    },
+    "kinematics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x_B", "Q2", "t", "phi", "beam_energy"],
+      "properties": {
+        "x_B": {
+          "allOf": [
+            {"$ref": "#/$defs/quantity"},
+            {
+              "properties": {
+                "value": {"exclusiveMinimum": 0, "exclusiveMaximum": 1},
+                "unit": {"const": "1"}
+              }
+            }
+          ]
+        },
+        "Q2": {
+          "allOf": [
+            {"$ref": "#/$defs/quantity"},
+            {
+              "properties": {
+                "value": {"exclusiveMinimum": 0},
+                "unit": {"const": "GeV2"}
+              }
+            }
+          ]
+        },
+        "t": {
+          "allOf": [
+            {"$ref": "#/$defs/quantity"},
+            {
+              "properties": {
+                "value": {"maximum": 0},
+                "unit": {"const": "GeV2"}
+              }
+            }
+          ]
+        },
+        "phi": {
+          "allOf": [
+            {"$ref": "#/$defs/quantity"},
+            {
+              "properties": {
+                "value": {"minimum": 0, "exclusiveMaximum": 6.283185307179586},
+                "unit": {"const": "rad"}
+              }
+            }
+          ]
+        },
+        "beam_energy": {
+          "allOf": [
+            {"$ref": "#/$defs/quantity"},
+            {
+              "properties": {
+                "value": {"exclusiveMinimum": 0},
+                "unit": {"const": "GeV"}
+              }
+            }
+          ]
+        }
+      }
+    },
+    "covariance_diagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dimension",
+        "symmetry_max_abs",
+        "minimum_eigenvalue",
+        "maximum_eigenvalue",
+        "relative_minimum_eigenvalue",
+        "condition_number",
+        "log_determinant",
+        "regularized"
+      ],
+      "properties": {
+        "dimension": {"type": "integer", "minimum": 1},
+        "symmetry_max_abs": {"type": "number", "minimum": 0},
+        "minimum_eigenvalue": {"type": "number", "exclusiveMinimum": 0},
+        "maximum_eigenvalue": {"type": "number", "exclusiveMinimum": 0},
+        "relative_minimum_eigenvalue": {
+          "type": "number",
+          "minimum": 1e-12,
+          "maximum": 1
+        },
+        "condition_number": {"type": "number", "minimum": 1},
+        "log_determinant": {"type": "number"},
+        "regularized": {"const": false}
+      }
+    }
+  }
+}

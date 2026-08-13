@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "campaign": "stage05_reduced_dd_round0_validation_v1_fixed_covariance",
+  "parameter_transform": "probit_uniform_to_standard_normal",
+  "stage04_configuration": "configs/examples/stage04_mcmc_closure.json",
+  "corpus": {
+    "simulation_count": 250,
+    "parameter_batch_size": 125,
+    "rng": "numpy.PCG64",
+    "seed": 5056026,
+    "covariance_policy": "fixed_at_stage04_injection",
+    "invalid_simulation_policy": "retain_index_and_failure_then_fail_gate"
+  },
+  "context_contract": {
+    "version": "stage05_reduced_dd_context_v1",
+    "point_count": 8,
+    "point_features": [
+      "gpd_x",
+      "skewness_xi_over_0p5",
+      "minus_t_GeV2_over_0p5",
+      "log_q2_over_q0_squared",
+      "observed_h_up_over_5",
+      "marginal_sigma_over_0p25",
+      "symmetric_whitened_observation_over_25",
+      "normalization_response_over_0p1",
+      "observable_is_direct_h_up",
+      "point_mask"
+    ],
+    "global_features": [
+      "representation_is_reduced_dd",
+      "representation_is_conformal",
+      "q0_squared_GeV2_over_4",
+      "profile_b_over_2",
+      "t_slope_GeV_minus2",
+      "coefficient_function_enabled",
+      "evolution_enabled",
+      "model_mask"
+    ],
+    "covariance_encoding": "symmetric_inverse_square_root_whitening",
+    "varying_point_features": [
+      "observed_h_up_over_5",
+      "symmetric_whitened_observation_over_25"
+    ]
+  }
+}

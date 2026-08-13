@@ -1,0 +1,98 @@
+{
+    "schema_version": 1,
+    "role": "post_training_external_native_validation_test",
+    "learning_use": false,
+    "replaces_dd_outer_test": false,
+    "admitted_models": [
+        {
+            "name": "GPDGK11",
+            "supported_gpd_types": ["H", "E", "Htilde", "Etilde"],
+            "header": "dependency://partons@1ad0b7d3/include/partons/modules/gpd/GPDGK11.h",
+            "header_sha256": "b2d7074221222377e0d63356a9554c41b5f64fb1e69183bc083c2f0c6d22acb3",
+            "source": "dependency://partons@1ad0b7d3/src/partons/modules/gpd/GPDGK11.cpp",
+            "source_sha256": "6d7823662014526533f0276b687c4d8eaf7d7d032fb465b7ca37a800b6aecafd",
+            "lhapdf_requirement": null,
+            "thread_policy": "process_isolated_only_due_to_CLN"
+        },
+        {
+            "name": "GPDGK16",
+            "supported_gpd_types": ["H", "E", "Htilde", "Etilde"],
+            "header": "dependency://partons@1ad0b7d3/include/partons/modules/gpd/GPDGK16.h",
+            "header_sha256": "1cb6ac9129a8de9030a993d315112c61f97427adbd111b702b608dfc27def073",
+            "source": "dependency://partons@1ad0b7d3/src/partons/modules/gpd/GPDGK16.cpp",
+            "source_sha256": "4512e3d7dcab78bdbf22a6491bc80208eccc49c658d53f2376b6536950d07aee",
+            "lhapdf_requirement": null,
+            "thread_policy": "process_isolated_only_due_to_CLN"
+        },
+        {
+            "name": "GPDGK19",
+            "supported_gpd_types": ["H", "E", "Htilde", "Etilde"],
+            "header": "dependency://partons@1ad0b7d3/include/partons/modules/gpd/GPDGK19.h",
+            "header_sha256": "6d21e5b12bdd498064db120bd4c219392ea131396c27118f938cfed44ea1ad29",
+            "source": "dependency://partons@1ad0b7d3/src/partons/modules/gpd/GPDGK19.cpp",
+            "source_sha256": "c66062b25d8696bdc75aa4ea580cbb9f84f20f0384bb4201415e59902e06a8fe",
+            "lhapdf_requirement": null,
+            "thread_policy": "process_isolated_only_due_to_GPDGK16_inheritance"
+        },
+        {
+            "name": "GPDVGG99",
+            "supported_gpd_types": ["H", "E", "Htilde", "Etilde"],
+            "header": "dependency://partons@1ad0b7d3/include/partons/modules/gpd/GPDVGG99.h",
+            "header_sha256": "a1c8f51894e6d3c4df38cb5cf5648dacdcd010888c349e5547a5c3836109de56",
+            "source": "dependency://partons@1ad0b7d3/src/partons/modules/gpd/GPDVGG99.cpp",
+            "source_sha256": "06898d77120340abecf2879d08dc03534abec520b982e2df115525f368e44335",
+            "lhapdf_requirement": {
+                "set": "MSTW2008nlo68cl",
+                "member": 0,
+                "archive_sha256": "98ec0541e80e223785bb6029ebf81e93ca5111da41d6565b3b5c4aa86d59bb5d",
+                "info_sha256": "07b1ee816adfd9e438bb996d20116dbcb4a0e3624e5b2075aecb7e699a37b0f3",
+                "member_sha256": "26e94045264006998fa0af3dc5d5c0e7e304820ac5ce43eee43413197eae7e78"
+            },
+            "thread_policy": "single_worker_per_PARTONS_process"
+        }
+    ],
+    "required_lhapdf_sets": [
+        {
+            "set": "MSTW2008nlo68cl",
+            "installed_member_count": 41,
+            "installed_complete_set": true,
+            "required_by_admitted_models": ["GPDVGG99"]
+        }
+    ],
+    "excluded_installed_models": [
+        {
+            "name": "GPDHM18",
+            "reason": "runtime proton-DVCS route fails because the installed model returns QuarkFlavor::UNDEFINED"
+        },
+        {
+            "name": "GPDMMS13",
+            "reason": "installed header supports only H and E"
+        },
+        {
+            "name": "GPDMPSSW13",
+            "reason": "installed header supports only H"
+        },
+        {
+            "name": "GPDVinnikov06",
+            "reason": "installed header supports only H and Htilde"
+        },
+        {
+            "name": "GPDBDMMS21",
+            "reason": "installed module is retained for the separate H shadow-identifiability contract"
+        },
+        {
+            "name": "GPDGK16Numerical",
+            "reason": "numerical implementation of GK16, not an independent physics-family validation dataset"
+        },
+        {
+            "name": "GPDGK19COMPASS",
+            "reason": "installed header describes the model as TODO; independent physics provenance is insufficient for admission"
+        }
+    ],
+    "nonrequired_local_example_sets": [
+        {
+            "set": "CT14nnlo",
+            "reason": "used by generic PARTONS collinear-distribution examples, not by the admitted native GPD validation models"
+        }
+    ]
+}

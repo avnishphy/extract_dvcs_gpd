@@ -1,0 +1,5 @@
+# Structured stdout must never be contaminated by backend log messages.
+enable = false
+default.level = ERROR
+print.mode = COUT
+log.folder.path = @CMAKE_CURRENT_BINARY_DIR@

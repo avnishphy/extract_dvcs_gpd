@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "campaign": "stage09_native_shadow_identifiability_v1",
+  "bridge_schema_version": 1,
+  "representation": "stage09_gk16_plus_bdmms21_shadow_v1",
+  "baseline_grid": {"minimum": 0.8, "maximum": 1.2, "count": 31},
+  "shadow_grid": {"minimum": -1.0, "maximum": 1.0, "count": 9},
+  "truth": {"baseline_coefficient": 1.04, "shadow_coefficient": 0.5},
+  "gpd_diagnostic": {
+    "x": 0.35,
+    "xi": 0.1,
+    "mu_f_squared_GeV2": 4.0,
+    "mu_r_squared_GeV2": 4.0
+  },
+  "observable_points": [
+    {"x_b": 0.20, "t_GeV2": -0.10, "Q2_GeV2": 2.0, "beam_energy_GeV": 6.0, "phi_rad": 0.0},
+    {"x_b": 0.20, "t_GeV2": -0.10, "Q2_GeV2": 2.0, "beam_energy_GeV": 6.0, "phi_rad": 0.8},
+    {"x_b": 0.20, "t_GeV2": -0.10, "Q2_GeV2": 2.0, "beam_energy_GeV": 6.0, "phi_rad": 1.6},
+    {"x_b": 0.22, "t_GeV2": -0.14, "Q2_GeV2": 2.0, "beam_energy_GeV": 6.0, "phi_rad": 2.4},
+    {"x_b": 0.22, "t_GeV2": -0.14, "Q2_GeV2": 2.0, "beam_energy_GeV": 6.0, "phi_rad": 3.2},
+    {"x_b": 0.24, "t_GeV2": -0.09, "Q2_GeV2": 2.0, "beam_energy_GeV": 6.0, "phi_rad": 4.0}
+  ],
+  "experimental_covariance": {
+    "uncorrelated_fraction": 0.002,
+    "absolute_floor_nb_per_GeV4": 0.001,
+    "correlation": "exp_minus_abs_index_distance",
+    "correlation_length": 1.5
+  },
+  "normalization_nuisance": {
+    "name": "eta_norm",
+    "prior": "normal",
+    "mean": 0.0,
+    "standard_deviation": 0.001,
+    "treatment": "analytic_gaussian_marginalization_fixed_experimental_covariance"
+  },
+  "posterior_samples": 2000,
+  "random_seed": 1909,
+  "frozen_gates": {
+    "max_abs_cff_shift": 1e-8,
+    "max_abs_observable_shift_nb_per_GeV4": 1e-10,
+    "min_max_abs_h_up_deformation": 1e-3,
+    "min_shadow_width90_ratio": 0.98,
+    "max_shadow_density_ratio": 1.05,
+    "max_shadow_discrete_kl": 1e-3,
+    "max_baseline_width90_ratio": 0.75
+  }
+}

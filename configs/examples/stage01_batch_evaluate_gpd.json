@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "operation": "batch_evaluate_gpd",
+  "requests": [
+    {
+      "request_id": "reference-point",
+      "module": "GPDGK16",
+      "gpd_type": "H",
+      "kinematics": {
+        "x": 0.1,
+        "xi": 0.2,
+        "t": {"value": -0.1, "unit": "GeV2"},
+        "mu_f2": {"value": 2.0, "unit": "GeV2"},
+        "mu_r2": {"value": 2.0, "unit": "GeV2"}
+      }
+    },
+    {
+      "request_id": "second-point",
+      "module": "GPDGK16",
+      "gpd_type": "H",
+      "kinematics": {
+        "x": 0.2,
+        "xi": 0.1,
+        "t": {"value": -0.2, "unit": "GeV2"},
+        "mu_f2": {"value": 4.0, "unit": "GeV2"},
+        "mu_r2": {"value": 4.0, "unit": "GeV2"}
+      }
+    }
+  ]
+}

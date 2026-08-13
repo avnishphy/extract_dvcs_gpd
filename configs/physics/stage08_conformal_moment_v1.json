@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "representation": "stage08_zero_skewness_conformal_moment_v1",
+  "gpd_type": "H",
+  "flavor": "up",
+  "parton_content": "reduced_up_valence_zero_skewness_no_gluon_no_sea",
+  "input_scale_squared": {"value": 4.0, "unit": "GeV2"},
+  "factorization_scale_squared": {"value": 4.0, "unit": "GeV2"},
+  "skewness": 0.0,
+  "moment_convention": {
+    "definition": "F_j(xi,t)=xi^j Gamma(3/2) Gamma(j+1)/(2^j Gamma(j+3/2)) integral_-1^1 dx C_j^(3/2)(x/xi) F(x,xi,t)",
+    "forward_limit": "F_j(0,t)=integral_-1^1 dx x^j F(x,0,t)",
+    "implemented_ansatz": "N B(j+1-alpha,beta+1) (j+1-alpha)/(j+1-alpha-alpha_prime t)",
+    "normalization": "F_0(0)=2"
+  },
+  "reconstruction": {
+    "method": "analytic_inverse_Mellin_convolution_at_xi_zero",
+    "integrator": "GSL_qag_GAUSS61",
+    "absolute_tolerance": 1e-12,
+    "relative_tolerance": 1e-10,
+    "integration_limit": 1024
+  },
+  "parameter_bounds": {
+    "alpha": [-1.0, -0.1],
+    "beta": [2.0, 6.0],
+    "trajectory_slope_GeV-2": [0.0, 2.0]
+  },
+  "kinematic_domain": {
+    "x": [1e-5, 0.95],
+    "xi": [0.0, 0.0],
+    "t_GeV2": [-0.5, 0.0]
+  },
+  "evolution": null,
+  "coefficient_function_order": null,
+  "analysis_order_label": null
+}

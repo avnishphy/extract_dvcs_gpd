@@ -1,0 +1,61 @@
+name: publish-images
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+jobs:
+  publish:
+    # Keep publication fail-closed until the application copyright holders
+    # provide a license grant and a maintainer records that approval.
+    if: startsWith(github.ref, 'refs/tags/v') && vars.DVCS_PUBLICATION_APPROVED == 'true'
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        include:
+          - variant: cpu
+            torch_index: https://download.pytorch.org/whl/cpu
+          - variant: cuda12.6
+            torch_index: https://download.pytorch.org/whl/cu126
+          - variant: jlab_ifarm
+            torch_index: https://download.pytorch.org/whl/cu126
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: image
+        env:
+          REGISTRY_REPOSITORY: ghcr.io/${{ github.repository_owner }}/extract-dvcs-gpd
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if [[ "${VARIANT}" == jlab_ifarm ]]; then
+            tag="${REGISTRY_REPOSITORY}:jlab_ifarm-${version}"
+          else
+            tag="${REGISTRY_REPOSITORY}:${version}-${VARIANT}"
+          fi
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: containers/Dockerfile
+          target: runtime
+          push: true
+          provenance: mode=max
+          sbom: true
+          tags: ${{ steps.image.outputs.tag }}
+          build-args: TORCH_INDEX_URL=${{ matrix.torch_index }}
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/extract-dvcs-gpd
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true

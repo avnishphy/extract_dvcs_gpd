@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "operation": "evaluate_gpd",
+  "request_id": "local-partons-gpd-example",
+  "module": "GPDGK16",
+  "gpd_type": "H",
+  "kinematics": {
+    "x": 0.1,
+    "xi": 0.2,
+    "t": {"value": -0.1, "unit": "GeV2"},
+    "mu_f2": {"value": 2.0, "unit": "GeV2"},
+    "mu_r2": {"value": 2.0, "unit": "GeV2"}
+  }
+}

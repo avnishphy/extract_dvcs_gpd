@@ -1,0 +1,806 @@
+{
+    "schema_version": 1,
+    "protocol": "measurement_free_representative_fixed_target_v1",
+    "database_revision": "1e9e97fd417ce1d6d44fc73550bdbf32cca4eeb1",
+    "catalog_sha256": "1ec0d1e206fc55481fea79225190f528b29907e287033eff0707afa5b1ffe77e",
+    "candidate_policy": {
+        "roles": [
+            "experimental fixed-target proton"
+        ],
+        "source_declared_pseudodata_excluded": true,
+        "neutron_excluded": true,
+        "collider_excluded": true,
+        "physical_y_required": true,
+        "domain": {
+            "x_b": [
+                0.1,
+                0.5
+            ],
+            "t_GeV2": [
+                -0.9,
+                -0.1
+            ],
+            "Q2_GeV2": [
+                1,
+                80
+            ],
+            "beam_energy_GeV": [
+                3,
+                200
+            ]
+        },
+        "minimum_distinct_phi_per_group": 3
+    },
+    "selection": {
+        "independent_group_count": 12,
+        "phi_per_group": 3,
+        "site_count": 36,
+        "group_metric": "deterministic_maximin_on_clipped_1_to_99_percent_normalized_xB_minus_t_logQ2_logE",
+        "phi_targets_rad": [
+            0.5235987755982988,
+            2.6179938779914944,
+            4.71238898038469
+        ],
+        "measurements_used": false
+    },
+    "kinematics": [
+        {
+            "x_b": 0.25,
+            "t_GeV2": -0.46,
+            "Q2_GeV2": 1.83,
+            "beam_energy_GeV": 4.8,
+            "phi_rad": 0.39269908169872414
+        },
+        {
+            "x_b": 0.25,
+            "t_GeV2": -0.46,
+            "Q2_GeV2": 1.83,
+            "beam_energy_GeV": 4.8,
+            "phi_rad": 3.141592653589793
+        },
+        {
+            "x_b": 0.25,
+            "t_GeV2": -0.46,
+            "Q2_GeV2": 1.83,
+            "beam_energy_GeV": 4.8,
+            "phi_rad": 4.494222823885399
+        },
+        {
+            "x_b": 0.4847,
+            "t_GeV2": -0.7702,
+            "Q2_GeV2": 3.8447,
+            "beam_energy_GeV": 5.77,
+            "phi_rad": 0.7655206085464848
+        },
+        {
+            "x_b": 0.4847,
+            "t_GeV2": -0.7702,
+            "Q2_GeV2": 3.8447,
+            "beam_energy_GeV": 5.77,
+            "phi_rad": 2.8257665987951595
+        },
+        {
+            "x_b": 0.4847,
+            "t_GeV2": -0.7702,
+            "Q2_GeV2": 3.8447,
+            "beam_energy_GeV": 5.77,
+            "phi_rad": 4.54999656546213
+        },
+        {
+            "x_b": 0.125,
+            "t_GeV2": -0.864,
+            "Q2_GeV2": 1.131,
+            "beam_energy_GeV": 5.88,
+            "phi_rad": 1.1676252695842066
+        },
+        {
+            "x_b": 0.125,
+            "t_GeV2": -0.864,
+            "Q2_GeV2": 1.131,
+            "beam_energy_GeV": 5.88,
+            "phi_rad": 1.4311699866353502
+        },
+        {
+            "x_b": 0.125,
+            "t_GeV2": -0.864,
+            "Q2_GeV2": 1.131,
+            "beam_energy_GeV": 5.88,
+            "phi_rad": 4.852015320544236
+        },
+        {
+            "x_b": 0.124,
+            "t_GeV2": -0.108,
+            "Q2_GeV2": 1.128,
+            "beam_energy_GeV": 5.88,
+            "phi_rad": 1.4329153158873444
+        },
+        {
+            "x_b": 0.124,
+            "t_GeV2": -0.108,
+            "Q2_GeV2": 1.128,
+            "beam_energy_GeV": 5.88,
+            "phi_rad": 1.9582594207376378
+        },
+        {
+            "x_b": 0.124,
+            "t_GeV2": -0.108,
+            "Q2_GeV2": 1.128,
+            "beam_energy_GeV": 5.88,
+            "phi_rad": 4.588470603493092
+        },
+        {
+            "x_b": 0.301,
+            "t_GeV2": -0.119,
+            "Q2_GeV2": 2.625,
+            "beam_energy_GeV": 5.88,
+            "phi_rad": 0.6527531402458793
+        },
+        {
+            "x_b": 0.301,
+            "t_GeV2": -0.119,
+            "Q2_GeV2": 2.625,
+            "beam_energy_GeV": 5.88,
+            "phi_rad": 0.3909537524467298
+        },
+        {
+            "x_b": 0.301,
+            "t_GeV2": -0.119,
+            "Q2_GeV2": 2.625,
+            "beam_energy_GeV": 5.88,
+            "phi_rad": 5.630432166933708
+        },
+        {
+            "x_b": 0.2494,
+            "t_GeV2": -0.7689,
+            "Q2_GeV2": 2.199,
+            "beam_energy_GeV": 5.77,
+            "phi_rad": 0.4266666796010378
+        },
+        {
+            "x_b": 0.2494,
+            "t_GeV2": -0.7689,
+            "Q2_GeV2": 2.199,
+            "beam_energy_GeV": 5.77,
+            "phi_rad": 2.8842037128104336
+        },
+        {
+            "x_b": 0.2494,
+            "t_GeV2": -0.7689,
+            "Q2_GeV2": 2.199,
+            "beam_energy_GeV": 5.77,
+            "phi_rad": 4.4948371797821
+        },
+        {
+            "x_b": 0.399,
+            "t_GeV2": -0.37,
+            "Q2_GeV2": 1.633,
+            "beam_energy_GeV": 5.7572,
+            "phi_rad": 0.39269908169872414
+        },
+        {
+            "x_b": 0.399,
+            "t_GeV2": -0.37,
+            "Q2_GeV2": 1.633,
+            "beam_energy_GeV": 5.7572,
+            "phi_rad": 2.748893571891069
+        },
+        {
+            "x_b": 0.399,
+            "t_GeV2": -0.37,
+            "Q2_GeV2": 1.633,
+            "beam_energy_GeV": 5.7572,
+            "phi_rad": 4.581489286485115
+        },
+        {
+            "x_b": 0.357,
+            "t_GeV2": -0.177,
+            "Q2_GeV2": 1.49,
+            "beam_energy_GeV": 3.355,
+            "phi_rad": 0.2617993877991494
+        },
+        {
+            "x_b": 0.357,
+            "t_GeV2": -0.177,
+            "Q2_GeV2": 1.49,
+            "beam_energy_GeV": 3.355,
+            "phi_rad": 2.8797932657906435
+        },
+        {
+            "x_b": 0.357,
+            "t_GeV2": -0.177,
+            "Q2_GeV2": 1.49,
+            "beam_energy_GeV": 3.355,
+            "phi_rad": 4.4505895925855405
+        },
+        {
+            "x_b": 0.11,
+            "t_GeV2": -0.27,
+            "Q2_GeV2": 2.6,
+            "beam_energy_GeV": 27.6,
+            "phi_rad": 0.3141499999999793
+        },
+        {
+            "x_b": 0.11,
+            "t_GeV2": -0.27,
+            "Q2_GeV2": 2.6,
+            "beam_energy_GeV": 27.6,
+            "phi_rad": 2.8273499999998135
+        },
+        {
+            "x_b": 0.11,
+            "t_GeV2": -0.27,
+            "Q2_GeV2": 2.6,
+            "beam_energy_GeV": 27.6,
+            "phi_rad": 4.712435307179689
+        },
+        {
+            "x_b": 0.451,
+            "t_GeV2": -0.34,
+            "Q2_GeV2": 3.63,
+            "beam_energy_GeV": 5.75,
+            "phi_rad": 0.6515314097694832
+        },
+        {
+            "x_b": 0.451,
+            "t_GeV2": -0.34,
+            "Q2_GeV2": 3.63,
+            "beam_energy_GeV": 5.75,
+            "phi_rad": 2.7481954401902713
+        },
+        {
+            "x_b": 0.451,
+            "t_GeV2": -0.34,
+            "Q2_GeV2": 3.63,
+            "beam_energy_GeV": 5.75,
+            "phi_rad": 4.584281813288307
+        },
+        {
+            "x_b": 0.175,
+            "t_GeV2": -0.491,
+            "Q2_GeV2": 1.358,
+            "beam_energy_GeV": 5.77,
+            "phi_rad": 0.4770281551673342
+        },
+        {
+            "x_b": 0.175,
+            "t_GeV2": -0.491,
+            "Q2_GeV2": 1.358,
+            "beam_energy_GeV": 5.77,
+            "phi_rad": 2.880973108364992
+        },
+        {
+            "x_b": 0.175,
+            "t_GeV2": -0.491,
+            "Q2_GeV2": 1.358,
+            "beam_energy_GeV": 5.77,
+            "phi_rad": 4.50344863431144
+        },
+        {
+            "x_b": 0.17,
+            "t_GeV2": -0.23,
+            "Q2_GeV2": 1.22,
+            "beam_energy_GeV": 4.8,
+            "phi_rad": 0.39269908169872414
+        },
+        {
+            "x_b": 0.17,
+            "t_GeV2": -0.23,
+            "Q2_GeV2": 1.22,
+            "beam_energy_GeV": 4.8,
+            "phi_rad": 3.141592653589793
+        },
+        {
+            "x_b": 0.17,
+            "t_GeV2": -0.23,
+            "Q2_GeV2": 1.22,
+            "beam_energy_GeV": 4.8,
+            "phi_rad": 4.494222823885399
+        }
+    ],
+    "selected_records": [
+        {
+            "record_id": "A6Pgo5TE:1:24",
+            "dataset_id": "A6Pgo5TE:1",
+            "source_uuid": "A6Pgo5TE",
+            "source_path": "CLAS_2009.yaml",
+            "collaboration": "CLAS",
+            "reference": "http://arxiv.org/pdf/0812.2950.pdf",
+            "source_Q2_GeV2": 1.83,
+            "source_beam_energy_GeV": 4.8,
+            "generated_Q2_GeV2": 1.83,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 4.8,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "A6Pgo5TE:1:27",
+            "dataset_id": "A6Pgo5TE:1",
+            "source_uuid": "A6Pgo5TE",
+            "source_path": "CLAS_2009.yaml",
+            "collaboration": "CLAS",
+            "reference": "http://arxiv.org/pdf/0812.2950.pdf",
+            "source_Q2_GeV2": 1.83,
+            "source_beam_energy_GeV": 4.8,
+            "generated_Q2_GeV2": 1.83,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 4.8,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "A6Pgo5TE:1:28",
+            "dataset_id": "A6Pgo5TE:1",
+            "source_uuid": "A6Pgo5TE",
+            "source_path": "CLAS_2009.yaml",
+            "collaboration": "CLAS",
+            "reference": "http://arxiv.org/pdf/0812.2950.pdf",
+            "source_Q2_GeV2": 1.83,
+            "source_beam_energy_GeV": 4.8,
+            "generated_Q2_GeV2": 1.83,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 4.8,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "AvF5daeP:0:577",
+            "dataset_id": "AvF5daeP:0",
+            "source_uuid": "AvF5daeP",
+            "source_path": "CLAS_2007.yaml",
+            "collaboration": "CLAS",
+            "reference": "http://arxiv.org/pdf/0711.4805.pdf",
+            "source_Q2_GeV2": 3.8447,
+            "source_beam_energy_GeV": 5.77,
+            "generated_Q2_GeV2": 3.8447,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.77,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "AvF5daeP:0:581",
+            "dataset_id": "AvF5daeP:0",
+            "source_uuid": "AvF5daeP",
+            "source_path": "CLAS_2007.yaml",
+            "collaboration": "CLAS",
+            "reference": "http://arxiv.org/pdf/0711.4805.pdf",
+            "source_Q2_GeV2": 3.8447,
+            "source_beam_energy_GeV": 5.77,
+            "generated_Q2_GeV2": 3.8447,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.77,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "AvF5daeP:0:584",
+            "dataset_id": "AvF5daeP:0",
+            "source_uuid": "AvF5daeP",
+            "source_path": "CLAS_2007.yaml",
+            "collaboration": "CLAS",
+            "reference": "http://arxiv.org/pdf/0711.4805.pdf",
+            "source_Q2_GeV2": 3.8447,
+            "source_beam_energy_GeV": 5.77,
+            "generated_Q2_GeV2": 3.8447,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.77,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "ob8hLTm2:0:126",
+            "dataset_id": "ob8hLTm2:0",
+            "source_uuid": "ob8hLTm2",
+            "source_path": "CLAS_2018_1.yaml",
+            "collaboration": "CLAS",
+            "reference": "https://arxiv.org/pdf/1810.02110",
+            "source_Q2_GeV2": 1.131,
+            "source_beam_energy_GeV": 5.88,
+            "generated_Q2_GeV2": 1.131,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.88,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "ob8hLTm2:0:127",
+            "dataset_id": "ob8hLTm2:0",
+            "source_uuid": "ob8hLTm2",
+            "source_path": "CLAS_2018_1.yaml",
+            "collaboration": "CLAS",
+            "reference": "https://arxiv.org/pdf/1810.02110",
+            "source_Q2_GeV2": 1.131,
+            "source_beam_energy_GeV": 5.88,
+            "generated_Q2_GeV2": 1.131,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.88,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "ob8hLTm2:0:137",
+            "dataset_id": "ob8hLTm2:0",
+            "source_uuid": "ob8hLTm2",
+            "source_path": "CLAS_2018_1.yaml",
+            "collaboration": "CLAS",
+            "reference": "https://arxiv.org/pdf/1810.02110",
+            "source_Q2_GeV2": 1.131,
+            "source_beam_energy_GeV": 5.88,
+            "generated_Q2_GeV2": 1.131,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.88,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "ob8hLTm2:0:1",
+            "dataset_id": "ob8hLTm2:0",
+            "source_uuid": "ob8hLTm2",
+            "source_path": "CLAS_2018_1.yaml",
+            "collaboration": "CLAS",
+            "reference": "https://arxiv.org/pdf/1810.02110",
+            "source_Q2_GeV2": 1.128,
+            "source_beam_energy_GeV": 5.88,
+            "generated_Q2_GeV2": 1.128,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.88,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "ob8hLTm2:0:3",
+            "dataset_id": "ob8hLTm2:0",
+            "source_uuid": "ob8hLTm2",
+            "source_path": "CLAS_2018_1.yaml",
+            "collaboration": "CLAS",
+            "reference": "https://arxiv.org/pdf/1810.02110",
+            "source_Q2_GeV2": 1.128,
+            "source_beam_energy_GeV": 5.88,
+            "generated_Q2_GeV2": 1.128,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.88,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "ob8hLTm2:0:13",
+            "dataset_id": "ob8hLTm2:0",
+            "source_uuid": "ob8hLTm2",
+            "source_path": "CLAS_2018_1.yaml",
+            "collaboration": "CLAS",
+            "reference": "https://arxiv.org/pdf/1810.02110",
+            "source_Q2_GeV2": 1.128,
+            "source_beam_energy_GeV": 5.88,
+            "generated_Q2_GeV2": 1.128,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.88,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "ob8hLTm2:0:1947",
+            "dataset_id": "ob8hLTm2:0",
+            "source_uuid": "ob8hLTm2",
+            "source_path": "CLAS_2018_1.yaml",
+            "collaboration": "CLAS",
+            "reference": "https://arxiv.org/pdf/1810.02110",
+            "source_Q2_GeV2": 2.625,
+            "source_beam_energy_GeV": 5.88,
+            "generated_Q2_GeV2": 2.625,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.88,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "ob8hLTm2:0:1946",
+            "dataset_id": "ob8hLTm2:0",
+            "source_uuid": "ob8hLTm2",
+            "source_path": "CLAS_2018_1.yaml",
+            "collaboration": "CLAS",
+            "reference": "https://arxiv.org/pdf/1810.02110",
+            "source_Q2_GeV2": 2.625,
+            "source_beam_energy_GeV": 5.88,
+            "generated_Q2_GeV2": 2.625,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.88,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "ob8hLTm2:0:1953",
+            "dataset_id": "ob8hLTm2:0",
+            "source_uuid": "ob8hLTm2",
+            "source_path": "CLAS_2018_1.yaml",
+            "collaboration": "CLAS",
+            "reference": "https://arxiv.org/pdf/1810.02110",
+            "source_Q2_GeV2": 2.625,
+            "source_beam_energy_GeV": 5.88,
+            "generated_Q2_GeV2": 2.625,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.88,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "AvF5daeP:0:492",
+            "dataset_id": "AvF5daeP:0",
+            "source_uuid": "AvF5daeP",
+            "source_path": "CLAS_2007.yaml",
+            "collaboration": "CLAS",
+            "reference": "http://arxiv.org/pdf/0711.4805.pdf",
+            "source_Q2_GeV2": 2.199,
+            "source_beam_energy_GeV": 5.77,
+            "generated_Q2_GeV2": 2.199,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.77,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "AvF5daeP:0:497",
+            "dataset_id": "AvF5daeP:0",
+            "source_uuid": "AvF5daeP",
+            "source_path": "CLAS_2007.yaml",
+            "collaboration": "CLAS",
+            "reference": "http://arxiv.org/pdf/0711.4805.pdf",
+            "source_Q2_GeV2": 2.199,
+            "source_beam_energy_GeV": 5.77,
+            "generated_Q2_GeV2": 2.199,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.77,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "AvF5daeP:0:500",
+            "dataset_id": "AvF5daeP:0",
+            "source_uuid": "AvF5daeP",
+            "source_path": "CLAS_2007.yaml",
+            "collaboration": "CLAS",
+            "reference": "http://arxiv.org/pdf/0711.4805.pdf",
+            "source_Q2_GeV2": 2.199,
+            "source_beam_energy_GeV": 5.77,
+            "generated_Q2_GeV2": 2.199,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.77,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "BJ84iv8s:0:9",
+            "dataset_id": "BJ84iv8s:0",
+            "source_uuid": "BJ84iv8s",
+            "source_path": "HallA_2015_1.yaml",
+            "collaboration": "HallA",
+            "reference": "https://arxiv.org/pdf/1504.05453v1.pdf",
+            "source_Q2_GeV2": 1.633,
+            "source_beam_energy_GeV": 5.7572,
+            "generated_Q2_GeV2": 1.633,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.7572,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "BJ84iv8s:0:54",
+            "dataset_id": "BJ84iv8s:0",
+            "source_uuid": "BJ84iv8s",
+            "source_path": "HallA_2015_1.yaml",
+            "collaboration": "HallA",
+            "reference": "https://arxiv.org/pdf/1504.05453v1.pdf",
+            "source_Q2_GeV2": 1.633,
+            "source_beam_energy_GeV": 5.7572,
+            "generated_Q2_GeV2": 1.633,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.7572,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "BJ84iv8s:0:89",
+            "dataset_id": "BJ84iv8s:0",
+            "source_uuid": "BJ84iv8s",
+            "source_path": "HallA_2015_1.yaml",
+            "collaboration": "HallA",
+            "reference": "https://arxiv.org/pdf/1504.05453v1.pdf",
+            "source_Q2_GeV2": 1.633,
+            "source_beam_energy_GeV": 5.7572,
+            "generated_Q2_GeV2": 1.633,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.7572,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "TKhscLcB:0:0",
+            "dataset_id": "TKhscLcB:0",
+            "source_uuid": "TKhscLcB",
+            "source_path": "HallA_2017_1.yaml",
+            "collaboration": "HallA",
+            "reference": "https://arxiv.org/pdf/1703.09442.pdf",
+            "source_Q2_GeV2": 1.49,
+            "source_beam_energy_GeV": 3.355,
+            "generated_Q2_GeV2": 1.49,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 3.355,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "TKhscLcB:0:5",
+            "dataset_id": "TKhscLcB:0",
+            "source_uuid": "TKhscLcB",
+            "source_path": "HallA_2017_1.yaml",
+            "collaboration": "HallA",
+            "reference": "https://arxiv.org/pdf/1703.09442.pdf",
+            "source_Q2_GeV2": 1.49,
+            "source_beam_energy_GeV": 3.355,
+            "generated_Q2_GeV2": 1.49,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 3.355,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "TKhscLcB:0:8",
+            "dataset_id": "TKhscLcB:0",
+            "source_uuid": "TKhscLcB",
+            "source_path": "HallA_2017_1.yaml",
+            "collaboration": "HallA",
+            "reference": "https://arxiv.org/pdf/1703.09442.pdf",
+            "source_Q2_GeV2": 1.49,
+            "source_beam_energy_GeV": 3.355,
+            "generated_Q2_GeV2": 1.49,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 3.355,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "NvMm42PD:0:5",
+            "dataset_id": "NvMm42PD:0",
+            "source_uuid": "NvMm42PD",
+            "source_path": "HERMES_2001.yaml",
+            "collaboration": "HERMES",
+            "reference": "https://arxiv.org/pdf/hep-ex/0106068.pdf",
+            "source_Q2_GeV2": 2.6,
+            "source_beam_energy_GeV": 27.6,
+            "generated_Q2_GeV2": 2.6,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 27.6,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "NvMm42PD:0:9",
+            "dataset_id": "NvMm42PD:0",
+            "source_uuid": "NvMm42PD",
+            "source_path": "HERMES_2001.yaml",
+            "collaboration": "HERMES",
+            "reference": "https://arxiv.org/pdf/hep-ex/0106068.pdf",
+            "source_Q2_GeV2": 2.6,
+            "source_beam_energy_GeV": 27.6,
+            "generated_Q2_GeV2": 2.6,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 27.6,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "NvMm42PD:0:2",
+            "dataset_id": "NvMm42PD:0",
+            "source_uuid": "NvMm42PD",
+            "source_path": "HERMES_2001.yaml",
+            "collaboration": "HERMES",
+            "reference": "https://arxiv.org/pdf/hep-ex/0106068.pdf",
+            "source_Q2_GeV2": 2.6,
+            "source_beam_energy_GeV": 27.6,
+            "generated_Q2_GeV2": 2.6,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 27.6,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "RQncbKtk:0:2594",
+            "dataset_id": "RQncbKtk:0",
+            "source_uuid": "RQncbKtk",
+            "source_path": "CLAS_2015_2.yaml",
+            "collaboration": "CLAS",
+            "reference": "https://arxiv.org/pdf/1504.02009v1.pdf",
+            "source_Q2_GeV2": 3.63,
+            "source_beam_energy_GeV": 5.75,
+            "generated_Q2_GeV2": 3.63,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.75,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "RQncbKtk:0:2602",
+            "dataset_id": "RQncbKtk:0",
+            "source_uuid": "RQncbKtk",
+            "source_path": "CLAS_2015_2.yaml",
+            "collaboration": "CLAS",
+            "reference": "https://arxiv.org/pdf/1504.02009v1.pdf",
+            "source_Q2_GeV2": 3.63,
+            "source_beam_energy_GeV": 5.75,
+            "generated_Q2_GeV2": 3.63,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.75,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "RQncbKtk:0:2609",
+            "dataset_id": "RQncbKtk:0",
+            "source_uuid": "RQncbKtk",
+            "source_path": "CLAS_2015_2.yaml",
+            "collaboration": "CLAS",
+            "reference": "https://arxiv.org/pdf/1504.02009v1.pdf",
+            "source_Q2_GeV2": 3.63,
+            "source_beam_energy_GeV": 5.75,
+            "generated_Q2_GeV2": 3.63,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.75,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "AvF5daeP:0:288",
+            "dataset_id": "AvF5daeP:0",
+            "source_uuid": "AvF5daeP",
+            "source_path": "CLAS_2007.yaml",
+            "collaboration": "CLAS",
+            "reference": "http://arxiv.org/pdf/0711.4805.pdf",
+            "source_Q2_GeV2": 1.358,
+            "source_beam_energy_GeV": 5.77,
+            "generated_Q2_GeV2": 1.358,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.77,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "AvF5daeP:0:293",
+            "dataset_id": "AvF5daeP:0",
+            "source_uuid": "AvF5daeP",
+            "source_path": "CLAS_2007.yaml",
+            "collaboration": "CLAS",
+            "reference": "http://arxiv.org/pdf/0711.4805.pdf",
+            "source_Q2_GeV2": 1.358,
+            "source_beam_energy_GeV": 5.77,
+            "generated_Q2_GeV2": 1.358,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.77,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "AvF5daeP:0:296",
+            "dataset_id": "AvF5daeP:0",
+            "source_uuid": "AvF5daeP",
+            "source_path": "CLAS_2007.yaml",
+            "collaboration": "CLAS",
+            "reference": "http://arxiv.org/pdf/0711.4805.pdf",
+            "source_Q2_GeV2": 1.358,
+            "source_beam_energy_GeV": 5.77,
+            "generated_Q2_GeV2": 1.358,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 5.77,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "A6Pgo5TE:0:2",
+            "dataset_id": "A6Pgo5TE:0",
+            "source_uuid": "A6Pgo5TE",
+            "source_path": "CLAS_2009.yaml",
+            "collaboration": "CLAS",
+            "reference": "http://arxiv.org/pdf/0812.2950.pdf",
+            "source_Q2_GeV2": 1.22,
+            "source_beam_energy_GeV": 4.8,
+            "generated_Q2_GeV2": 1.22,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 4.8,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "A6Pgo5TE:0:5",
+            "dataset_id": "A6Pgo5TE:0",
+            "source_uuid": "A6Pgo5TE",
+            "source_path": "CLAS_2009.yaml",
+            "collaboration": "CLAS",
+            "reference": "http://arxiv.org/pdf/0812.2950.pdf",
+            "source_Q2_GeV2": 1.22,
+            "source_beam_energy_GeV": 4.8,
+            "generated_Q2_GeV2": 1.22,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 4.8,
+            "measurement_values_used": false
+        },
+        {
+            "record_id": "A6Pgo5TE:0:6",
+            "dataset_id": "A6Pgo5TE:0",
+            "source_uuid": "A6Pgo5TE",
+            "source_path": "CLAS_2009.yaml",
+            "collaboration": "CLAS",
+            "reference": "http://arxiv.org/pdf/0812.2950.pdf",
+            "source_Q2_GeV2": 1.22,
+            "source_beam_energy_GeV": 4.8,
+            "generated_Q2_GeV2": 1.22,
+            "Q2_projected": false,
+            "generated_beam_energy_GeV": 4.8,
+            "measurement_values_used": false
+        }
+    ]
+}

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+prefix="${1:-/opt/dvcs}"
+source_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+build_root="$(mktemp -d /tmp/extract-dvcs-gpd-build.XXXXXX)"
+trap 'rm -rf -- "${build_root}"' EXIT
+jobs="$(nproc)"
+cd "${build_root}"
+curl -fL https://ftpmirror.gnu.org/gsl/gsl-2.8.tar.gz -o gsl.tgz
+echo '6a99eeed15632c6354895b1dd542ed5a855c0f15d9ad1326c6fe2b2c9e423190  gsl.tgz' | sha256sum -c -
+tar -xzf gsl.tgz; cd gsl-2.8; ./configure --prefix="${prefix}"; make -j"${jobs}"; make install; cd ..
+curl -fL 'https://lhapdf.hepforge.org/downloads/?f=LHAPDF-6.5.6.tar.gz' -o lhapdf.tgz
+echo '6b8b7e38dc26a977a24f5a321215b7054c14a4469d04134d70cb93a860eeeea7  lhapdf.tgz' | sha256sum -c -
+tar -xzf lhapdf.tgz; cd LHAPDF-6.5.6; ./configure --prefix="${prefix}" --disable-python; make -j"${jobs}"; make install; cd ..
+export PATH="${prefix}/bin:${PATH}" LD_LIBRARY_PATH="${prefix}/lib"
+clone_build() {
+    name="$1" url="$2" commit="$3"; shift 3
+    git clone --filter=blob:none "${url}" "${name}"
+    git -C "${name}" checkout --detach "${commit}"
+    cmake -S "${name}" -B "${name}-build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${prefix}" "$@"
+    cmake --build "${name}-build" -j"${jobs}"; cmake --install "${name}-build"
+}
+clone_build elementary-utils https://github.com/3d-partons/elementary-utils.git 0133fc6e69872270027c37381a273893f7841b42
+clone_build numa https://github.com/3d-partons/numa.git f184ee75f1d61b380e522d38ba48fbcbe9d78ae5 -DElementaryUtils_HINT="${prefix}"
+clone_build apfelxx https://github.com/vbertone/apfelxx.git 27deaec493d95bad0686b3b1c91fbbc910c891ff
+clone_build partons https://github.com/3d-partons/partons.git 1ad0b7d3bf62328f564c4ded06793e5feed00d4f -DElementaryUtils_HINT="${prefix}" '-DNumA++_HINT='"${prefix}" '-DApfel++_HINT='"${prefix}" -DLHAPDF_HINT="${prefix}"
+git clone --filter=blob:none https://github.com/3d-partons/partons-example.git
+git -C partons-example checkout --detach 7ca59c36634dce411643e0846b495fcf0690e545
+install -D -m0644 partons-example/data/xmlSchema.xsd "${prefix}/share/extract-dvcs-gpd/xmlSchema.xsd"
+cmake -S "${source_root}" -B application -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${prefix}" -DCMAKE_PREFIX_PATH="${prefix}"
+cmake --build application -j"${jobs}"; cmake --install application
+python3 -m venv "${prefix}/venv"
+"${prefix}/venv/bin/pip" install --upgrade pip 'setuptools<82' wheel
+torch_index="${DVCS_TORCH_INDEX_URL:-https://download.pytorch.org/whl/cpu}"
+"${prefix}/venv/bin/pip" install --index-url "${torch_index}" torch==2.11.0
+"${prefix}/venv/bin/pip" install --no-build-isolation "${source_root}[neural]"
+"${prefix}/venv/bin/pip" check

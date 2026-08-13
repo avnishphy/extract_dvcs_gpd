@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "dataset_id": "stage02-correlated-synthetic-v1",
+  "seed": 20260728,
+  "generator": "numpy.PCG64.stage02.v1",
+  "points": [
+    {
+      "point_id": "p0",
+      "experiment_id": "stage02-synthetic",
+      "dataset_id": "stage02-template",
+      "observable_id": "synthetic_dimensionless_observable",
+      "kinematics": {
+        "x_B": {"value": 0.15, "unit": "1"},
+        "Q2": {"value": 2.0, "unit": "GeV2"},
+        "t": {"value": -0.10, "unit": "GeV2"},
+        "phi": {"value": 0.20, "unit": "rad"},
+        "beam_energy": {"value": 10.6, "unit": "GeV"}
+      },
+      "beam_charge": -1,
+      "beam_helicity": 1,
+      "target_polarization": 0.0,
+      "measurement": {"value": 0.0, "unit": "1"},
+      "kinematic_valid": true
+    },
+    {
+      "point_id": "p1",
+      "experiment_id": "stage02-synthetic",
+      "dataset_id": "stage02-template",
+      "observable_id": "synthetic_dimensionless_observable",
+      "kinematics": {
+        "x_B": {"value": 0.20, "unit": "1"},
+        "Q2": {"value": 3.0, "unit": "GeV2"},
+        "t": {"value": -0.15, "unit": "GeV2"},
+        "phi": {"value": 0.50, "unit": "rad"},
+        "beam_energy": {"value": 10.6, "unit": "GeV"}
+      },
+      "beam_charge": -1,
+      "beam_helicity": 1,
+      "target_polarization": 0.0,
+      "measurement": {"value": 0.0, "unit": "1"},
+      "kinematic_valid": true
+    },
+    {
+      "point_id": "p2",
+      "experiment_id": "stage02-synthetic",
+      "dataset_id": "stage02-template",
+      "observable_id": "synthetic_dimensionless_observable",
+      "kinematics": {
+        "x_B": {"value": 0.25, "unit": "1"},
+        "Q2": {"value": 4.0, "unit": "GeV2"},
+        "t": {"value": -0.20, "unit": "GeV2"},
+        "phi": {"value": 0.80, "unit": "rad"},
+        "beam_energy": {"value": 10.6, "unit": "GeV"}
+      },
+      "beam_charge": -1,
+      "beam_helicity": 1,
+      "target_polarization": 0.0,
+      "measurement": {"value": 0.0, "unit": "1"},
+      "kinematic_valid": true
+    }
+  ],
+  "truth_prediction": [0.3, 0.5, 0.7],
+  "covariance": [
+    [0.0100, 0.0020, 0.0000],
+    [0.0020, 0.0225, 0.0030],
+    [0.0000, 0.0030, 0.0400]
+  ],
+  "nuisance_groups": [
+    {
+      "group_id": "offset",
+      "mode": "additive",
+      "response": [0.01, 0.02, 0.03],
+      "response_unit": "observable",
+      "prior": "standard_normal"
+    },
+    {
+      "group_id": "normalization",
+      "mode": "multiplicative",
+      "response": [0.04, 0.04, 0.04],
+      "response_unit": "1",
+      "prior": "standard_normal"
+    }
+  ]
+}

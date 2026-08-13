@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "operation": "evaluate_conformal_moment_gpd",
+  "request_id": "stage08-example-001",
+  "representation": "stage08_zero_skewness_conformal_moment_v1",
+  "gpd_type": "H",
+  "flavor": "up",
+  "parton_content": "reduced_up_valence_zero_skewness_no_gluon_no_sea",
+  "parameters": {
+    "alpha": -0.55,
+    "beta": 3.4,
+    "trajectory_slope": {"value": 1.0, "unit": "GeV-2"}
+  },
+  "integration_limit": 1024,
+  "kinematics": {
+    "x": 0.2,
+    "xi": 0.0,
+    "t": {"value": -0.2, "unit": "GeV2"},
+    "q0_squared": {"value": 4.0, "unit": "GeV2"},
+    "mu_f_squared": {"value": 4.0, "unit": "GeV2"}
+  }
+}

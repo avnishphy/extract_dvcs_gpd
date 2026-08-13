@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "campaign": "stage05_reduced_dd_round0_npe_v2_fixed_covariance",
+  "parameter_transform": "probit_uniform_to_standard_normal",
+  "corpus_configuration": "configs/inference/stage05_corpus.json",
+  "stage04_configuration": "configs/examples/stage04_mcmc_closure.json",
+  "corpus": {
+    "simulation_count": 16384,
+    "parameter_batch_size": 128,
+    "rng": "numpy.PCG64",
+    "seed": 5052026,
+    "covariance_policy": "fixed_at_stage04_injection",
+    "invalid_simulation_policy": "retain_index_and_failure_then_fail_gate"
+  },
+  "context_contract": {
+    "version": "stage05_reduced_dd_context_v1",
+    "point_count": 8,
+    "point_features": [
+      "gpd_x",
+      "skewness_xi_over_0p5",
+      "minus_t_GeV2_over_0p5",
+      "log_q2_over_q0_squared",
+      "observed_h_up_over_5",
+      "marginal_sigma_over_0p25",
+      "symmetric_whitened_observation_over_25",
+      "normalization_response_over_0p1",
+      "observable_is_direct_h_up",
+      "point_mask"
+    ],
+    "global_features": [
+      "representation_is_reduced_dd",
+      "representation_is_conformal",
+      "q0_squared_GeV2_over_4",
+      "profile_b_over_2",
+      "t_slope_GeV_minus2",
+      "coefficient_function_enabled",
+      "evolution_enabled",
+      "model_mask"
+    ],
+    "covariance_encoding": "symmetric_inverse_square_root_whitening",
+    "varying_point_features": [
+      "observed_h_up_over_5",
+      "symmetric_whitened_observation_over_25"
+    ]
+  },
+  "network": {
+    "estimator": "sbi.NPE",
+    "flow": "zuko_maf",
+    "point_hidden": 256,
+    "point_layers": 3,
+    "dataset_hidden": 256,
+    "dataset_layers": 2,
+    "embedding_features": 128,
+    "point_layer_norm": false,
+    "flow_hidden_features": 64,
+    "num_transforms": 5,
+    "num_bins": 8,
+    "z_score_theta": "independent",
+    "z_score_x": "none",
+    "training_batch_size": 256,
+    "learning_rate": 0.0005,
+    "validation_fraction": 0.1,
+    "stop_after_epochs": 20,
+    "max_num_epochs": 200,
+    "ensemble_seeds": [5053401, 5053402, 5053403]
+  },
+  "validation": {
+    "sbc_trials": 250,
+    "posterior_samples_per_trial": 256,
+    "coverage_levels": [0.5, 0.8, 0.9],
+    "sbc_rank_histogram_bins": 10,
+    "posterior_predictive_trial_count": 20,
+    "posterior_predictive_samples_per_trial": 96,
+    "ood_envelope_margin_fraction": 0.1,
+    "mcmc_comparison_sample_count": 6000,
+    "exact_reevaluation_sample_count": 100,
+    "gates": {
+      "ensemble_sliced_wasserstein_max": 0.3,
+      "individual_sliced_wasserstein_max": 0.4,
+      "seed_pair_sliced_wasserstein_max": 0.4,
+      "marginal_wasserstein_over_mcmc_sd_max": 0.35,
+      "mean_difference_over_mcmc_sd_max": 0.5,
+      "sbc_chi_square_p_min": 0.001,
+      "sbc_ks_p_min": 0.001,
+      "coverage_standard_error_max": 3.0,
+      "posterior_predictive_point_90_coverage_min": 0.82,
+      "posterior_predictive_point_90_coverage_max": 0.98,
+      "posterior_predictive_central_pvalue_fraction_min": 0.8,
+      "posterior_predictive_median_pvalue_min": 0.2,
+      "posterior_predictive_median_pvalue_max": 0.8,
+      "ood_validation_in_envelope_fraction_min": 0.95,
+      "ood_corrupted_detection_fraction_min": 1.0
+    }
+  }
+}

@@ -1,0 +1,11 @@
+.git
+.dvcs
+build
+dist
+results
+user/workspaces
+jobs/jlab_ifarm/*.env
+*.sif
+*.log
+__pycache__
+*.pyc

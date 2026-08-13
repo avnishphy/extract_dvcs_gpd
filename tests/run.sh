@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONDONTWRITEBYTECODE=1
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+mode="${1:-static}"
+case "${mode}" in
+  static)
+    python3 "${root}/tests/verify_distribution.py"
+    while IFS= read -r script; do bash -n "${script}"; done < <(find "${root}" -type f \( -name '*.sh' -o -name '*.sbatch' -o -name install.sh -o -name dvcs \) -not -path '*/.git/*' | sort)
+    "${root}/install.sh" --profile local --accelerator cpu --dry-run >/dev/null
+    "${root}/install.sh" --profile jlab_ifarm --accelerator cpu --dry-run >/dev/null
+    echo "shell and installer static verification: PASS"
+    ;;
+  native)
+    bridge="${DVCS_BRIDGE:-/opt/dvcs/bin/partons_bridge}"
+    [[ -x "${bridge}" ]] || { echo "UNVERIFIED: set DVCS_BRIDGE" >&2; exit 77; }
+    "${bridge}" --capabilities
+    "${bridge}" --self-test
+    ;;
+  quick)
+    bridge="${DVCS_BRIDGE:-/opt/dvcs/bin/partons_bridge}"
+    python_bin="${DVCS_PYTHON:-python3}"
+    [[ -x "${bridge}" ]] || { echo "UNVERIFIED: set DVCS_BRIDGE" >&2; exit 77; }
+    temp="$(mktemp -d)"; trap 'rm -rf -- "${temp}"' EXIT
+    mkdir -p "${temp}/workspace"
+    export PYTHONPATH="${root}/src" DVCS_INFER_REPOSITORY_ROOT="${root}" DVCS_WORKSPACE_ROOT="${temp}/workspace" DVCS_GPDDATABASE_ROOT="${temp}/no-database" DVCS_ACCELERATOR=cpu DVCS_CPU_THREADS=1 DVCS_NATIVE_WORKERS=1 MPLCONFIGDIR="${temp}/matplotlib"
+    "${python_bin}" -m extract_dvcs_cff.cli.user --bridge "${bridge}" init acceptance
+    "${python_bin}" -m extract_dvcs_cff.cli.user --bridge "${bridge}" doctor acceptance
+    "${python_bin}" -m extract_dvcs_cff.cli.user --bridge "${bridge}" generate acceptance --profile quick --no-progress
+    ;;
+  offline)
+    [[ -f "${root}/.dvcs/install.env" ]] || { echo "install first" >&2; exit 77; }
+    "${root}/dvcs" --help
+    ;;
+  *) echo "usage: tests/run.sh static|native|quick|offline" >&2; exit 64 ;;
+esac

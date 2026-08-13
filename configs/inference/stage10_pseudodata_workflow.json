@@ -1,0 +1,311 @@
+{
+    "schema_version": 8,
+    "workflow": "stage11_full_independent_dd_multiq2_pseudodata_v1",
+    "physics_configuration": "configs/physics/stage10_pseudodata_systematics_v1.json",
+    "bridge_schema_version": 1,
+    "representation": "stage11_lo_multiq2_full_independent_dd_v1",
+    "real_data": false,
+    "data_provenance": {
+        "mode": "manual"
+    },
+    "runtime": {
+        "accelerator": "auto",
+        "cpu_threads": 4,
+        "deterministic_algorithms": true,
+        "native_workers": "all_available"
+    },
+    "truth": {
+        "H_shadow_coefficient": 0.6,
+        "E_shadow_coefficient": -0.35,
+        "Htilde_shadow_coefficient": 0.4,
+        "Etilde_shadow_coefficient": -0.2,
+        "eta_global_normalization": 0.35,
+        "eta_lu_normalization": -0.25
+    },
+    "kinematics": [
+        {
+            "x_b": 0.2,
+            "t_GeV2": -0.09,
+            "Q2_GeV2": 1.2,
+            "beam_energy_GeV": 5.75,
+            "phi_rad": 0.4
+        },
+        {
+            "x_b": 0.18,
+            "t_GeV2": -0.11,
+            "Q2_GeV2": 2.0,
+            "beam_energy_GeV": 10.6,
+            "phi_rad": 1.2
+        },
+        {
+            "x_b": 0.21,
+            "t_GeV2": -0.14,
+            "Q2_GeV2": 3.0,
+            "beam_energy_GeV": 12.0,
+            "phi_rad": 2.2
+        },
+        {
+            "x_b": 0.24,
+            "t_GeV2": -0.18,
+            "Q2_GeV2": 4.0,
+            "beam_energy_GeV": 12.0,
+            "phi_rad": 3.4
+        },
+        {
+            "x_b": 0.2,
+            "t_GeV2": -0.12,
+            "Q2_GeV2": 8.0,
+            "beam_energy_GeV": 27.6,
+            "phi_rad": 4.6
+        },
+        {
+            "x_b": 0.26,
+            "t_GeV2": -0.16,
+            "Q2_GeV2": 45.0,
+            "beam_energy_GeV": 160.0,
+            "phi_rad": 5.6
+        }
+    ],
+    "observables": [
+        {
+            "id": "DVCSCrossSectionUUMinus",
+            "native_unit": "nb/GeV4",
+            "normalization_scale": 1.0,
+            "user_label": "Beam-spin half-sum / unpolarized cross section"
+        },
+        {
+            "id": "DVCSCrossSectionDifferenceLUMinus",
+            "native_unit": "nb/GeV4",
+            "normalization_scale": 0.1,
+            "user_label": "Beam-spin difference"
+        },
+        {
+            "id": "DVCSAc",
+            "native_unit": "1",
+            "normalization_scale": 1.0,
+            "user_label": "Beam-charge asymmetry"
+        },
+        {
+            "id": "DVCSAluMinus",
+            "native_unit": "1",
+            "normalization_scale": 1.0,
+            "user_label": "Beam-spin asymmetry"
+        },
+        {
+            "id": "DVCSAulMinus",
+            "native_unit": "1",
+            "normalization_scale": 1.0,
+            "user_label": "Longitudinal target-spin asymmetry"
+        },
+        {
+            "id": "DVCSAllMinus",
+            "native_unit": "1",
+            "normalization_scale": 1.0,
+            "user_label": "Longitudinal double-spin asymmetry"
+        }
+    ],
+    "diagnostics": {
+        "gpd_reference_kinematics": {
+            "x_b": 0.2,
+            "t_GeV2": -0.12,
+            "Q2_GeV2": 2.0,
+            "beam_energy_GeV": 12.0,
+            "phi_rad": 0.0
+        },
+        "gpd_x_grid": {
+            "minimum": 0.001,
+            "maximum": 0.8,
+            "point_count": 65
+        },
+        "credible_interval": 0.9
+    },
+    "experimental_model": {
+        "covariance_policy": "fixed_at_declared_truth",
+        "uncorrelated_relative_sigma": 0.05,
+        "uncorrelated_absolute_floor_normalized": 0.01,
+        "local_correlation_fraction": 0.015,
+        "local_correlation_length": 1.5,
+        "phi_shape_correlated_fraction": 0.01,
+        "nuisance_groups": [
+            {
+                "name": "eta_global_normalization",
+                "mode": "multiplicative",
+                "prior": "standard_normal",
+                "fractional_response": 0.02,
+                "applies_to": "all"
+            },
+            {
+                "name": "eta_lu_normalization",
+                "mode": "multiplicative",
+                "prior": "standard_normal",
+                "fractional_response": 0.03,
+                "applies_to": "DVCSCrossSectionDifferenceLUMinus"
+            }
+        ]
+    },
+    "profiles": {
+        "quick": {
+            "native_parameter_count": 2048,
+            "noise_replicates_per_parameter": 2,
+            "held_out_fraction": 0.2,
+            "posterior_sample_count": 1024,
+            "conventional_nuisance_draws_per_parameter": 8,
+            "coverage_trial_count": 20,
+            "exact_reevaluation_sample_count": 48,
+            "max_num_epochs": 100,
+            "stop_after_epochs": 20,
+            "ensemble_seeds": [
+                51001,
+                51002
+            ],
+            "active_ensemble_member_count": 2
+        },
+        "validation": {
+            "native_parameter_count": 4096,
+            "noise_replicates_per_parameter": 4,
+            "held_out_fraction": 0.2,
+            "posterior_sample_count": 16384,
+            "conventional_nuisance_draws_per_parameter": 8,
+            "coverage_trial_count": 80,
+            "exact_reevaluation_sample_count": 64,
+            "max_num_epochs": 200,
+            "stop_after_epochs": 25,
+            "ensemble_seeds": [
+                51001,
+                51002,
+                51003,
+                51004,
+                51005
+            ],
+            "active_ensemble_member_count": 3
+        }
+    },
+    "context_contract": {
+        "version": "stage11_full_independent_dd_multiq2_context_v1",
+        "point_features": [
+            "x_b_over_0p3",
+            "minus_t_GeV2_over_0p2",
+            "q2_over_q0_squared",
+            "beam_energy_GeV_over_12",
+            "sin_phi",
+            "cos_phi",
+            "observable_is_uu",
+            "observable_is_lu_difference",
+            "observable_is_beam_charge_asymmetry",
+            "observable_is_beam_spin_asymmetry",
+            "observable_is_target_spin_asymmetry",
+            "observable_is_double_spin_asymmetry",
+            "observed_normalized",
+            "marginal_sigma_normalized",
+            "symmetric_whitened_observation_over_10",
+            "global_normalization_response",
+            "lu_normalization_response",
+            "point_mask"
+        ],
+        "global_features": [
+            "representation_is_full_independent_four_gpd_flavor_dd",
+            "q0_squared_GeV2_over_1",
+            "coefficient_function_is_lo",
+            "evolution_is_configured",
+            "datum_q2_native_evolution_enabled",
+            "full_covariance_enabled",
+            "all_four_twist2_gpd_types_enabled",
+            "native_six_observable_route_enabled",
+            "model_mask"
+        ],
+        "covariance_encoding": "symmetric_inverse_square_root_whitening"
+    },
+    "network": {
+        "estimator": "sbi.NPE",
+        "flow": "zuko_maf",
+        "point_hidden": 128,
+        "point_layers": 3,
+        "dataset_hidden": 128,
+        "dataset_layers": 2,
+        "embedding_features": 96,
+        "point_layer_norm": false,
+        "flow_hidden_features": 96,
+        "num_transforms": 6,
+        "num_bins": 8,
+        "z_score_theta": "independent",
+        "z_score_x": "none",
+        "training_batch_size": 256,
+        "learning_rate": 0.0005,
+        "validation_fraction": 0.1
+    },
+    "hyperparameter_optimization": {
+        "package": "Optuna",
+        "sampler": "TPESampler",
+        "objective": "best_validation_negative_log_density",
+        "trials": {
+            "quick": 12,
+            "validation": 40
+        },
+        "pruner": "MedianPruner",
+        "pruner_startup_trials": 5,
+        "pruner_warmup_epochs": 10,
+        "search_space": {
+            "point_hidden": [
+                64,
+                96,
+                128,
+                192
+            ],
+            "dataset_hidden": [
+                64,
+                96,
+                128,
+                192
+            ],
+            "embedding_features": [
+                64,
+                96,
+                128
+            ],
+            "flow_hidden_features": [
+                64,
+                96,
+                128,
+                192
+            ],
+            "num_transforms": [
+                4,
+                6,
+                8
+            ],
+            "num_bins": [
+                6,
+                8,
+                10
+            ],
+            "training_batch_size": [
+                128,
+                256,
+                512
+            ],
+            "learning_rate": [
+                0.0001,
+                0.002
+            ]
+        }
+    },
+    "seeds": {
+        "native_parameters": 51010,
+        "training_noise": 51011,
+        "pseudodata": 51012,
+        "conventional_nuisance": 51013,
+        "comparison": 51014,
+        "coverage": 51015,
+        "optimization": 51016
+    },
+    "frozen_validation_gates": {
+        "minimum_conventional_effective_sample_size": 80,
+        "maximum_ensemble_sliced_wasserstein": 0.45,
+        "maximum_marginal_wasserstein_over_conventional_sd": 0.6,
+        "maximum_test_nll_minus_validation_nll": 0.75,
+        "maximum_coverage_standard_error": 3.5,
+        "minimum_posterior_predictive_point_90_coverage": 0.75,
+        "minimum_neural_to_conventional_stress_width_ratio": 0.85,
+        "maximum_exact_reevaluation_invalid_fraction": 0.0
+    }
+}

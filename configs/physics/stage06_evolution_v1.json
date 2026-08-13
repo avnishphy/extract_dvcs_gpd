@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "contract": "stage06_lo_apfel_fixed_nf3_msbar_v1",
+  "representation": "stage06_lo_apfel_evolved_reduced_dd_v1",
+  "input": {
+    "module": "FixedScaleDDGPD",
+    "gpd_type": "H",
+    "parton_content": "reduced_up_valence_input_evolved_fixed_nf3",
+    "q0_squared": {"value": 4.0, "unit": "GeV2"},
+    "d_term": false
+  },
+  "evolution": {
+    "module": "GPDEvolutionApfel",
+    "gpd_evolution_order": "LO",
+    "factorization_scheme": "MSbar",
+    "alpha_s": {
+      "module": "RunningAlphaStrongApfel",
+      "order": "LO",
+      "scheme": "MSbar",
+      "reference_value": 0.118,
+      "reference_scale": {"value": 91.1876, "unit": "GeV"},
+      "thresholds": [0, 0, 0]
+    },
+    "active_flavors": {
+      "module": "ActiveFlavorsThresholdsConstant",
+      "n_flavors": 3
+    },
+    "coefficient_function_order": null,
+    "renormalization_scale": null,
+    "twist": null
+  },
+  "validated_domain": {
+    "x": {"minimum": 0.00001, "maximum": 0.95},
+    "xi": {"minimum": 0.0, "maximum": 0.8},
+    "t": {"minimum": -1.0, "maximum": 0.0, "unit": "GeV2"},
+    "mu_f_squared": {"minimum": 4.0, "maximum": 16.0, "unit": "GeV2"},
+    "quadrature_order": 128
+  },
+  "labels": {
+    "analysis_order": null,
+    "coefficient_function_order": null,
+    "gpd_evolution_order": "LO",
+    "alpha_s_order": "LO",
+    "alpha_s_argument": "evolution_factorization_scale",
+    "factorization_scheme": "MSbar",
+    "fixed_active_flavors": 3,
+    "heavy_flavor_threshold_matching": false
+  },
+  "claims_excluded": [
+    "full_LO_DVCS_analysis",
+    "NLO",
+    "validated_singlet_gluon_mixing",
+    "heavy_flavor_threshold_matching",
+    "negative_x_evolution_interface",
+    "CFF",
+    "DVCS_observable"
+  ]
+}

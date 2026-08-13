@@ -1,0 +1,13 @@
+# Approved runtime imports from extract_dvcs_cff. One repository-relative path
+# per line. Directories are expanded recursively; generated files are rejected.
+src/extract_dvcs_cff
+cpp/partons_bridge/src
+cpp/partons_bridge/tests
+configs/examples
+configs/inference
+configs/physics
+configs/schemas
+configs/validation
+user/README.md
+user/PHYSICS_AND_RESULTS_GUIDE.md
+user/WORKFLOW_AND_PHYSICS.md

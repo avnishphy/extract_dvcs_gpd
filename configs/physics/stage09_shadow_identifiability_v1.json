@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "representation": "stage09_gk16_plus_bdmms21_shadow_v1",
+  "composition_module": "ShadowInjectionGPD",
+  "baseline_module": "GPDGK16",
+  "shadow_module": "GPDBDMMS21",
+  "gpd_type": "H",
+  "shadow_content": "up_sea_quark_only",
+  "parameters": {
+    "baseline_coefficient": {"prior": "uniform", "bounds": [0.8, 1.2]},
+    "shadow_coefficient": {"prior": "uniform", "bounds": [-1.0, 1.0]}
+  },
+  "gpd_diagnostic_domain": {
+    "abs_x": [0.05, 0.8],
+    "xi": [0.05, 0.2],
+    "require_abs_x_greater_than_or_equal_xi": true,
+    "t_GeV2": [-0.2, -0.08],
+    "mu_f_squared_GeV2": 4.0,
+    "mu_r_squared_GeV2": 4.0
+  },
+  "native_forward_pipeline": {
+    "cff_module": "DVCSCFFStandard",
+    "process_module": "DVCSProcessGV08",
+    "observable_module": "DVCSCrossSectionUUMinus",
+    "xi_converter_module": "DVCSXiConverterXBToXi",
+    "scales_module": "DVCSScalesQ2Multiplier",
+    "scale_multiplier": 1.0,
+    "observable_unit": "nb/GeV4"
+  },
+  "observable_domain": {
+    "x_b": [0.12, 0.28],
+    "t_GeV2": [-0.2, -0.08],
+    "Q2_GeV2": 2.0,
+    "beam_energy_GeV": 6.0,
+    "phi_rad": [0.0, 6.283185307179586]
+  },
+  "theory_configuration": {
+    "coefficient_function_order": "NLO",
+    "gpd_evolution_order": null,
+    "alpha_s": {
+      "module": "RunningAlphaStrongStandard",
+      "implementation_order": "four_loop",
+      "scheme": "MSbar",
+      "reference_value": 0.1184,
+      "reference_scale_GeV": 91.1876,
+      "flavor_threshold_source": "installed_quark_masses",
+      "threshold_matching_verified": false
+    },
+    "factorization_scale_squared": "Q2",
+    "renormalization_scale_squared": "Q2",
+    "twist": null,
+    "analysis_order_label": null
+  },
+  "frozen_gates": {
+    "max_abs_cff_shift": 1e-8,
+    "max_abs_observable_shift_nb_per_GeV4": 1e-10,
+    "min_max_abs_h_up_deformation": 1e-3,
+    "min_shadow_width90_ratio": 0.98,
+    "max_shadow_density_ratio": 1.05,
+    "max_shadow_discrete_kl": 1e-3,
+    "max_baseline_width90_ratio": 0.75
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/extract_dvcs_cff/partons_bridge_response_v1.schema.json",
+  "title": "PARTONS bridge response v1",
+  "type": "object",
+  "required": ["schema_version", "status", "backend"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "status": {"enum": ["ok", "error"]},
+    "operation": {"type": "string"},
+    "backend": {
+      "type": "object",
+      "required": [
+        "bridge_version",
+        "bridge_schema_version",
+        "bridge_source_sha256",
+        "compiler",
+        "partons",
+        "apfelxx",
+        "elementary_utils",
+        "numa",
+        "lhapdf",
+        "native_libraries",
+        "execution_mode"
+      ]
+    },
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": {"type": "string"},
+        "message": {"type": "string"}
+      }
+    }
+  }
+}
