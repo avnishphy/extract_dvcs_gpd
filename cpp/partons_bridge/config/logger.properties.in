@@ -2,4 +2,4 @@
 enable = false
 default.level = ERROR
 print.mode = COUT
-log.folder.path = @CMAKE_CURRENT_BINARY_DIR@
+log.folder.path = /tmp

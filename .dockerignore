@@ -3,9 +3,12 @@
 build
 dist
 results
+cache
+workspace
 user/workspaces
 jobs/jlab_ifarm/*.env
 *.sif
+*.partial
 *.log
 __pycache__
 *.pyc
