@@ -8,8 +8,15 @@ case "${mode}" in
     python3 "${root}/tests/verify_distribution.py"
     python3 "${root}/tests/verify_documentation.py"
     while IFS= read -r script; do bash -n "${script}"; done < <(find "${root}" -type f \( -name '*.sh' -o -name '*.sbatch' -o -name install.sh -o -name dvcs \) -not -path '*/.git/*' | sort)
+    install_state_before="$(if [[ -f "${root}/.dvcs/install.env" ]]; then sha256sum "${root}/.dvcs/install.env"; else echo absent; fi)"
     "${root}/install.sh" --profile local --accelerator cpu --dry-run >/dev/null
     "${root}/install.sh" --profile jlab_ifarm --accelerator cpu --dry-run >/dev/null
+    install_state_after="$(if [[ -f "${root}/.dvcs/install.env" ]]; then sha256sum "${root}/.dvcs/install.env"; else echo absent; fi)"
+    [[ "${install_state_before}" == "${install_state_after}" ]] || { echo "dry-run changed installer state" >&2; exit 1; }
+    if DVCS_ENGINE=invalid "${root}/install.sh" --dry-run >/dev/null 2>&1; then
+        echo "installer accepted invalid DVCS_ENGINE" >&2
+        exit 1
+    fi
     echo "shell and installer static verification: PASS"
     ;;
   native)

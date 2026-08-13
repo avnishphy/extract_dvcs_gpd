@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-13",
+  "scope": "dependency update and installation-readiness audit",
+  "passed": [
+    "all six pinned Git native repositories resolve and their locked commits equal upstream HEAD; PARTONS, ElementaryUtils, NumA++, and partons-example are at v5.0.0, APFEL++ HEAD is after 4.8.1, and gpddatabase is at v.1.1.3",
+    "LHAPDF 6.5.6 and GSL 2.8 are current stable releases",
+    "the pinned Ubuntu OCI digest and 20260801 snapshot endpoint remain retrievable",
+    "exact direct Python requirements resolve with PyTorch 2.12.1 on the official CPU index and CUDA 12.6 metadata is available",
+    "fresh isolated CPU installation of all direct and constrained transitive packages completed",
+    "pip check and direct scientific-stack imports passed",
+    "sbi 0.26.1 performed an actual CPU NPE train, posterior construction, and sampling cycle with PyTorch 2.12.1",
+    "37 targeted DeepSets, inference, Optuna, plotting, and validation regressions passed",
+    "native bridge capabilities and deterministic self-test passed",
+    "stage03 DD, stage06 evolution, stage07 basis mixing, stage08 conformal, and stage09 shadow native physics tests passed",
+    "distribution static, documentation, shell syntax, and non-mutating installer dry-run checks passed",
+    "PyPI direct and transitive advisory metadata plus pip-audit were reviewed"
+  ],
+  "conditional": [
+    {
+      "finding": "setuptools 81.0.0 is in the affected range of GHSA-h35f-9h28-mq5c",
+      "reason": "PyTorch 2.12.1 requires setuptools<82; the issue requires sdist creation on macOS APFS/HFS+, outside the supported Linux-container build/runtime and normal workflow"
+    },
+    {
+      "test": "CUDA 12.6 installation",
+      "result": "PyTorch wheel and platform dependency metadata resolved after the exact preinstalled packaging-tool step; the multi-gigabyte dry-run download was stopped and no GPU execution was available"
+    }
+  ],
+  "unverified": [
+    {
+      "test": "complete CPU/CUDA OCI build, non-root execution, vulnerability scan, persistent mounts, and offline runtime",
+      "reason": "Docker and Podman are unavailable on the audit host; GitHub CI is configured to build, test, scan high-or-critical vulnerabilities, and generate an SBOM"
+    },
+    {
+      "test": "Apptainer build/execution, Slurm submission, JLab filesystem and GPU-driver behavior",
+      "reason": "Apptainer, Slurm, JLab ifarm, and usable CUDA hardware are unavailable on the audit host"
+    },
+    {
+      "test": "published image pull by immutable digest",
+      "reason": "publication remains disabled pending an application license grant, GitHub owner selection, successful CI, and recorded image digests"
+    }
+  ],
+  "publication_blockers": [
+    "repository-level application license grant is unresolved",
+    "provenance/images.lock.json still requires the real GitHub owner and post-publication OCI digests"
+  ]
+}

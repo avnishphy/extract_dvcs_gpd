@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "audit_date": "2026-08-13",
+  "policy": "Update security and build-compatibility fixes immediately; migrate scientific feature/API versions only with full numerical regression and a new compatibility record.",
+  "native": {
+    "partons": {"locked": "1ad0b7d3bf62328f564c4ded06793e5feed00d4f", "upstream_head": "1ad0b7d3bf62328f564c4ded06793e5feed00d4f", "latest_tag": "v5.0.0", "action": "none"},
+    "apfelxx": {"locked": "27deaec493d95bad0686b3b1c91fbbc910c891ff", "upstream_head": "27deaec493d95bad0686b3b1c91fbbc910c891ff", "latest_tag": "4.8.1", "action": "none"},
+    "elementary_utils": {"locked": "0133fc6e69872270027c37381a273893f7841b42", "upstream_head": "0133fc6e69872270027c37381a273893f7841b42", "latest_tag": "v5.0.0", "action": "none"},
+    "numa": {"locked": "f184ee75f1d61b380e522d38ba48fbcbe9d78ae5", "upstream_head": "f184ee75f1d61b380e522d38ba48fbcbe9d78ae5", "latest_tag": "v5.0.0", "action": "none"},
+    "partons_example": {"locked": "7ca59c36634dce411643e0846b495fcf0690e545", "upstream_head": "7ca59c36634dce411643e0846b495fcf0690e545", "latest_tag": "v5.0.0", "action": "none"},
+    "gpddatabase": {"locked": "1e9e97fd417ce1d6d44fc73550bdbf32cca4eeb1", "upstream_head": "1e9e97fd417ce1d6d44fc73550bdbf32cca4eeb1", "latest_tag": "v.1.1.3", "action": "none"},
+    "lhapdf": {"locked": "6.5.6", "latest_release": "6.5.6", "action": "none"},
+    "gsl": {"locked": "2.8", "latest_stable": "2.8", "action": "none"}
+  },
+  "python": {
+    "numpy": {"locked": "1.26.4", "latest": "2.5.2", "action": "retain; NumPy 2 is an explicit numerical/API migration"},
+    "PyYAML": {"locked": "6.0.3", "latest": "6.0.3", "action": "none"},
+    "munch": {"locked": "4.0.0", "latest": "4.0.0", "action": "none"},
+    "particle": {"locked": "0.26.1", "latest": "1.0.0", "action": "retain; major database-compatibility migration"},
+    "matplotlib": {"locked": "3.10.8", "latest": "3.11.1", "action": "retain validated plotting environment"},
+    "scipy": {"locked": "1.17.1", "latest": "1.18.0", "action": "retain validated numerical environment"},
+    "torch": {"previous": "2.11.0", "locked": "2.12.1", "latest": "2.12.1", "action": "updated for GHSA-rrmf-rvhw-rf47"},
+    "sbi": {"locked": "0.26.1", "latest": "0.27.0", "action": "retain validated inference API"},
+    "zuko": {"locked": "1.6.0", "latest": "1.6.0", "action": "none"},
+    "optuna": {"locked": "4.5.0", "latest": "4.9.0", "action": "retain validated sampler and study semantics"},
+    "tqdm": {"locked": "4.70.0", "latest": "4.70.0", "action": "none"}
+  },
+  "security": {
+    "source": "PyPI vulnerability metadata cross-checked with the GitHub-reviewed advisory database",
+    "direct_pin_findings": [
+      {
+        "package": "torch",
+        "affected_pin": "2.11.0",
+        "advisory": "GHSA-rrmf-rvhw-rf47",
+        "severity": "low",
+        "affected_range": "<=2.12.0",
+        "resolution": "2.12.1"
+      }
+    ],
+    "other_direct_pins": "No advisories returned by PyPI on the audit date",
+    "transitive_findings": [
+      {
+        "package": "setuptools",
+        "locked": "81.0.0",
+        "advisory": "GHSA-h35f-9h28-mq5c",
+        "fixed": "83.0.0",
+        "reason_not_updated": "PyTorch 2.12.1 requires setuptools<82",
+        "applicability": "The advisory requires Unicode normalization collisions while creating an sdist on macOS APFS/HFS+. Supported builds and runtime are Linux containers, and normal workflows do not create sdists."
+      }
+    ]
+  },
+  "github_actions": {
+    "policy": "Current major tags were resolved to immutable commit SHAs in both workflows.",
+    "checkout": "v7",
+    "setup_buildx": "v4",
+    "build_push": "v7",
+    "upload_artifact": "v7",
+    "login": "v4",
+    "attest_build_provenance": "v4",
+    "scan_action": "v7",
+    "sbom_action": "v0"
+  },
+  "system": {
+    "ubuntu_base_digest": "sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90",
+    "digest_retrievable": true,
+    "ubuntu_snapshot": "20260801T000000Z",
+    "snapshot_retrievable": true,
+    "current_mutable_ubuntu_24_04_tag_digest": "sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea",
+    "action": "retain audited digest and snapshot; mutable tag drift alone is not a validated scientific-environment update"
+  },
+  "resolution": {
+    "python_target": "CPython 3.12 on Ubuntu 24.04",
+    "cpu_index": "https://download.pytorch.org/whl/cpu",
+    "cuda_index": "https://download.pytorch.org/whl/cu126",
+    "solver": "CPU direct and transitive installation succeeded. CUDA 12.6 accepted the exact pins and began resolving wheel-metadata-pinned platform libraries; the multi-gigabyte dry-run download was stopped before completion.",
+    "transitive_constraints": "requirements/runtime-constraints.txt"
+  },
+  "sources": {
+    "pypi": "https://pypi.org/pypi/<package>/json",
+    "pytorch_versions": "https://pytorch.org/get-started/previous-versions/",
+    "github_advisory": "https://github.com/advisories/GHSA-rrmf-rvhw-rf47",
+    "lhapdf_releases": "https://gitlab.com/hepcedar/lhapdf/-/releases",
+    "gsl": "https://www.gnu.org/software/gsl/"
+  }
+}

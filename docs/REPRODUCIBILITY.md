@@ -12,9 +12,10 @@ artifacts. It distinguishes several increasingly strong claims:
 4. **numerical reproducibility** — outputs agree within declared tolerances;
 5. **bitwise reproducibility** — every byte is identical.
 
-The first four are supported/audited to the degree documented. Bitwise Python
-environment reproduction is not claimed because transitive wheel hashes are
-not yet locked, and GPU arithmetic may differ across hardware/runtime stacks.
+The first four are supported/audited to the degree documented. Direct and
+transitive Python versions are constrained, but bitwise Python environment
+reproduction is not claimed because wheel hashes are not locked and GPU
+arithmetic may differ across hardware/runtime stacks.
 
 ## Source identity
 
@@ -40,7 +41,7 @@ The distribution's own Git commit is recorded by containers and JLab jobs.
 - release archive URLs and SHA-256;
 - version/build flags;
 - base-image digest and Ubuntu APT snapshot;
-- Python direct versions and wheel indexes;
+- Python direct versions, transitive constraint file, and wheel indexes;
 - LHAPDF set/member hashes;
 - installed native-model source hashes;
 - database revision and access/licensing boundary.

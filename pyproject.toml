@@ -18,7 +18,7 @@ dependencies = [
 neural = [
   "matplotlib==3.10.8",
   "scipy==1.17.1",
-  "torch==2.11.0",
+  "torch==2.12.1",
   "sbi==0.26.1",
   "zuko==1.6.0",
   "optuna==4.5.0",

@@ -39,7 +39,7 @@
 20c. PyTorch, official CUDA availability and CUDA semantics documentation:
     https://docs.pytorch.org/docs/stable/generated/torch.cuda.is_available.html
     and https://docs.pytorch.org/docs/stable/notes/cuda.html.
-    The official 2.11 wheel matrix used to select CPU/CUDA distribution wheels is:
+    The official 2.12.1 wheel matrix used to select CPU/CUDA 12.6 distribution wheels is:
     https://pytorch.org/get-started/previous-versions/.
 20d. Optuna, official installation and `create_study` documentation:
     https://optuna.readthedocs.io/en/stable/installation.html and

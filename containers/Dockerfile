@@ -52,17 +52,25 @@ COPY . /src/extract-dvcs-gpd
 RUN cmake -S /src/extract-dvcs-gpd -B /build/application -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=${PREFIX} -DCMAKE_PREFIX_PATH=${PREFIX} && \
     cmake --build /build/application -j"$(nproc)" && cmake --install /build/application && \
-    python3 -m venv ${PREFIX}/venv && ${PREFIX}/venv/bin/pip install --no-cache-dir --upgrade pip 'setuptools<82' wheel
+    python3 -m venv ${PREFIX}/venv && ${PREFIX}/venv/bin/pip install --no-cache-dir --upgrade \
+      pip==26.2.1 setuptools==81.0.0 wheel==0.48.0
 ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
-RUN ${PREFIX}/venv/bin/pip install --no-cache-dir --index-url ${TORCH_INDEX_URL} torch==2.11.0 && \
-    ${PREFIX}/venv/bin/pip install --no-cache-dir --no-build-isolation '/src/extract-dvcs-gpd[neural]' && \
-    ${PREFIX}/venv/bin/pip check
+RUN ${PREFIX}/venv/bin/pip install --no-cache-dir --index-url ${TORCH_INDEX_URL} \
+      --constraint /src/extract-dvcs-gpd/requirements/runtime-constraints.txt torch==2.12.1 && \
+    ${PREFIX}/venv/bin/pip install --no-cache-dir --no-build-isolation \
+      --constraint /src/extract-dvcs-gpd/requirements/runtime-constraints.txt '/src/extract-dvcs-gpd[neural]' && \
+    ${PREFIX}/venv/bin/pip check && \
+    ${PREFIX}/bin/partons_bridge --self-test && \
+    ${PREFIX}/venv/bin/python -c 'import matplotlib, numpy, optuna, particle, scipy, sbi, torch, yaml, zuko'
 
 FROM ubuntu:24.04@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90 AS runtime
+ARG IMAGE_VERSION=0.1.0
+ARG IMAGE_SOURCE
+ARG IMAGE_REVISION=unknown
 LABEL org.opencontainers.image.title="extract-dvcs-gpd" \
-      org.opencontainers.image.version="0.1.0" \
-      org.opencontainers.image.source="https://github.com/OWNER/extract-dvcs-gpd" \
-      org.opencontainers.image.revision="7d690f69af60082d0bca8eb22a3a44144a98cd30"
+      org.opencontainers.image.version="${IMAGE_VERSION}" \
+      org.opencontainers.image.source="${IMAGE_SOURCE}" \
+      org.opencontainers.image.revision="${IMAGE_REVISION}"
 ARG DEBIAN_FRONTEND=noninteractive
 ARG UBUNTU_SNAPSHOT=20260801T000000Z
 RUN echo "APT::Snapshot \"${UBUNTU_SNAPSHOT}\";" > /etc/apt/apt.conf.d/50snapshot && \

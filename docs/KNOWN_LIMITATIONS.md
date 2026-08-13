@@ -7,9 +7,9 @@
 - Docker/Podman, Apptainer, Slurm, and usable GPU hardware were absent from the
   packaging machine. Definitions, launchers, syntax, and propagation were
   tested, but actual runtime acceptance remains outstanding.
-- The Ubuntu base digest and APT snapshot are pinned, but direct Python pins do
-  not include transitive wheel hashes; bit-for-bit Python rebuilds are not
-  claimed.
+- The Ubuntu base digest and APT snapshot plus direct/transitive Python
+  versions are pinned, but wheel hashes are not; bit-for-bit Python rebuilds
+  are not claimed.
 - Immutable historical images improve reproducibility but can contain known
   vulnerabilities. Security updates require new reviewed snapshots/images.
 

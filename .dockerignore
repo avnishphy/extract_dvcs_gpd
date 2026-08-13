@@ -9,3 +9,5 @@ jobs/jlab_ifarm/*.env
 *.log
 __pycache__
 *.pyc
+*.egg-info
+sbi-logs

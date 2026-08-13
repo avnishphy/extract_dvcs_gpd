@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import tomllib
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -51,4 +52,30 @@ with patch("extract_dvcs_cff.native_parallel.os.sched_getaffinity", return_value
 
 lock = json.loads((ROOT / "provenance/dependencies.lock.json").read_text())
 assert lock["native_sources"]["lhapdf"]["sha256"] == "6b8b7e38dc26a977a24f5a321215b7054c14a4469d04134d70cb93a860eeeea7"
+project = tomllib.loads((ROOT / "pyproject.toml").read_text())
+direct = project["project"]["dependencies"] + project["project"]["optional-dependencies"]["neural"]
+direct_versions = dict(item.split("==", 1) for item in direct)
+lock_names = {"PyYAML": "PyYAML", **{name: name for name in lock["python"] if isinstance(lock["python"][name], str)}}
+for project_name, lock_name in lock_names.items():
+    if project_name in direct_versions:
+        assert direct_versions[project_name] == lock["python"][lock_name]
+assert set(direct_versions) <= set(lock["python"])
+assert direct_versions["torch"] == "2.12.1"
+
+constraints = []
+for line in (ROOT / "requirements/runtime-constraints.txt").read_text().splitlines():
+    line = line.strip()
+    if line and not line.startswith("#"):
+        assert line.count("==") == 1, line
+        constraints.append(line.split("==", 1)[0].lower())
+assert len(constraints) == len(set(constraints))
+assert {"filelock", "fsspec", "nflows", "scikit-learn", "tensorboard"} <= set(constraints)
+for recipe in (ROOT / "containers/Dockerfile", ROOT / "scripts/build-native-source.sh"):
+    text = recipe.read_text()
+    assert "torch==2.12.1" in text
+    assert "runtime-constraints.txt" in text
+
+audit = json.loads((ROOT / "provenance/dependency-audit-2026-08-13.json").read_text())
+assert audit["python"]["torch"]["locked"] == "2.12.1"
+assert audit["security"]["direct_pin_findings"][0]["advisory"] == "GHSA-rrmf-rvhw-rf47"
 print("distribution static verification: PASS")

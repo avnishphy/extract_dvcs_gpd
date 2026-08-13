@@ -124,8 +124,9 @@ Force a source build even after images are published:
 ./install.sh --profile local --accelerator cpu --source-build
 ```
 
-Dry-run validation performs argument/profile/engine resolution and writes
-transactional launcher state without building/downloading data:
+Dry-run validation performs argument/profile/engine resolution and reports the
+planned actions without writing launcher state, creating directories, or
+building/downloading anything:
 
 ```bash
 ./install.sh --profile local --accelerator cpu --dry-run
@@ -137,7 +138,8 @@ transactional launcher state without building/downloading data:
 ### LHAPDF
 
 The installer downloads `MSTW2008nlo68cl.tar.gz`, verifies the locked archive
-SHA-256, and atomically moves the extracted set into `DVCS_CACHE/lhapdf/`.
+SHA-256, the `.info` and central-member hashes, and the 41-member inventory,
+then atomically moves the extracted set into `DVCS_CACHE/lhapdf/`.
 This set is required only for the VGG99 native-model holdout. The explicit
 container `LHAPDF_DATA_PATH` points at that directory.
 
@@ -167,7 +169,15 @@ The installer may reuse an already complete SIF or data set. It does not claim
 that a partially created third-party engine cache is valid; the container
 engine controls its own layer recovery.
 
-## Verify installation
+## Automatic and manual verification
+
+Installation now finishes only after the native bridge self-test, direct
+imports of the scientific Python stack, and `pip check` succeed. CUDA local
+installation additionally requires PyTorch to see a usable GPU through the
+selected container engine. This catches a missing NVIDIA Container Toolkit or
+Podman CDI configuration before the first physics run.
+
+For an additional project-level check:
 
 ```bash
 ./dvcs init installation-check

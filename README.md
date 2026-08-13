@@ -125,7 +125,7 @@ Verified on the packaging host:
 
 Docker/Podman, Apptainer, Slurm, usable CUDA hardware, and multi-GPU hardware
 were unavailable on that host and remain explicitly unverified. See the
-[verification record](provenance/verification-2026-08-12.json) and [acceptance
+[latest verification record](provenance/verification-2026-08-13.json) and [acceptance
 procedures](docs/ACCEPTANCE.md).
 
 ## Reproducibility and provenance

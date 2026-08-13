@@ -30,8 +30,11 @@ install -D -m0644 partons-example/data/xmlSchema.xsd "${prefix}/share/extract-dv
 cmake -S "${source_root}" -B application -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${prefix}" -DCMAKE_PREFIX_PATH="${prefix}"
 cmake --build application -j"${jobs}"; cmake --install application
 python3 -m venv "${prefix}/venv"
-"${prefix}/venv/bin/pip" install --upgrade pip 'setuptools<82' wheel
+"${prefix}/venv/bin/pip" install --upgrade pip==26.2.1 setuptools==81.0.0 wheel==0.48.0
 torch_index="${DVCS_TORCH_INDEX_URL:-https://download.pytorch.org/whl/cpu}"
-"${prefix}/venv/bin/pip" install --index-url "${torch_index}" torch==2.11.0
-"${prefix}/venv/bin/pip" install --no-build-isolation "${source_root}[neural]"
+constraints="${source_root}/requirements/runtime-constraints.txt"
+"${prefix}/venv/bin/pip" install --index-url "${torch_index}" --constraint "${constraints}" torch==2.12.1
+"${prefix}/venv/bin/pip" install --no-build-isolation --constraint "${constraints}" "${source_root}[neural]"
 "${prefix}/venv/bin/pip" check
+"${prefix}/bin/partons_bridge" --self-test
+"${prefix}/venv/bin/python" -c 'import matplotlib, numpy, optuna, particle, scipy, sbi, torch, yaml, zuko'

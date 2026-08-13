@@ -7,6 +7,12 @@ The authoritative machine-readable inventory is
 present and how it is obtained. Exact values here must be updated together
 with the lock and container definitions.
 
+The dated upstream/security review is recorded in
+`provenance/dependency-audit-2026-08-13.json`. A newer upstream release is not
+automatically a required update: for a scientific environment, API and
+numerical migrations remain pinned until their complete regression evidence is
+recorded. Security fixes and build-compatibility fixes take priority.
+
 Native source dependencies are fetched from verified upstream locations at
 exact commits or release archives. No image build copies sibling development
 binaries. Distribution/runtime tests may use local trees only as audit
@@ -55,7 +61,7 @@ Direct versions are exact in `pyproject.toml`/the lock:
 | particle | 0.26.1 | Database particle metadata compatibility. |
 | Matplotlib | 3.10.8 | Saved-result plots. |
 | SciPy | 1.17.1 | Statistical/numerical diagnostics. |
-| PyTorch | 2.11.0 | Neural computation and distributed runtime. |
+| PyTorch | 2.12.1 | Neural computation and distributed runtime; first release after the affected range of GHSA-rrmf-rvhw-rf47. |
 | sbi | 0.26.1 | Neural posterior estimation interface. |
 | zuko | 1.6.0 | Conditional MAF implementation used by sbi. |
 | Optuna | 4.5.0 | Optional persistent hyperparameter study. |
@@ -63,12 +69,25 @@ Direct versions are exact in `pyproject.toml`/the lock:
 
 CPU wheels come from the official PyTorch CPU index; CUDA variants use the
 official CUDA 12.6 index. The rest resolve from the normal Python index during
-image build. `pip check` runs in the build.
+image build. Packaging tools are fixed at pip 26.2.1, setuptools 81.0.0, and
+wheel 0.48.0. `requirements/runtime-constraints.txt` fixes the complete
+non-platform transitive graph; PyTorch wheel metadata fixes its platform CUDA
+libraries. `pip check`, direct imports, and the native self-test run while the
+image is built and again after installation.
 
-Direct versions are pinned, but transitive wheel filenames and hashes are not
-yet locked. Therefore the repository does not claim bit-for-bit Python
-environment reproduction. CI should emit a complete resolved package/wheel
-manifest before release promotion.
+Package versions are deterministic, while wheel files are not hash-locked.
+The promoted OCI digest, SBOM, and build attestation are therefore the final
+immutable installation identity rather than a claim of bit-for-bit local
+source-build reproduction.
+
+The resolved PyTorch dependency requires setuptools below 82. The only
+remaining Python advisory in the 13 August 2026 audit is a setuptools sdist
+Unicode-normalization issue fixed in 83. It applies to sdist creation on macOS
+APFS/HFS+, while supported builds/runs are Linux containers and physics
+workflows never create sdists. This scoped exception is recorded in the dated
+audit. CI still fails the image build on high-or-critical findings and emits an
+SBOM; a future PyTorch release that permits a fixed setuptools must remove the
+exception.
 
 ## LHAPDF set
 

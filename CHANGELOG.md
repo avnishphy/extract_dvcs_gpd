@@ -10,6 +10,12 @@
   and every generated schema-7 leaf.
 - Corrected the JLab workflow DAG to run the conventional comparison before
   holdout and plotting.
+- Updated PyTorch from 2.11.0 to security-fixed 2.12.1, constrained the full
+  non-platform Python graph, pinned packaging tools and GitHub Actions, and
+  added a dated dependency/security audit plus high-severity image scanning.
+- Made installer dry runs non-mutating, added usable-engine preflight,
+  download retries, full LHAPDF set checks, atomic database checkout, clear
+  progress messages, and automatic native/Python post-install self-tests.
 
 ## 0.1.0 - 2026-08-12
 

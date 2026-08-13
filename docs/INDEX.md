@@ -54,8 +54,9 @@ use the reference pages while running a study.
 - [Updating from upstream](UPDATING_FROM_EXTRACT_DVCS_CFF.md) describes the
   allowlisted, conflict-detecting import process.
 - [Dependency lock](../provenance/dependencies.lock.json), [image lock](../provenance/images.lock.json),
+  [dated dependency/security audit](../provenance/dependency-audit-2026-08-13.json),
   [upstream import record](../provenance/upstream-import.json), and
-  [verification record](../provenance/verification-2026-08-12.json) are the
+  [latest verification record](../provenance/verification-2026-08-13.json) are the
   machine-readable authorities.
 
 ## Important vocabulary

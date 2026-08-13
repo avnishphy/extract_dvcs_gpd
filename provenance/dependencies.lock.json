@@ -101,20 +101,35 @@
     "torch": "2.11.0+cu130",
     "cuda_probe": "unavailable: NVML/GPU access blocked"
   },
+  "updated_cpu_python_evidence": {
+    "date": "2026-08-13",
+    "python": "3.13.5",
+    "torch": "2.12.1+cpu",
+    "sbi": "0.26.1",
+    "result": "isolated install, pip check, direct imports, targeted regressions, and NPE train/sample passed"
+  },
   "python": {
     "python": "3.12 (Ubuntu 24.04)",
     "numpy": "1.26.4",
     "PyYAML": "6.0.3",
+    "munch": "4.0.0",
+    "particle": "0.26.1",
     "matplotlib": "3.10.8",
     "scipy": "1.17.1",
-    "torch": "2.11.0",
+    "torch": "2.12.1",
     "sbi": "0.26.1",
     "zuko": "1.6.0",
     "optuna": "4.5.0",
     "tqdm": "4.70.0",
     "cpu_wheel_index": "https://download.pytorch.org/whl/cpu",
     "cuda_wheel_index": "https://download.pytorch.org/whl/cu126",
-    "cuda_runtime": "12.6 wheel runtime; host driver compatibility must pass doctor"
+    "cuda_runtime": "12.6 wheel runtime; host driver compatibility must pass doctor",
+    "packaging_tools": {
+      "pip": "26.2.1",
+      "setuptools": "81.0.0",
+      "wheel": "0.48.0"
+    },
+    "transitive_constraints": "requirements/runtime-constraints.txt"
   },
   "native_model_source_sha256": {
     "GPDGK11.cpp": "6d7823662014526533f0276b687c4d8eaf7d7d032fb465b7ca37a800b6aecafd",

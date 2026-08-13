@@ -10,6 +10,8 @@ dist/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+*.egg-info/
+sbi-logs/
 jobs/jlab_ifarm/resources.env
 jobs/jlab_ifarm/logs/
 user/workspaces/
