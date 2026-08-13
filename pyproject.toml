@@ -19,7 +19,7 @@ neural = [
   "matplotlib==3.10.8",
   "scipy==1.17.1",
   "torch==2.12.1",
-  "sbi==0.26.1",
+  "sbi==0.27.0",
   "zuko==1.6.0",
   "optuna==4.5.0",
   "tqdm==4.70.0",
