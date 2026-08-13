@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-12",
+  "implementation_commit_under_test": "5123d6d",
+  "host": {
+    "kernel": "Linux 5.15.167.4-microsoft-standard-WSL2 x86_64",
+    "affinity_cpu_count": 22,
+    "compiler": "GNU 14.2.0",
+    "cmake": "3.31.6",
+    "system_python": "3.13.5"
+  },
+  "passed": [
+    "clean no-hardlink Git clone and tests/run.sh static",
+    "distribution JSON/Python/path/development-file hygiene and shell syntax",
+    "installer local/JLab dry runs, repeated invocation, and transactional configuration",
+    "local launcher runtime override precedence and Docker/Podman/Apptainer GPU argument selection",
+    "native CMake configure, build, install, relative RUNPATH audit, capabilities, and deterministic self-test",
+    "retained stage03, stage06, stage07, stage08, and stage09 native physics executables",
+    "native fixture source checksums",
+    "targeted upstream Python regression suite: 16 passed, 2 hardware skips",
+    "CPU affinity and SLURM_CPUS_PER_TASK worker bounding",
+    "CPU tensor/autograd training smoke",
+    "explicit CUDA request fails closed when CUDA is unusable",
+    "complete editable CPU generation smoke: 8 requested parameters plus injected truth, 0 invalid",
+    "complete workflow-level CPU NPE ensemble training smoke: two members converged after 38 and 21 epochs",
+    "215 additional content-addressed native quick-profile bridge calls completed with zero nonzero exit codes",
+    "upstream synchronization conflict detection without overwrite",
+    "dependency Git revision reachability and GSL/LHAPDF archive checksum verification",
+    "absence of committed generated workspaces, results, caches, development-stage files, and machine-local paths"
+  ],
+  "partial": [
+    {
+      "test": "frozen quick profile with 2048 requested native parameters",
+      "result": "215 bridge requests completed successfully before the time-bounded packaging run was stopped; the content-addressed cache remains resumable outside the repository",
+      "claim": "not marked complete"
+    },
+    {
+      "test": "Python environment parity",
+      "result": "the available audited environment ran regressions and workflow training but lacked direct packages munch and particle; the container recipe pins and installs both and runs pip check",
+      "claim": "container-level dependency check remains unverified"
+    }
+  ],
+  "unverified": [
+    {
+      "test": "complete CPU OCI build, non-root execution, persistent mounts, and offline runtime",
+      "reason": "Docker and Podman are unavailable"
+    },
+    {
+      "test": "real CUDA neural training and multi-GPU NCCL/Optuna equivalence",
+      "reason": "NVML reports GPU access blocked; no usable CUDA device is allocated"
+    },
+    {
+      "test": "Apptainer conversion and execution",
+      "reason": "Apptainer is unavailable"
+    },
+    {
+      "test": "Slurm submission and JLab filesystem/driver behavior",
+      "reason": "Slurm and JLab ifarm are unavailable"
+    },
+    {
+      "test": "published OCI names and digests",
+      "reason": "publication is blocked by the missing application license and images.lock.json intentionally contains null digests"
+    }
+  ]
+}
