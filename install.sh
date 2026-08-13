@@ -149,20 +149,56 @@ if [[ "${profile}" == local ]]; then
         'python -c "import matplotlib, numpy, optuna, particle, scipy, sbi, torch, yaml, zuko; assert torch.cuda.is_available() == ('"$([[ "${resolved}" == cuda ]] && echo True || echo False)"')" && pip check'
 else
     log "preparing JLab Apptainer image"
+    candidate_image="${image}"
+    built_image=false
     if [[ ! -s "${image}" ]]; then
+        candidate_image="${image}.partial"
+        built_image=true
         if [[ "${published}" == true && -n "${digest}" && "${source_build}" != true ]]; then
-            apptainer pull "${image}.partial" "docker://${registry}@${digest}"
+            apptainer pull --force "${candidate_image}" "docker://${registry}@${digest}"
         else
             log "no approved published digest is available; the first locked fakeroot source build can take a while"
-            (cd "${root}" && apptainer build --fakeroot "${image}.partial" containers/apptainer.def)
+            wheelhouse="${DVCS_WHEELHOUSE:-${TMPDIR:-/tmp}/extract-dvcs-gpd-wheels-${UID}/${resolved}}"
+            mkdir -p "${wheelhouse}"
+            if [[ "${resolved}" == cuda ]]; then
+                torch_wheel="torch-2.12.1+cu126-cp312-cp312-manylinux_2_28_x86_64.whl"
+                torch_url="https://download.pytorch.org/whl/cu126/torch-2.12.1%2Bcu126-cp312-cp312-manylinux_2_28_x86_64.whl"
+                torch_sha256="fcc3cf2026f15afeb69f51fa3fde7b286ffd7e6d9b8e070021ca8abd95bd220a"
+            else
+                torch_wheel="torch-2.12.1+cpu-cp312-cp312-manylinux_2_28_x86_64.whl"
+                torch_url="https://download.pytorch.org/whl/cpu/torch-2.12.1%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl"
+                torch_sha256="ae4bb28409f5370852bd71af221066236c38d647f780d9b0a7240c330a9c12df"
+            fi
+            if ! echo "${torch_sha256}  ${wheelhouse}/${torch_wheel}" | sha256sum -c - >/dev/null 2>&1; then
+                log "downloading and verifying the pinned PyTorch wheel on the host"
+                curl --fail --location --http1.1 --retry 10 --retry-all-errors --connect-timeout 20 \
+                    --max-time 1800 --continue-at - "${torch_url}" -o "${wheelhouse}/${torch_wheel}.partial"
+                echo "${torch_sha256}  ${wheelhouse}/${torch_wheel}.partial" | sha256sum -c -
+                mv "${wheelhouse}/${torch_wheel}.partial" "${wheelhouse}/${torch_wheel}"
+            fi
+            (
+                build_context="$(mktemp -d "${TMPDIR:-/tmp}/extract-dvcs-gpd-context.XXXXXX")"
+                trap 'rm -rf -- "${build_context}"' EXIT
+                tar --exclude-vcs --exclude-from="${root}/.dockerignore" \
+                    -C "${root}" -cf "${build_context}/context.tar" .
+                tar -xf "${build_context}/context.tar" -C "${build_context}"
+                rm -f "${build_context}/context.tar"
+                cd "${build_context}"
+                apptainer build --force --fakeroot \
+                    --bind "${wheelhouse}:/tmp/dvcs-wheelhouse:ro" \
+                    "${candidate_image}" containers/apptainer.def
+            )
         fi
-        mv "${image}.partial" "${image}"
     fi
     log "running native and Python installation self-tests"
-    apptainer exec --cleanenv "${image}" /opt/dvcs/bin/partons_bridge --self-test
-    apptainer exec --cleanenv "${image}" /opt/dvcs/venv/bin/python -c \
+    apptainer exec --cleanenv --bind "${cache}:/cache" \
+        "${candidate_image}" /opt/dvcs/bin/partons_bridge --self-test
+    apptainer exec --cleanenv --bind "${cache}:/cache" \
+        "${candidate_image}" /opt/dvcs/venv/bin/python -c \
         'import matplotlib, numpy, optuna, particle, scipy, sbi, torch, yaml, zuko'
-    apptainer exec --cleanenv "${image}" /opt/dvcs/venv/bin/pip check
+    apptainer exec --cleanenv --bind "${cache}:/cache" \
+        "${candidate_image}" /opt/dvcs/venv/bin/pip check
+    [[ "${built_image}" == true ]] && mv "${candidate_image}" "${image}"
     if [[ ! -f "${root}/jobs/jlab_ifarm/resources.env" ]]; then
         cp "${root}/jobs/jlab_ifarm/resources.env.example" "${root}/jobs/jlab_ifarm/resources.env"
     fi
