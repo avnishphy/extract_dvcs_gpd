@@ -1,9 +1,132 @@
-# Dependencies
+# Dependency inventory
 
-The machine-readable authority is `provenance/dependencies.lock.json`. PARTONS 5.0.0, NumA++ 5.0.0, APFEL++ source-version 4.8.0, ElementaryUtils 5.0.0, LHAPDF 6.5.6, and GSL 2.8 are source built. Boost JSON, CLN, SFML-system, Eigen, LibXml2, GCC/GFortran, CMake, and Python come from the base distribution ABI.
+## Authority and policy
 
-Only `MSTW2008nlo68cl` is required, and only for the VGG99 holdout. Its archive, metadata, and central-member hashes are locked.
+The authoritative machine-readable inventory is
+`provenance/dependencies.lock.json`. This page explains why each dependency is
+present and how it is obtained. Exact values here must be updated together
+with the lock and container definitions.
 
-`gpddatabase` v1.1.3 at commit `1e9e97f` is public and declares GPL-3.0, while its README additionally says non-profit scientific use. The installer obtains a separate clean checkout and mounts it read-only; it is not embedded in images. Dataset-level citation/redistribution terms need upstream review.
+Native source dependencies are fetched from verified upstream locations at
+exact commits or release archives. No image build copies sibling development
+binaries. Distribution/runtime tests may use local trees only as audit
+evidence.
 
-PARTONS, APFEL++, NumA++, LHAPDF, GSL, and gpddatabase are GPL-family; ElementaryUtils is Apache-2.0. Exact notices are copied from their upstream repositories under `licenses/` during release preparation. The application itself currently lacks an upstream license grant, blocking public publication.
+## Native physics stack
+
+| Component | Locked identity | Role | Build/license |
+|---|---|---|---|
+| PARTONS | 5.0.0, commit `1ad0b7d3bf62328f564c4ded06793e5feed00d4f` | Module factories/services, GPD evolution integration, DVCS CFFs/process/observables, named models. | CMake C++17 shared Release; GPL-3.0-only. |
+| APFEL++ | source reports 4.8.0, commit `27deaec493d95bad0686b3b1c91fbbc910c891ff` | LO fixed-three-flavor evolution tables. | CMake C++17/Fortran shared Release; GPL-3.0-only. |
+| ElementaryUtils | 5.0.0, commit `0133fc6e69872270027c37381a273893f7841b42` | PARTONS utility/logging/factory support. | CMake C++11 shared Release; Apache-2.0. |
+| NumA++ | 5.0.0, commit `f184ee75f1d61b380e522d38ba48fbcbe9d78ae5` | Numerical integration used by PARTONS/project modules. | CMake C++11 shared Release; GPL-3.0-only. |
+| LHAPDF | 6.5.6 release archive with locked SHA-256 | PDF access required by VGG99 holdout. | Autotools shared, Python disabled; GPL-3.0-or-later. |
+| GSL | 2.8 release archive with locked SHA-256 | Quadrature/special numerical support in bridge diagnostics. | Source build; GPL-3.0-or-later. |
+| PARTONS example schema | commit `7ca59c36634dce411643e0846b495fcf0690e545` | `xmlSchema.xsd` used by installed PARTONS configuration. | One installed data file; GPL-3.0-only upstream. |
+
+The bridge capability response verifies runtime-observed versions and records
+source hashes for GK11/GK16/GK19/VGG99 implementation files.
+
+## System ABI dependencies
+
+Ubuntu snapshot packages provide:
+
+- GCC/G++/GFortran and build tools;
+- CMake (project minimum 3.20), pkg-config, Autotools, and libtool;
+- Boost JSON 1.83 or newer for protocol parsing/serialization;
+- CLN, SFML-system, Eigen3, and LibXml2 required by the native stack;
+- Python 3.12 and development/venv support;
+- runtime shared libraries in the final stage.
+
+The base image is `ubuntu:24.04` at the recorded index digest. APT snapshot
+`20260801T000000Z` fixes the archive view. Package versions are captured in
+the image's `dpkg-manifest.tsv` rather than duplicated as incomplete manual
+pins in prose.
+
+## Python runtime
+
+Direct versions are exact in `pyproject.toml`/the lock:
+
+| Package | Version | Role |
+|---|---:|---|
+| NumPy | 1.26.4 | Arrays, sampling, deterministic numerical records. |
+| PyYAML | 6.0.3 | Read-only database YAML parsing. |
+| munch | 4.0.0 | Database object compatibility. |
+| particle | 0.26.1 | Database particle metadata compatibility. |
+| Matplotlib | 3.10.8 | Saved-result plots. |
+| SciPy | 1.17.1 | Statistical/numerical diagnostics. |
+| PyTorch | 2.11.0 | Neural computation and distributed runtime. |
+| sbi | 0.26.1 | Neural posterior estimation interface. |
+| zuko | 1.6.0 | Conditional MAF implementation used by sbi. |
+| Optuna | 4.5.0 | Optional persistent hyperparameter study. |
+| tqdm | 4.70.0 | Interactive stderr progress. |
+
+CPU wheels come from the official PyTorch CPU index; CUDA variants use the
+official CUDA 12.6 index. The rest resolve from the normal Python index during
+image build. `pip check` runs in the build.
+
+Direct versions are pinned, but transitive wheel filenames and hashes are not
+yet locked. Therefore the repository does not claim bit-for-bit Python
+environment reproduction. CI should emit a complete resolved package/wheel
+manifest before release promotion.
+
+## LHAPDF set
+
+Only `MSTW2008nlo68cl` is installed. It is required for `GPDVGG99` in the
+native-model holdout, not for the production DD pseudodata generator.
+
+The lock records:
+
+- archive URL and SHA-256;
+- `.info` hash;
+- central member hash;
+- 41-member count;
+- redistribution-review note.
+
+The set is downloaded to the host cache and mounted through
+`LHAPDF_DATA_PATH`; it is not silently embedded in the image.
+
+## gpddatabase
+
+The database identity is version v1.1.3 at commit
+`1e9e97fd417ce1d6d44fc73550bdbf32cca4eeb1`, fetched read-only over public
+HTTPS. Its purposes in this release are:
+
+- deterministic selection of measurement-free kinematics/provenance for new
+  projects and fresh holdouts;
+- generation of mapping-readiness metadata;
+- a narrow, quarantined real-observable diagnostic.
+
+It is not a source of training measurements or likelihood covariance.
+
+The repository contains a GPL-3.0 license file while its README adds
+“strictly for non-profit scientific use.” Dataset-level citation and
+redistribution terms are not fully resolved. To avoid silently assuming
+compatibility, the database is a separate clean pinned checkout and read-only
+mount, never embedded in distribution images.
+
+## Licensing summary
+
+License texts gathered from audited dependency sources are under `licenses/`.
+Their inclusion documents dependencies; it does not resolve compatibility for
+the imported application itself.
+
+The application/bridge source imported from `extract_dvcs_cff` has no
+repository-level license grant. Without permission from its copyright holders,
+public source/image publication is blocked. The GHCR workflow enforces an
+explicit approval variable in addition to this documentation.
+
+## Updating dependencies
+
+For any dependency change:
+
+1. verify the authoritative upstream and exact release/commit;
+2. check license and redistribution changes;
+3. update the lock, Dockerfile, Apptainer definition, and relevant CMake flags;
+4. verify source/archive hashes and Git reachability;
+5. rebuild CPU and CUDA/JLab variants from a clean cache;
+6. run bridge capabilities/self-test and all retained native tests;
+7. run Python and end-to-end workflow regression;
+8. produce new SBOM/package manifests;
+9. record new image digests and compatibility/version changes;
+10. do not reuse old scientific result contracts under the changed bridge.

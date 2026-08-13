@@ -8,7 +8,8 @@ generate_id="$(sbatch --parsable --account="${JLAB_ACCOUNT}" --partition="${JLAB
 optimize_id="$(sbatch --parsable --account="${JLAB_ACCOUNT}" --partition="${JLAB_GPU_PARTITION}" --dependency="afterok:${generate_id}" "${job_dir}/optimize_gpu.sbatch")"
 train_id="$(sbatch --parsable --account="${JLAB_ACCOUNT}" --partition="${JLAB_GPU_PARTITION}" --dependency="afterok:${optimize_id}" "${job_dir}/train_gpu.sbatch")"
 evaluate_id="$(sbatch --parsable --account="${JLAB_ACCOUNT}" --partition="${JLAB_CPU_PARTITION}" --dependency="afterok:${train_id}" "${job_dir}/evaluate.sbatch")"
-holdout_id="$(sbatch --parsable --account="${JLAB_ACCOUNT}" --partition="${JLAB_CPU_PARTITION}" --dependency="afterok:${train_id}" "${job_dir}/holdout.sbatch")"
-plot_id="$(sbatch --parsable --account="${JLAB_ACCOUNT}" --partition="${JLAB_CPU_PARTITION}" --dependency="afterok:${evaluate_id}:${holdout_id}" "${job_dir}/plot.sbatch")"
-printf 'generate=%s\noptimize=%s\ntrain=%s\nevaluate=%s\nholdout=%s\nplot=%s\n' \
-  "${generate_id}" "${optimize_id}" "${train_id}" "${evaluate_id}" "${holdout_id}" "${plot_id}" | tee "${job_dir}/logs/workflow-$(date -u +%Y%m%dT%H%M%SZ).jobs"
+compare_id="$(sbatch --parsable --account="${JLAB_ACCOUNT}" --partition="${JLAB_CPU_PARTITION}" --dependency="afterok:${evaluate_id}" "${job_dir}/compare.sbatch")"
+holdout_id="$(sbatch --parsable --account="${JLAB_ACCOUNT}" --partition="${JLAB_CPU_PARTITION}" --dependency="afterok:${compare_id}" "${job_dir}/holdout.sbatch")"
+plot_id="$(sbatch --parsable --account="${JLAB_ACCOUNT}" --partition="${JLAB_CPU_PARTITION}" --dependency="afterok:${compare_id}:${holdout_id}" "${job_dir}/plot.sbatch")"
+printf 'generate=%s\noptimize=%s\ntrain=%s\nevaluate=%s\ncompare=%s\nholdout=%s\nplot=%s\n' \
+  "${generate_id}" "${optimize_id}" "${train_id}" "${evaluate_id}" "${compare_id}" "${holdout_id}" "${plot_id}" | tee "${job_dir}/logs/workflow-$(date -u +%Y%m%dT%H%M%SZ).jobs"

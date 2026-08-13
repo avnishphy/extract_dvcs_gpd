@@ -158,7 +158,7 @@ a verified twist label. Those are omissions, not implicit constraints.
 The simulator adds one type-level coefficient times channel amplitudes. H/u
 uses installed PARTONS `GPDBDMMS21`; the remaining directions are project DD
 differences with zero forward zeroth moment. They are stress directions, not
-native shadows and not proved CFF-null. In this milestone all shadow settings
+native shadows and not proved CFF-null. In this release all shadow settings
 are fixed within a posterior run and are not among the 82 inferred
 coordinates. Editing them changes the simulator family; use a new project.
 
@@ -222,11 +222,11 @@ $$\mathcal L_{\mathrm{NPE}}=-\mathbb E\log q_\phi(\theta,\eta\mid D,m).$$
 Observable MSE or chi-square is not the neural posterior loss. Exact PARTONS
 observables are used only to generate training pairs and reevaluate samples.
 
-The milestone default is a three-layer 128-wide point network, a two-layer
+The release default is a three-layer 128-wide point network, a two-layer
 128-wide dataset network, 96 embedding features, and a zuko MAF with 96 hidden
 features, six transforms, and eight bins. Training uses batch size 256,
 learning rate (5\times10^{-4}), and a 10% internal-validation fraction.
-These values are frozen for the milestone, not asserted optimal.
+These values are frozen for the release campaign, not asserted optimal.
 
 Native parameter draws—not noisy replicas—are partitioned into train,
 internal validation, and a 20% outer test. Replicas from one draw cannot cross

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Expanded the public documentation into complete onboarding, CLI, schema,
+  architecture, native-interface, data-contract, physics, result,
+  installation, container, JLab, resource, dependency, reproducibility,
+  security, troubleshooting, limitation, reference, and maintenance guides.
+- Added documentation regression checks for required coverage, local links,
+  and every generated schema-7 leaf.
+- Corrected the JLab workflow DAG to run the conventional comparison before
+  holdout and plotting.
+
 ## 0.1.0 - 2026-08-12
 
 - Imported the approved runtime surface from clean `extract_dvcs_cff` commit `7d690f6` with a content manifest; local uncommitted upstream content is excluded.

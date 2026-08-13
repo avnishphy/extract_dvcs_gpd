@@ -1,8 +1,8 @@
 # DVCS posterior inference: user entry point
 
-Everything you may safely edit lives in `user/workspaces/`. Framework source,
-developer stages, accepted evidence, and the protected sibling database are
-outside that directory. A project is content-bound: after changing an
+Everything you may safely edit lives under the workspace root configured by
+the installer. Framework source, accepted evidence, and the read-only database
+are outside each project. A project is content-bound: after changing an
 experiment that already has results, create a new project name.
 
 ## Setup and first run
@@ -16,17 +16,15 @@ From the repository root:
 ./dvcs run my-study --profile quick
 ```
 
-`setup` builds the C++ PARTONS bridge and creates `build/user_env`. `auto`
-uses CUDA whenever PyTorch can initialize it and otherwise records a CPU
+Installation builds or retrieves the complete container runtime. `auto` uses
+CUDA whenever container PyTorch can initialize it and otherwise records a CPU
 fallback. Use `--accelerator cuda` to require CUDA and fail rather than fall
 back. PARTONS simulation/evaluation is CPU work; NPE training, scoring, and
 sampling use the selected Torch device. `native_workers: "all_available"`
 uses affinity-bounded independent PARTONS processes because installed PARTONS
-thread safety is not established. On the audited WSL host this currently
-resolves to all 22 affinity-visible CPUs. The separate `cpu_threads` setting
-controls Torch's CPU fallback only; it does not cap PARTONS workers. Run
-`./dvcs doctor my-study` to see the requested and resolved counts on your
-current host.
+thread safety is not established. The separate `cpu_threads` setting controls
+Torch's CPU fallback only; it does not cap PARTONS workers. Run `./dvcs doctor
+my-study` to see requested and resolved counts in the current allocation.
 
 `quick` checks plumbing. It is not a calibrated 82-dimensional scientific
 campaign. The larger `validation` profile is also only a starting default;
@@ -50,7 +48,7 @@ not validated adequate sample sizes for an 82-dimensional posterior.
 - five controls per shape: `normalization`, `a`, `c`, `profile_b`, and
   `t_slope_GeV_minus2`;
 - fixed shadow coefficients and channel amplitudes (editable simulator
-  settings, not posterior coordinates in this milestone);
+  settings, not posterior coordinates in this release);
 - six multi-Q2 kinematic sites copied from the read-only database catalog,
   with source Q2 and beam energy retained;
 - a declared full synthetic covariance and two explicit normalization
@@ -157,8 +155,8 @@ observable, real/imaginary CFF, and u/d/s/gluon GPD comparisons. A mismatch is
 a method-improvement result, not an execution failure and not permission to
 tune on the holdout.
 
-This implementation milestone deliberately leaves those fresh native outputs
-ungenerated so you perform the first accepted campaign.
+Fresh native outputs are generated only when you run `holdout`; they are not
+shipped as fixtures that could leak into model selection.
 
 ## Main plots
 
@@ -180,8 +178,8 @@ Under `results/PROFILE/plots/`:
   `posterior_predictive_pulls.png`: joint/statistical diagnostics.
 
 PNG files are views. JSON metrics and NumPy arrays are authoritative.
-For custom inspection, copy the compact example in
-[`scripts/`](scripts/README.md) into its Git-ignored personal workspace.
+For custom inspection, consume saved non-pickled arrays using the contracts in
+the main [data-contract reference](../docs/DATA_CONTRACTS.md).
 
 ## Interpreting success
 
@@ -203,7 +201,7 @@ the fresh native-model campaign are reviewed.
 `compare-real` remains an optional, quarantined 24-point ALU diagnostic from
 a frozen synthetic posterior. It retains source Q2 and evolves the input GPD,
 not the data. It is not a likelihood, posterior update, fit, or extraction.
-No real-fit command is enabled in this milestone.
+No real-fit command is enabled in this release.
 
 ## More detail
 
@@ -211,4 +209,5 @@ No real-fit command is enabled in this milestone.
   data-to-posterior pipeline.
 - [PHYSICS_AND_RESULTS_GUIDE.md](PHYSICS_AND_RESULTS_GUIDE.md): parameter and
   plot interpretation, gates, and troubleshooting.
-- [../docs/technical/FULL_DD_MULTIQ2_MILESTONE_V1.md](../docs/technical/FULL_DD_MULTIQ2_MILESTONE_V1.md): native source evidence and exact limitations.
+- [../docs/NATIVE_BRIDGE.md](../docs/NATIVE_BRIDGE.md): native operations,
+  provenance, cache, and exact limitations.

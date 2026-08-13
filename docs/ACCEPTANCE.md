@@ -43,6 +43,7 @@ apptainer inspect .dvcs/*.sif
 sinfo -o '%P %G %c %m %l %f'
 sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/generate.sbatch
 sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/train_gpu.sbatch
+sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/compare.sbatch
 jobs/jlab_ifarm/submit_workflow.sh
 squeue -u "$USER"
 ```

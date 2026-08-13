@@ -1,10 +1,89 @@
-# Known limitations
+# Known limitations and claim boundary
 
-- No Docker/Podman, Apptainer, Slurm, or usable GPU exists on the packaging machine. Those acceptance tests are unverified.
-- No OCI image is published and no distribution-image digest exists. `images.lock.json` intentionally contains null digests.
-- Multi-GPU ensemble training and per-GPU Optuna trial sharding are implemented, but no multi-GPU hardware was available to validate NCCL, concurrent study behavior, determinism, or statistical equivalence. Published templates conservatively request one GPU.
-- JLab paths, account association, current node features, driver compatibility, and writable filesystem choice require an actual ifarm run.
-- The application/bridge upstream has no repository-level license. Public source/image publication needs an explicit compatible license from its copyright holders.
-- `gpddatabase` combines a GPL-3.0 license file with additional restrictive README wording, and individual dataset redistribution status has not been resolved. It is fetched separately and mounted read-only.
-- Direct Python versions are pinned but wheel hashes are not yet locked, so builds are not claimed bit-for-bit reproducible.
-- Real measurements are diagnostic/quarantined, not enabled for likelihood fitting.
+## Packaging and deployment
+
+- No OCI image has been published. `provenance/images.lock.json` intentionally
+  has null digests, so source build is the only verified installer decision.
+- Docker/Podman, Apptainer, Slurm, and usable GPU hardware were absent from the
+  packaging machine. Definitions, launchers, syntax, and propagation were
+  tested, but actual runtime acceptance remains outstanding.
+- The Ubuntu base digest and APT snapshot are pinned, but direct Python pins do
+  not include transitive wheel hashes; bit-for-bit Python rebuilds are not
+  claimed.
+- Immutable historical images improve reproducibility but can contain known
+  vulnerabilities. Security updates require new reviewed snapshots/images.
+
+## Accelerator and scaling
+
+- PARTONS is CPU-native. This distribution makes no PARTONS-on-GPU claim.
+- Multi-GPU ensemble sharding and per-GPU Optuna trial sharding are
+  implemented and statically/mocked tested, but NCCL, concurrent SQLite study
+  behavior, deterministic equivalence, and posterior statistical equivalence
+  have not been validated on real multi-GPU hardware.
+- Multi-GPU execution is single-node. No multi-node distributed training or
+  distributed native simulation is implemented.
+- Native parallelism uses isolated subprocesses because PARTONS thread safety
+  is not established. Initialization/memory overhead may limit scaling.
+
+## Scientific model scope
+
+- The production path is the declared full-independent DD representation at
+  `Q0²=1 GeV²`, fixed-three-flavor LO evolution, LO standard DVCS CFFs, and six
+  observables. It is not a general selector for arbitrary PARTONS modules,
+  orders, twists, schemes, thresholds, or processes.
+- Five controls per GPD/channel are inferred. Fixed shadow/stress coefficients
+  are simulator-family settings, not posterior coordinates. Only the H/u
+  shadow direction uses installed `GPDBDMMS21`; other stress directions are
+  project test directions and are not claimed CFF-null/native.
+- Kinematic support is the validated fixed-target envelope and coupled
+  `0<y<1` domain, not the entire formal DVCS phase space.
+- The `quick` and `validation` defaults are compute profiles, not guarantees of
+  adequate simulation density, calibration precision, or identifiability in
+  82 dimensions.
+
+## Inference and validation
+
+- Simulation-based inference is amortized over the declared synthetic model.
+  Calibration outside its prior, uncertainty, kinematic, and representation
+  envelope is not established.
+- The conventional posterior uses self-normalized importance sampling on the
+  exact bank. When ESS is poor, its comparison metrics are not reliable.
+- A finite number of coverage trials has Monte Carlo uncertainty. Passing
+  configured standard-error gates is not proof of universal calibration.
+- Named GK/VGG holdouts test predictive behavior after freezing the NPE. They
+  do not establish DD parameter recovery because native model parameters do
+  not map to the inferred DD coordinates.
+- No validation threshold may be interpreted beyond the campaign for which it
+  was frozen.
+
+## Real data and database
+
+- Real measurements are quarantined from generation, training, model
+  selection, likelihood construction, and posterior updating.
+- `compare-real` is a narrow frozen-posterior diagnostic, not a fit or GPD
+  extraction from data. It does not implement a complete experimental
+  covariance/likelihood.
+- Many installed database observables remain pending convention, unit,
+  uncertainty, and runtime mapping audits. `TSlope` is derived/unmapped.
+- JLab/project data-access policies and individual dataset redistribution terms
+  remain the user's responsibility.
+
+## Licensing and access
+
+- The imported application and bridge lack a repository-level license grant.
+  Public source/image publication requires permission from copyright holders.
+- `gpddatabase` combines a GPL-3.0 file with additional non-profit-use wording;
+  compatibility and dataset redistribution require upstream/legal review.
+- The database and LHAPDF set are therefore installed separately rather than
+  embedded silently.
+
+## Verification record
+
+Exact passed, partial, and unverified checks are recorded in
+`provenance/verification-2026-08-12.json`. In particular, a complete editable
+eight-vector native generation and two-member CPU NPE training smoke passed;
+the full standard 2,048-vector quick generation was time-bounded after 215
+successful native bridge requests and is not marked complete.
+
+Use [Acceptance](ACCEPTANCE.md) to close unavailable-runtime items. Never turn
+“unverified” into “passed” based only on code inspection or device detection.

@@ -1,0 +1,236 @@
+# Architecture
+
+## Purpose and design constraints
+
+The distribution turns a validated research implementation into a portable,
+user-facing runtime. Its central constraint is that packaging must not create
+a second physics implementation. PARTONS and the project-defined C++ modules
+remain authoritative for GPDs, evolution, CFFs, and DVCS observables. Python
+orchestrates simulation, uncertainty construction, inference, validation, and
+presentation.
+
+The other design constraints are:
+
+- run without sibling development repositories;
+- preserve exact source and runtime provenance;
+- isolate every PARTONS worker process because native thread safety is not
+  established;
+- prevent experiment output from modifying framework source;
+- reject incomplete, stale, or incompatible artifacts rather than guessing;
+- make CPU, CUDA, container, and scheduler resource use explicit;
+- keep database measurements outside training and likelihood construction.
+
+## System overview
+
+```text
+host launcher ./dvcs
+        |
+        +-- Docker/Podman (local) or Apptainer (JLab)
+                |
+                +-- container entrypoint
+                |     - resolve affinity and accelerator
+                |     - constrain numerical-library threads
+                |     - record runtime provenance
+                |
+                +-- Python user CLI
+                |     - validate experiment.json
+                |     - construct private engine configuration
+                |     - coordinate workflow and artifacts
+                |
+                +-- isolated C++ bridge processes
+                |     - validate JSON request
+                |     - initialize PARTONS
+                |     - evaluate native modules/services
+                |     - return deterministic JSON + provenance
+                |
+                +-- PyTorch / sbi / Optuna
+                      - DeepSets context encoding
+                      - neural posterior estimation
+                      - optional hyperparameter search
+```
+
+Persistent host directories are mounted at `/workspace`, `/results`, `/cache`,
+and `/database`. The last mount is read-only. Images and containers are
+replaceable; user state is not stored in the container writable layer.
+
+## Repository layout
+
+| Path | Responsibility |
+|---|---|
+| `containers/` | Canonical OCI multi-stage build and Apptainer definition. |
+| `cpp/partons_bridge/` | C++ bridge, project-defined native modules, schemas/configuration, and retained physics tests. |
+| `src/extract_dvcs_cff/` | Public runtime orchestration, data handling, inference, optimization, and workflows. |
+| `configs/` | Frozen engine, physics, schema, validation, and request examples. |
+| `user/` | Imported scientific user explanations retained from the validated runtime. |
+| `docs/` | Distribution onboarding, operation, reference, and assurance documentation. |
+| `jobs/jlab_ifarm/` | Editable Slurm templates and dependency-aware submission wrapper. |
+| `scripts/` | Container entrypoint, native source build, and multi-GPU Optuna launcher. |
+| `tests/` | Distribution/static/native/quick/offline verification entry points. |
+| `tools/` | Upstream synchronization, license collection, and SBOM helper. |
+| `provenance/` | Dependency, image, import, fixture, modification, and verification records. |
+| `licenses/` | Dependency license texts and unresolved application-license notice. |
+
+Generated `.dvcs/`, `workspace/`, `results/`, `cache/`, `build/`, and local
+JLab `resources.env` paths are ignored by Git.
+
+## Launcher and container boundary
+
+`install.sh` resolves the profile and image variant, installs user-owned data,
+and atomically writes `.dvcs/install.env`. `dvcs` reads that state and starts
+the runtime with the invoking UID/GID on local engines. Environment values set
+by a job or user for workspace, results, cache, database, and accelerator take
+precedence over installation defaults.
+
+The launcher does not interpret scientific configuration. It is responsible
+for mounts, device passthrough, CPU-set propagation, and selecting the image.
+Inside the image, `scripts/container-entrypoint.sh` resolves resources and
+dispatches the public command.
+
+## User-project boundary
+
+`./dvcs init NAME` creates exactly one directory beneath the configured
+workspace root. The name cannot be absolute, contain traversal, or escape via
+a symbolic link. A project contains:
+
+```text
+NAME/
+  README.md
+  experiment.json
+  real_data_mapping_readiness.json
+  .engine/                 generated; do not edit
+  results/
+    doctor.json
+    quick/                 quick profile contract and artifacts
+    validation/            validation profile contract and artifacts
+```
+
+The public file is `experiment.json`. Before each action, the CLI validates it
+and translates it into `.engine/workflow.json` and `.engine/physics.json`.
+Those files are derived implementation inputs, not another editable API.
+
+Generation writes `workspace_contract.json`, binding results to the canonical
+engine configuration hash, profile, bridge executable hash, synthetic-only
+flag, and split policy. Training, optimization, evaluation, comparison,
+holdout, plotting, and real-data diagnostics refuse to consume results if the
+contract differs. A changed experiment therefore requires a new project.
+
+## Native physics boundary
+
+The bridge is an executable instead of an in-process Python extension. Each
+request crosses a JSON boundary and returns structured JSON. This provides:
+
+- process isolation for native global state;
+- deterministic request/response hashing;
+- direct capture of stdout, stderr, and exit status;
+- an auditable list of supported operations;
+- no dependency on Python ABI details;
+- a clean failure boundary for native exceptions or non-finite values.
+
+The bridge initializes relative to its installed location, so
+`partons.properties`, `logger.properties`, and `xmlSchema.xsd` remain
+discoverable after relocation. Installed native libraries use
+`$ORIGIN/../lib`; development build paths are not runtime dependencies.
+
+See [Native bridge](NATIVE_BRIDGE.md) for the protocol and operations.
+
+## Native scheduling and cache
+
+PARTONS thread safety has not been proven. Parallelism therefore launches one
+bridge subprocess per task and never shares a PARTONS object. Worker count is
+bounded by:
+
+1. Linux process affinity/cgroup visibility;
+2. `SLURM_CPUS_PER_TASK`, when set;
+3. the user `native_workers` or `DVCS_NATIVE_WORKERS` request;
+4. the number of ready native tasks.
+
+Requests are evaluated in deterministic two-parameter chunks and submitted in
+bounded waves. Results are restored to input order. Each cache directory is
+named by a request-content hash and stores the request, response, executable
+hash, stdout, stderr, metadata, and exit code. A hash mismatch is a cache miss,
+never an approximate match.
+
+## Simulation and uncertainty layer
+
+The workflow draws 80 GPD-shape coordinates from declared uniform supports,
+asks the bridge for the six observables at every kinematic point, and then
+constructs covariance/noise in Python. The physics prediction is never
+reimplemented in Python.
+
+Five controls are inferred for every combination of four GPD types and four
+channels: normalization, small-β exponent, large-β exponent, profile width,
+and t slope. Two standard-normal normalization nuisances bring the posterior
+dimension to 82. Native parameter groups, rather than noisy replicas, are the
+unit of train/validation/test splitting, preventing leakage between replicas.
+
+## Neural inference boundary
+
+Each measurement token contains kinematics, observable identity, normalized
+value, covariance-derived features, and nuisance responses. A shared point
+network maps tokens to embeddings; permutation-invariant pooling produces one
+dataset embedding; a conditional normalizing flow represents the posterior.
+
+Candidate ensemble members use fixed seeds. Internal grouped-validation NLL
+selects the configured number of active members. The untouched outer DD test,
+named native holdouts, and real-data diagnostic are excluded from selection.
+
+On multiple allocated GPUs, `torchrun` starts one NCCL rank per visible device
+and deterministically shards independent ensemble seeds. Rank 0 aggregates
+ordinary compatible checkpoints and performs the same selection. Optuna uses
+one process per visible GPU and a shared persistent SQLite study.
+
+## Validation boundaries
+
+Validation is layered deliberately:
+
+- training/internal-validation metrics diagnose optimization and select
+  ensemble members;
+- grouped outer-test NLL and empirical coverage test DD generalization;
+- the conventional exact-bank posterior checks neural approximation;
+- exact posterior reevaluation checks native validity and predictions;
+- named GK11/GK16/GK19/VGG99 holdouts test predictive behavior outside the DD
+  generator family after synthetic gates pass;
+- real-data comparison is a presentation-only diagnostic and cannot alter the
+  posterior.
+
+These roles must not be interchanged. In particular, a passing holdout does
+not validate a real-data fit, and real measurements cannot tune the frozen
+posterior in this release.
+
+## Provenance flow
+
+Every result can be traced through:
+
+```text
+distribution Git commit
+  -> upstream import commit and approved-file hashes
+  -> dependency lock and image digest
+  -> bridge executable/source/dependency capabilities
+  -> experiment and engine configuration hashes
+  -> native request/response/cache hashes
+  -> seed lineage and checkpoint hashes
+  -> result-array and plot-manifest hashes
+  -> host/container/Slurm resource record
+```
+
+This chain supports audit and rerun comparison. It does not imply identical
+floating-point bytes across different GPU models or library stacks unless the
+entire runtime and hardware contract also match.
+
+## Failure policy
+
+The framework fails closed for:
+
+- missing or incompatible native capabilities;
+- unknown, missing, out-of-range, or non-finite configuration values;
+- physically invalid kinematics;
+- invalid covariance or point ordering;
+- explicit CUDA requests without usable CUDA;
+- backend exception, nonzero exit, malformed JSON, or non-finite result;
+- bridge/configuration/profile mismatch with existing results;
+- dirty or wrong-revision database checkout during installation;
+- absent prerequisites for a later workflow step;
+- holdout execution before synthetic closure gates pass.
+
+Invalid prior draws are recorded and replaced deterministically during corpus
+generation. They are not converted to zero or silently imputed.

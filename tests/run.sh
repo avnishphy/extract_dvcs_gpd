@@ -6,6 +6,7 @@ mode="${1:-static}"
 case "${mode}" in
   static)
     python3 "${root}/tests/verify_distribution.py"
+    python3 "${root}/tests/verify_documentation.py"
     while IFS= read -r script; do bash -n "${script}"; done < <(find "${root}" -type f \( -name '*.sh' -o -name '*.sbatch' -o -name install.sh -o -name dvcs \) -not -path '*/.git/*' | sort)
     "${root}/install.sh" --profile local --accelerator cpu --dry-run >/dev/null
     "${root}/install.sh" --profile jlab_ifarm --accelerator cpu --dry-run >/dev/null

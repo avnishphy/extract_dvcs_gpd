@@ -1,6 +1,6 @@
 # Physics parameters and result interpretation
 
-Read this after [WORKFLOW_AND_PHYSICS.md](WORKFLOW_AND_PHYSICS.md). It explains
+Read this after [Workflow and physics](WORKFLOW_AND_PHYSICS.md). It explains
 what the files mean and what constitutes a trained, calibrated result.
 
 ## The 82 posterior coordinates

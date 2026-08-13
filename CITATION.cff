@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 title: extract-dvcs-gpd
-message: Cite this distribution, PARTONS, LHAPDF, the selected PDF set, and the scientific references listed in the user guides.
+message: Cite this distribution, PARTONS, APFEL++, LHAPDF, the selected PDF set when used, and the scientific references in docs/REFERENCES.md.
 type: software
 version: 0.1.0
 date-released: 2026-08-12

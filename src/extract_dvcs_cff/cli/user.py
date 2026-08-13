@@ -400,9 +400,8 @@ For step-by-step execution:
 ```
 
 `plot` consumes compatible saved results without repeating PARTONS or neural
-inference. For custom analysis, copy the compact notebook from
-`../../scripts/` into `../../scripts/workspaces/` and change its `PROJECT` and
-`PROFILE` values.
+inference. For custom analysis, consume the saved non-pickled arrays using
+`docs/DATA_CONTRACTS.md` in the distribution checkout.
 
 Edit `injected_truth.gpd_parameters.shadow_coefficients` in `experiment.json`
 to change the four type-level shadow injections for `H`, `E`, `Htilde`, and
@@ -412,18 +411,16 @@ distributed over `u`, `d`, `s`, and `gluon`. These are synthetic stress-test
 directions, not four native PARTONS shadow modules. The NPE infers all five
 DD controls for every H/E/Htilde/Etilde × u/d/s/gluon block (80 physics
 coordinates) plus two normalization nuisances. Shadows are fixed simulator
-settings in this milestone; changing one defines a new simulator family.
+settings in this release; changing one defines a new simulator family.
 
 The measurement-free `real_data_mapping_readiness.json` inventories candidate
 observable mappings and missing audits. It does not enable a real-data fit.
-All controls are explained in `../../README.md`. The exact simulator,
-uncertainty equations, priors,
-flavor conventions, and pseudodata-to-NPE sequence are in
-`../../WORKFLOW_AND_PHYSICS.md`.
-The exhaustive schema-7 field reference is
-`../../../docs/EXPERIMENT_JSON_REFERENCE.md`.
+All controls are explained in `docs/USER_GUIDE.md` and
+`docs/EXPERIMENT_JSON_REFERENCE.md` in the distribution checkout. The exact
+simulator, uncertainty equations, priors, flavor conventions, and
+pseudodata-to-NPE sequence are in `docs/WORKFLOW_AND_PHYSICS.md`.
 Interpretation of every result is in
-`../../PHYSICS_AND_RESULTS_GUIDE.md`.
+`docs/RESULTS_AND_INTERPRETATION.md`.
 
 Interactive workflow commands show live progress on stderr while preserving
 the final JSON result on stdout. Exact PARTONS generation advances after each

@@ -1,9 +1,230 @@
 # Troubleshooting
 
-- “no Podman or Docker”: install/configure a rootless engine outside this installer; it never changes the host OS.
-- explicit CUDA failure: check `nvidia-smi`, `CUDA_VISIBLE_DEVICES`, container GPU passthrough, PyTorch CUDA runtime, and driver compatibility. Do not switch a required CUDA run to CPU silently.
-- PARTONS configuration missing: invoke the installed bridge or `./dvcs`; do not copy the binary away from its properties/schema files.
-- LHAPDF set mismatch: preserve the directory for inspection, then point `DVCS_CACHE` at a fresh location and rerun installation.
-- database dirty/revision mismatch: use a separate clean checkout at the locked commit; never reset the user's checkout.
-- Slurm invalid account: edit `resources.env`; verify membership with JLab support.
-- checkpoint accelerator mismatch: resume with the same accelerator policy or start a new project.
+## Start with evidence
+
+For every failure, retain the exact command, exit code, stdout/stderr, project
+and profile, distribution commit, image/SIF identity, `doctor` result, and
+resource allocation. Avoid deleting caches or changing configuration before
+capturing evidence; many errors are deliberately diagnostic.
+
+Run these inexpensive checks first:
+
+```bash
+git status --short
+./tests/run.sh static
+./dvcs doctor PROJECT
+./dvcs partons-bridge --capabilities
+./dvcs partons-bridge --self-test
+```
+
+## Installation failures
+
+### No Podman or Docker
+
+The local profile found no rootless container engine. Install/configure one
+through your system administrator or distribution outside this installer, or
+set `DVCS_ENGINE=podman|docker` to an existing engine. The project will not
+install host packages for you.
+
+### Rootless engine permission error
+
+Confirm ordinary rootless test containers work, the daemon/socket belongs to
+your user, and the selected workspace paths are accessible. Do not solve this
+by running the entire workflow with sudo: generated files would become
+root-owned and the non-root contract would be untested.
+
+### Source download/checksum failure
+
+Distinguish network/TLS failure from an actual checksum mismatch. A checksum
+mismatch is fail-closed: preserve the object and lock, verify the upstream
+release independently, and update the lock only through a reviewed dependency
+change. Never disable checksum verification for convenience.
+
+### Interrupted install
+
+Rerun the same `install.sh` command. Images/data/environment state use partial
+names and atomic moves. If an incomplete final LHAPDF directory exists, point
+`DVCS_CACHE` at a fresh user-owned location or remove the incomplete directory
+yourself only after confirming its exact path and contents.
+
+### Database revision mismatch or dirty checkout
+
+The installer refuses to reset it. Preserve that checkout and set
+`DVCS_DATABASE` to a separate parent where a clean locked checkout can be
+installed. Do not package local uncommitted database changes.
+
+## Launcher and mount failures
+
+### `not installed; run ./install.sh`
+
+`.dvcs/install.env` is absent from this checkout. Run installation here; state
+from a different clone is intentionally not discovered globally.
+
+### Workspace/result/cache permission denied
+
+Check host ownership, parent execute permissions, filesystem ACLs, quota, and
+whether the engine mapped the invoking UID/GID. On SELinux systems confirm an
+approved labeling policy. The launcher does not chmod shared project storage.
+
+### Project not found or invalid name
+
+Use `./dvcs list`. Names must identify direct real directories below the
+workspace root and cannot contain traversal or symlink escapes.
+
+## Native bridge failures
+
+### PARTONS configuration or schema missing
+
+Use the installed bridge through `./dvcs`. `partons.properties`,
+`logger.properties`, and `xmlSchema.xsd` must remain beside the executable.
+Do not copy only `partons_bridge` to another directory.
+
+### Shared library not found
+
+Inspect the installed binary and image rather than setting a development-tree
+`LD_LIBRARY_PATH`:
+
+```bash
+readelf -d /opt/dvcs/bin/partons_bridge | grep -E 'RPATH|RUNPATH'
+ldd /opt/dvcs/bin/partons_bridge
+```
+
+The expected installed RUNPATH is `$ORIGIN/../lib`. A missing dependency means
+an incomplete/wrong image or installation.
+
+### Native request failed
+
+Find the corresponding content-addressed cache directory and inspect
+`request.json`, `metadata.json`, `stderr.txt`, `stdout.raw.txt`, and
+`exit_code.txt`. Do not overwrite `response.json`. Correct invalid parameters,
+kinematics, missing data, or backend installation and rerun.
+
+### Generation makes little progress
+
+The main count is accepted parameters, not attempts. Inspect rejected/invalid
+counts and `invalid_simulation_map.json`. A difficult support region may need
+many deterministic replacements; a systematic zero-acceptance first wave
+should abort. Increasing workers does not repair invalid physics.
+
+### Unphysical fixed-target kinematics
+
+Every point must satisfy `0 < Q²/(2 M_p E xB) < 1`. For legacy/database-backed
+provenance create a new project to receive the current selector. For intentional
+manual points set `kinematics_source` to exactly `{"mode":"manual"}` and
+correct the coupled values. `--force-native` cannot bypass this gate.
+
+## Result-contract failures
+
+### `generate must run first`
+
+The selected profile lacks `workspace_contract.json`. Generate that exact
+project/profile before training or later actions.
+
+### `result contract mismatch`
+
+The experiment, translated configuration, profile, or bridge hash differs
+from generation. Create a new project and regenerate. Do not copy/edit the
+contract or force old arrays through a changed method.
+
+### Checkpoint does not resume
+
+Only complete checkpoints matching data/config/member hashes resume. Inspect
+the member metrics and training logs. A changed accelerator can also affect
+the runtime contract; reproduce the original policy or start a new study.
+
+## CUDA failures
+
+### Explicit CUDA request fails
+
+Check, in order:
+
+1. scheduler/host allocation and `CUDA_VISIBLE_DEVICES`;
+2. `nvidia-smi -L` in the host/allocation;
+3. Docker toolkit, Podman CDI, or Apptainer `--nv` passthrough;
+4. device visibility inside the container;
+5. `torch.version.cuda`, `torch.cuda.is_available()`, and device count;
+6. host-driver compatibility with CUDA 12.6 wheels;
+7. a real tensor/autograd/training smoke.
+
+Do not change required `cuda` to `auto` and report the CPU fallback as GPU
+success.
+
+### Multi-GPU rank error
+
+Ensure `CUDA_VISIBLE_DEVICES` contains the allocated device list, `WORLD_SIZE`
+matches it, and the profile has at least as many candidate ensemble seeds as
+GPUs. Check per-rank runtime records and NCCL diagnostics. Do not launch a
+multi-node job; the implemented topology is single-node.
+
+### Multi-GPU Optuna SQLite locking
+
+Preserve every rank log and study file. Confirm all workers share the same
+writable filesystem and are from one job, and that no stale unrelated study is
+being reused. Persistent repeated locking requires site/runtime investigation,
+not deletion of completed trial evidence.
+
+## Neural/statistical failures
+
+### Training NLL is poor or unstable
+
+Inspect train versus internal-validation history, finite inputs, context
+normalization, corpus size, architecture, learning rate, and seed-to-seed
+variation. A better train loss with worse validation is overfitting. Do not
+tune against the outer test or named holdouts.
+
+### Conventional ESS is low
+
+Importance comparison is under-resolved. Wasserstein and width ratios may be
+unreliable even if the NPE trained normally. Increase an appropriately designed
+exact bank in a new project or improve the conventional proposal; do not lower
+the ESS gate post hoc.
+
+### Coverage or predictive gates fail
+
+Treat it as a scientific/method result. Inspect coordinate patterns, Monte
+Carlo standard errors, split integrity, invalid reevaluations, predictive
+pulls, and ensemble variation. Do not move thresholds to transform failure
+into success.
+
+### Posterior does not peak at injected truth
+
+This is not automatically a bug in an underidentified 82-dimensional inverse
+problem. Examine credible widths, correlations, repeated coverage, predictive
+agreement, and conventional comparison. A falsely narrow wrong posterior is
+more concerning than a broad posterior containing truth.
+
+## JLab/Slurm failures
+
+### Invalid account or account/partition combination
+
+Set `JLAB_ACCOUNT` in untracked `resources.env`; verify associations with
+`sacctmgr` or JLab support. Confirm current partitions with `sinfo`.
+
+### Dependent jobs never run
+
+Inspect `squeue` dependency reason and `sacct` for the prerequisite. The
+workflow uses `afterok`; a failed generation/train/evaluation/comparison
+correctly blocks downstream jobs. Resubmit from the failed step after fixing
+the cause.
+
+### Job timeout or out of memory
+
+Use `sacct` and site monitoring to measure actual usage. Increase explicit
+wall time/memory or reduce justified compute controls in a new experiment.
+Preserve resumable caches/checkpoints. Do not run the workload interactively
+on ifarm to evade scheduler limits.
+
+## Plot and real-data diagnostic failures
+
+### Plot says an input is missing/incompatible
+
+Complete generation, training, evaluation, and comparison for the same
+project/profile. Plotting intentionally refuses partial or hash-mismatched
+inputs and does not rerun computation.
+
+### Real-data comparison disabled/skipped
+
+Read `real_data_mapping_readiness.json` and the diagnostic's skipped reasons.
+The database may be absent, mapping unsupported, or required convention/unit
+audits incomplete. This is a safety boundary; do not substitute fixtures or
+enable a fit silently.
