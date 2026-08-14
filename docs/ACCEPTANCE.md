@@ -48,6 +48,12 @@ jobs/jlab_ifarm/submit_workflow.sh
 squeue -u "$USER"
 ```
 
+Before submitting the full workflow, run the allocated GPU smoke test in
+[JLab ifarm and farm guide](JLAB_IFARM.md#gpu-resource-propagation). It follows
+JLab's [GPU access instructions](https://scicomp.jlab.org/docs/Access_GPUs)
+and verifies `nvidia-smi`, the scheduler's `CUDA_VISIBLE_DEVICES`, Apptainer
+`--nv` passthrough, and PyTorch CUDA detection inside the SIF.
+
 After completion:
 
 ```bash

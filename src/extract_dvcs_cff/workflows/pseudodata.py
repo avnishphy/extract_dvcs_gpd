@@ -33,11 +33,26 @@ from extract_dvcs_cff.native_parallel import resolve_native_workers
 # an orchestration constant, not a physics parameter.
 _NATIVE_GENERATION_CHUNK_SIZE = 2
 
-# Submit enough two-parameter tasks to keep the audited CPU worker pool busy,
-# but never enqueue an entire validation corpus before its acceptance rate is
-# known.  This bounds wasted native work and permits an all-invalid campaign
-# to fail with evidence after its first wave.
-_NATIVE_GENERATION_WAVE_SIZE = 64
+# Submit at least this many parameters per wave. Larger CPU allocations scale
+# the wave to one two-parameter task per usable worker, while the incremental
+# acceptance loop still avoids enqueueing an entire validation corpus.
+_NATIVE_GENERATION_MIN_WAVE_SIZE = 64
+
+
+def _native_generation_wave_size(
+    native_workers: int | str,
+    *,
+    remaining: int,
+    available_candidates: int,
+) -> int:
+    """Size a generation wave to keep every usable native worker busy."""
+
+    worker_capacity = resolve_native_workers(native_workers).resolved_workers
+    target = max(
+        _NATIVE_GENERATION_MIN_WAVE_SIZE,
+        worker_capacity * _NATIVE_GENERATION_CHUNK_SIZE,
+    )
+    return min(remaining, target, available_candidates)
 
 # Physics-informed PARTONS models are external validation datasets only. They
 # must never be introduced into DD corpus generation or model selection.
@@ -1288,10 +1303,10 @@ def generate_pseudodata(
         if candidate_pool_offset == len(candidate_pool):
             candidate_pool = _sample_shape_parameters(rng, remaining)
             candidate_pool_offset = 0
-        wave_size = min(
-            remaining,
-            _NATIVE_GENERATION_WAVE_SIZE,
-            len(candidate_pool) - candidate_pool_offset,
+        wave_size = _native_generation_wave_size(
+            config["runtime"]["native_workers"],
+            remaining=remaining,
+            available_candidates=len(candidate_pool) - candidate_pool_offset,
         )
         candidates = candidate_pool[
             candidate_pool_offset : candidate_pool_offset + wave_size
@@ -1416,7 +1431,7 @@ def generate_pseudodata(
                 invalid_records.append(adjusted)
             native_batches.extend(partition.successful_batches)
         candidate_count += len(candidates)
-        if candidate_count >= _NATIVE_GENERATION_WAVE_SIZE and not any(
+        if candidate_count >= _NATIVE_GENERATION_MIN_WAVE_SIZE and not any(
             len(item) for item in accepted_parameters
         ):
             native_progress.close()

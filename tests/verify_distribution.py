@@ -47,8 +47,23 @@ with patch("extract_dvcs_cff.native_parallel.os.sched_getaffinity", return_value
     assert resolution.affinity_cpus == (2, 4, 6)
 with patch("extract_dvcs_cff.native_parallel.os.sched_getaffinity", return_value={1, 3}):
     assert resolve_native_workers(8).resolved_workers == 2
-with patch("extract_dvcs_cff.native_parallel.os.sched_getaffinity", return_value={0, 1, 2, 3}), patch.dict("os.environ", {"SLURM_CPUS_PER_TASK": "2"}):
+with patch("extract_dvcs_cff.native_parallel.os.sched_getaffinity", return_value={0, 1, 2, 3}), patch.dict("os.environ", {"SLURM_JOB_ID": "123", "SLURM_CPUS_PER_TASK": "2"}, clear=True):
     assert resolve_native_workers("all_available").resolved_workers == 2
+with patch("extract_dvcs_cff.native_parallel.os.sched_getaffinity", return_value={0, 1, 2, 3}), patch.dict("os.environ", {"SLURM_CPUS_PER_TASK": "2"}, clear=True):
+    assert resolve_native_workers("all_available").resolved_workers == 4
+
+from extract_dvcs_cff.workflows.pseudodata import _native_generation_wave_size
+with patch("extract_dvcs_cff.native_parallel.os.sched_getaffinity", return_value=set(range(256))), patch.dict("os.environ", {}, clear=True):
+    assert _native_generation_wave_size(
+        "all_available", remaining=4096, available_candidates=4096
+    ) == 512
+with patch("extract_dvcs_cff.native_parallel.os.sched_getaffinity", return_value=set(range(256))), patch.dict("os.environ", {"SLURM_JOB_ID": "123", "SLURM_CPUS_PER_TASK": "64"}, clear=True):
+    assert _native_generation_wave_size(
+        "all_available", remaining=4096, available_candidates=4096
+    ) == 128
+assert _native_generation_wave_size(
+    "all_available", remaining=17, available_candidates=17
+) == 17
 
 lock = json.loads((ROOT / "provenance/dependencies.lock.json").read_text())
 assert lock["native_sources"]["lhapdf"]["sha256"] == "6b8b7e38dc26a977a24f5a321215b7054c14a4469d04134d70cb93a860eeeea7"

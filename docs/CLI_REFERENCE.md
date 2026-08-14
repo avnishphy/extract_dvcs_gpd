@@ -229,7 +229,7 @@ a new project.
 | `DVCS_CACHE` | Host directory mounted at `/cache`; contains LHAPDF and application caches. |
 | `DVCS_DATABASE` | Host database parent mounted read-only at `/database`. |
 | `DVCS_ACCELERATOR` | `auto`, `cpu`, or fail-closed `cuda`. |
-| `DVCS_CPU_THREADS` | Torch CPU-thread request, bounded by allocation. |
+| `DVCS_CPU_THREADS` | Torch CPU-thread request; full affinity by default interactively, bounded by allocation in Slurm. |
 | `DVCS_NATIVE_WORKERS` | Positive integer or `all_available`, bounded by affinity. |
 | `DVCS_MATH_THREADS` | Threads per native numerical-library process; default 1. |
 | `CUDA_VISIBLE_DEVICES` | Authoritative GPU allocation presented by the runtime/scheduler. |

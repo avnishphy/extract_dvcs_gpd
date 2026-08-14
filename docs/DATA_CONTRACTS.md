@@ -240,8 +240,8 @@ exit-code.txt
 
 The container also writes `/results/provenance/runtime.json` and rank-specific
 records with requested/resolved accelerator, visible GPU count, affinity,
-Slurm CPU request, used CPU/math threads, Torch/CUDA versions, host, image
-digest, and distribution commit.
+interactive/Slurm execution context, Slurm CPU request, used CPU/math threads,
+Torch/CUDA versions, host, image digest, and distribution commit.
 
 ## Safe artifact handling
 

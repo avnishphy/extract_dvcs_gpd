@@ -135,7 +135,9 @@ not a broken executable.
   Check CUDA during `train`, and inspect recorded `neural_device`/peak memory.
 - PARTONS CPU use is bounded by both the number of ready native batches and
   the affinity-visible CPUs. With `native_workers: "all_available"`, `doctor`
-  reports the resolved count for the current allocation.
+  reports the resolved count for the current allocation. Generation wave size
+  expands beyond the 64-parameter minimum when needed to keep allocations
+  larger than 32 CPUs busy.
 - Progress advances after each completed two-parameter native batch and is
   redrawn immediately. The bar count is accepted parameters; its postfix
   distinguishes cumulative attempted, accepted, and rejected draws. It cannot

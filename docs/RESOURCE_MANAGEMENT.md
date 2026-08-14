@@ -14,8 +14,15 @@ GPU, and `native_workers` does not create PyTorch data-parallel ranks.
 
 Inside the runtime, available CPUs come from `os.sched_getaffinity(0)` when
 supported. This reflects cpusets and scheduler/container restrictions more
-reliably than the host's total CPU count. When `SLURM_CPUS_PER_TASK` is set,
-the usable count is the smaller of affinity size and that positive integer.
+reliably than the host's total CPU count. In an interactive session without
+`SLURM_JOB_ID`, `native_workers` defaults to `all_available` and Torch defaults
+to the full affinity-visible count. The launcher does not request or reserve
+CPUs.
+
+Only an actual Slurm job activates scheduler CPU limiting. When
+`SLURM_JOB_ID` and `SLURM_CPUS_PER_TASK` are set, the usable count is the
+smaller of affinity size and that positive integer. CPU requests live only in
+the supplied `sbatch` templates or an explicit user `salloc`/`srun` command.
 
 Invalid zero/non-numeric Slurm CPU values fail before computation. The runtime
 records affinity CPUs, Slurm request, and selected CPU-thread count.
@@ -28,14 +35,20 @@ ready task count.
 
 Each worker launches independent bridge processes. No PARTONS instance or
 module object is shared between workers. Two parameter vectors are normally
-evaluated in one atomic bridge batch. Generation submits no more than 64 new
-candidate parameters in one wave, allowing fail-fast behavior and responsive
-progress.
+evaluated in one atomic bridge batch. Generation submits at least 64 candidate
+parameters per wave and scales larger waves to provide one ready task per
+usable worker. A 256-CPU allocation therefore releases 512 parameters as 256
+two-parameter tasks when that much work remains. The final partial wave and
+small evaluation phases necessarily use fewer workers than allocated.
 
 Higher worker counts help only when enough independent tasks exist and memory,
 I/O, and native initialization overhead remain acceptable. Use timings in
 `generation_metrics.json` and evaluation parallel records rather than assuming
 linear scaling.
+
+On JLab, direct ifarm development/testing therefore uses every affinity-visible
+logical CPU by default. For sustained work through Slurm, treat
+`SLURM_CPUS_PER_TASK` plus the affinity mask as the allocation.
 
 ## Preventing oversubscription
 

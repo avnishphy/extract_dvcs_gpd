@@ -140,7 +140,7 @@ bridge subprocess per task and never shares a PARTONS object. Worker count is
 bounded by:
 
 1. Linux process affinity/cgroup visibility;
-2. `SLURM_CPUS_PER_TASK`, when set;
+2. `SLURM_CPUS_PER_TASK`, only when `SLURM_JOB_ID` identifies an allocation;
 3. the user `native_workers` or `DVCS_NATIVE_WORKERS` request;
 4. the number of ready native tasks.
 

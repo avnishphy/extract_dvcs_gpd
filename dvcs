@@ -28,17 +28,39 @@ source "${config}"
 if [[ "${DVCS_PROFILE}" == jlab_ifarm ]]; then
     apptainer_gpu_args=()
     if [[ "${DVCS_ACCELERATOR}" == cuda ]]; then
+        if [[ -z "${CUDA_VISIBLE_DEVICES:-}" ]] || \
+           [[ "${CUDA_VISIBLE_DEVICES}" == NoDevFiles ]]; then
+            echo "CUDA requested for jlab_ifarm, but no Slurm GPU allocation is visible" >&2
+            echo "request a GPU and run through salloc/srun or a supplied GPU sbatch template" >&2
+            exit 69
+        fi
         apptainer_gpu_args=(--nv)
     elif [[ "${DVCS_ACCELERATOR}" == auto ]] && \
          [[ -n "${CUDA_VISIBLE_DEVICES:-}" ]] && \
          [[ "${CUDA_VISIBLE_DEVICES}" != NoDevFiles ]]; then
         apptainer_gpu_args=(--nv)
     fi
+    apptainer_env_args=(
+      --env "DVCS_ACCELERATOR=${DVCS_ACCELERATOR}"
+      --env "DVCS_IMAGE_DIGEST=${DVCS_IMAGE_DIGEST}"
+    )
+    if [[ -v SLURM_JOB_ID ]]; then
+        apptainer_env_args+=(--env "SLURM_JOB_ID=${SLURM_JOB_ID}")
+        if [[ -v SLURM_CPUS_PER_TASK ]]; then
+            apptainer_env_args+=(
+              --env "SLURM_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK}"
+            )
+        fi
+    fi
+    if ((${#apptainer_gpu_args[@]})); then
+        # --cleanenv removes Slurm's host variable. Forward it explicitly so
+        # CUDA programs use exactly the devices assigned by the scheduler.
+        apptainer_env_args+=(--env "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}")
+    fi
     exec apptainer run --cleanenv "${apptainer_gpu_args[@]}" \
       --bind "${DVCS_WORKSPACE}:/workspace" --bind "${DVCS_RESULTS}:/results" \
       --bind "${DVCS_CACHE}:/cache" --bind "${DVCS_DATABASE}:/database:ro" \
-      --env "DVCS_ACCELERATOR=${DVCS_ACCELERATOR}" \
-      --env "DVCS_IMAGE_DIGEST=${DVCS_IMAGE_DIGEST}" "${DVCS_IMAGE}" "$@"
+      "${apptainer_env_args[@]}" "${DVCS_IMAGE}" "$@"
 fi
 container_gpu_args=()
 container_engine_args=()

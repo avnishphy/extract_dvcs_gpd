@@ -8,7 +8,7 @@ holdout work on allocated farm nodes. The public templates use `production`
 for long CPU work and `gpu` for neural GPU work.
 
 Those names and account requirements were checked against JLab SciComp
-documentation on 2026-08-12. Site configuration can change; confirm it before
+documentation on 2026-08-14. Site configuration can change; confirm it before
 the first campaign:
 
 ```bash
@@ -17,7 +17,8 @@ sacctmgr list user name="$USER" withassoc
 ```
 
 JLab references: [partitions/resources](https://scicomp.jlab.org/docs/node/644),
-[GPU jobs](https://scicomp.jlab.org/docs/node/631), [Slurm FAQ](https://scicomp.jlab.org/docs/farm_slurm_faq),
+[accessing GPUs](https://scicomp.jlab.org/docs/Access_GPUs),
+[GPU batch jobs](https://scicomp.jlab.org/docs/node/631), [Slurm FAQ](https://scicomp.jlab.org/docs/farm_slurm_faq),
 and [Slurm commands](https://scicomp.jlab.org/docs/farm_slurm_commands).
 
 ## Install on ifarm
@@ -158,8 +159,12 @@ sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/plot.sbatch
 ## CPU resource propagation
 
 Generation/holdout export `DVCS_NATIVE_WORKERS=all_available`. Inside the
-container the worker resolver intersects the process affinity mask with
-`SLURM_CPUS_PER_TASK`. Every worker owns one isolated PARTONS subprocess.
+container, a direct interactive invocation uses the full process affinity and
+does not make any Slurm CPU request. When `SLURM_JOB_ID` is present, the worker
+resolver intersects the process affinity mask with `SLURM_CPUS_PER_TASK`.
+Every worker owns one isolated PARTONS subprocess.
+Generation waves scale to keep that resolved worker pool busy whenever enough
+independent parameter batches remain.
 Numerical-library thread counts default to one, preventing `CPUs × BLAS
 threads` oversubscription.
 
@@ -167,11 +172,49 @@ Do not set `native_workers` above the allocation expecting more performance;
 the resolver caps it. Do not request `--ntasks=16` for this single-process
 orchestrator; request one task with `--cpus-per-task=16`.
 
+`nproc` may show every CPU on a shared ifarm login node. The framework uses
+that full affinity-visible count by default for direct interactive testing.
+No CPUs are reserved in this mode, so other users can contend for them. To use
+more than a submitted template's default allocation, increase its
+`#SBATCH --cpus-per-task` request to a count supported by the current
+`production` partition and size memory accordingly. The runtime will use all
+allocated CPUs, subject only to the amount of ready native work. Larger
+requests can restrict eligible nodes and increase queue time.
+
 ## GPU resource propagation
 
-Slurm sets `CUDA_VISIBLE_DEVICES` for the allocation. The launcher adds
-Apptainer `--nv` only for the CUDA-requesting job. The entrypoint asks PyTorch
-to initialize CUDA and fails if explicit `cuda` is unusable.
+JLab requires GPU work to be run through a Slurm GPU allocation. Its
+[GPU access guide](https://scicomp.jlab.org/docs/Access_GPUs) demonstrates
+requesting the `gpu` partition and GPU resources, then checking the allocation
+with `nvidia-smi` and `CUDA_VISIBLE_DEVICES`. The supplied templates request
+one GPU generically with `--gres=gpu:1`; consult `sinfo -o '%P %G %f'` before
+selecting a site-specific GPU type.
+
+Slurm sets `CUDA_VISIBLE_DEVICES` to the allocated devices. The launcher adds
+Apptainer `--nv` only for an allocated CUDA job and explicitly forwards that
+variable through `--cleanenv`. This is important because `--nv` supplies the
+host driver libraries and devices, while `CUDA_VISIBLE_DEVICES` keeps CUDA
+applications restricted to the scheduler-assigned set. The entrypoint asks
+PyTorch to initialize CUDA and fails if explicit `cuda` is unusable.
+
+For a short interactive smoke test after installation:
+
+```bash
+salloc --account="$JLAB_ACCOUNT" --partition="$JLAB_GPU_PARTITION" \
+  --nodes=1 --ntasks=1 --cpus-per-task=2 --gres=gpu:1 --time=00:15:00
+srun --pty bash
+export DVCS_ACCELERATOR=cuda
+echo "$CUDA_VISIBLE_DEVICES"
+nvidia-smi
+./dvcs doctor ifarm-acceptance
+exit  # srun shell
+exit  # release the salloc allocation
+```
+
+Use `sacct` to confirm that the allocation ended; use `scancel JOB_ID` if an
+interactive allocation is left running. Successful `doctor` output must show
+the requested accelerator as `cuda`, at least one visible GPU, and the
+container CUDA runtime. Device detection alone does not accept training.
 
 With more than one requested/visible GPU, training starts one NCCL rank per
 device and shards ensemble seeds. Ensure the selected profile has at least as

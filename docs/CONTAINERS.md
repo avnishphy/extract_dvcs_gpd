@@ -88,7 +88,8 @@ must not depend on the container writable layer.
 
 `scripts/container-entrypoint.sh`:
 
-1. intersects affinity with `SLURM_CPUS_PER_TASK`;
+1. uses full affinity interactively, or intersects it with
+   `SLURM_CPUS_PER_TASK` inside a Slurm job;
 2. configures Torch CPU and native worker requests;
 3. defaults OpenMP/BLAS/NumExpr/vecLib to one thread per process;
 4. resolves `auto`, `cpu`, or fail-closed `cuda` through PyTorch;

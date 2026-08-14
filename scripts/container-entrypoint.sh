@@ -3,12 +3,20 @@ set -euo pipefail
 
 python_bin=/opt/dvcs/venv/bin/python
 allowed_cpus="$(${python_bin} -c 'import os; print(len(os.sched_getaffinity(0)) if hasattr(os,"sched_getaffinity") else (os.cpu_count() or 1))')"
-slurm_cpus="${SLURM_CPUS_PER_TASK:-${allowed_cpus}}"
-if ! [[ "${slurm_cpus}" =~ ^[1-9][0-9]*$ ]]; then
-    echo "invalid SLURM_CPUS_PER_TASK=${slurm_cpus}" >&2
-    exit 64
+allocated_cpus="${allowed_cpus}"
+execution_context=interactive
+if [[ -n "${SLURM_JOB_ID:-}" ]]; then
+    execution_context=slurm
+    slurm_cpus="${SLURM_CPUS_PER_TASK:-${allowed_cpus}}"
+    if ! [[ "${slurm_cpus}" =~ ^[1-9][0-9]*$ ]]; then
+        echo "invalid SLURM_CPUS_PER_TASK=${slurm_cpus}" >&2
+        exit 64
+    fi
+    if (( slurm_cpus < allowed_cpus )); then
+        allocated_cpus="${slurm_cpus}"
+    fi
 fi
-if (( slurm_cpus < allowed_cpus )); then allocated_cpus="${slurm_cpus}"; else allocated_cpus="${allowed_cpus}"; fi
+export DVCS_EXECUTION_CONTEXT="${execution_context}"
 export DVCS_CPU_THREADS="${DVCS_CPU_THREADS:-${allocated_cpus}}"
 export DVCS_NATIVE_WORKERS="${DVCS_NATIVE_WORKERS:-all_available}"
 export OMP_NUM_THREADS="${DVCS_MATH_THREADS:-1}"
@@ -44,6 +52,7 @@ record = {
   "resolved_accelerator": "cuda" if torch.cuda.is_available() and os.environ.get("DVCS_ACCELERATOR") != "cpu" else "cpu",
   "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
   "visible_gpu_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
+  "execution_context": os.environ["DVCS_EXECUTION_CONTEXT"],
   "affinity_cpus": sorted(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else None,
   "slurm_cpus_per_task": os.environ.get("SLURM_CPUS_PER_TASK"),
   "used_cpu_threads": int(os.environ["DVCS_CPU_THREADS"]),

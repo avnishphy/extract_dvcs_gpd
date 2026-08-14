@@ -77,7 +77,9 @@ On an ifarm login node:
 This requires Apptainer, not a Docker daemon. Because login nodes need not
 expose GPUs, `auto` builds or retrieves the CUDA-capable JLab SIF while leaving
 runtime selection as `auto`. CPU jobs omit `--nv`; GPU jobs export
-`DVCS_ACCELERATOR=cuda` and receive `--nv`.
+`DVCS_ACCELERATOR=cuda`, receive `--nv`, and preserve Slurm's allocated
+`CUDA_VISIBLE_DEVICES` through the clean container environment. Follow the
+[JLab ifarm and farm guide](JLAB_IFARM.md) for allocation and GPU validation.
 
 When no published digest exists, the installer runs an unprivileged/fakeroot
 Apptainer source build. Site policy must permit that operation. If it does not,

@@ -86,8 +86,8 @@ catalog. `compare-real` is an explicitly non-fitting frozen-posterior overlay.
 - CPU and CUDA-capable images share one canonical multi-stage definition.
 - PARTONS always runs on CPU in isolated processes.
 - CUDA accelerates eligible PyTorch/sbi work only.
-- CPU workers are bounded by process affinity/cgroups and
-  `SLURM_CPUS_PER_TASK`.
+- CPU workers use full process affinity interactively and are bounded by
+  `SLURM_CPUS_PER_TASK` only inside a Slurm job.
 - Multi-GPU training uses one NCCL rank per allocated visible GPU and shards
   independent ensemble seeds deterministically.
 - Workspaces, results, caches, and database data are persistent host mounts.

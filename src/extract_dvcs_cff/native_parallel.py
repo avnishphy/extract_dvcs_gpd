@@ -31,7 +31,7 @@ class NativeWorkerResolution:
 
 
 def available_affinity_cpus() -> tuple[int, ...]:
-    """Return CPUs allowed by affinity and the Slurm per-task allocation."""
+    """Return interactive affinity or the active Slurm job allocation."""
 
     if hasattr(os, "sched_getaffinity"):
         cpus = tuple(sorted(os.sched_getaffinity(0)))
@@ -39,7 +39,11 @@ def available_affinity_cpus() -> tuple[int, ...]:
         cpus = tuple(range(os.cpu_count() or 1))
     if not cpus:
         raise RuntimeError("the process has no schedulable CPUs")
-    slurm_limit = os.environ.get("SLURM_CPUS_PER_TASK")
+    slurm_limit = (
+        os.environ.get("SLURM_CPUS_PER_TASK")
+        if os.environ.get("SLURM_JOB_ID")
+        else None
+    )
     if slurm_limit is not None:
         try:
             allocated = int(slurm_limit)
