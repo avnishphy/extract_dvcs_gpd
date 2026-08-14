@@ -11,7 +11,11 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from extract_dvcs_cff.cli.user import _generated_readme, _public_experiment
+from extract_dvcs_cff.cli.user import (
+    _generated_readme,
+    _public_experiment,
+    _public_result,
+)
 from extract_dvcs_cff.workflows.pseudodata import load_configuration
 
 
@@ -155,5 +159,18 @@ for key in (
 ):
     assert key in project_readme
 assert "../" not in project_readme
+
+doctor_public = _public_result(
+    "doctor",
+    Path("hostname-test"),
+    None,
+    {
+        "status": "ok",
+        "hostname": "sciml-test.jlab.org",
+        "neural_device": {},
+        "native_accelerator": "cpu",
+    },
+)
+assert doctor_public["hostname"] == "sciml-test.jlab.org"
 
 print(f"documentation verification: PASS ({len(REQUIRED)} required pages, {len(paths)} schema leaves)")

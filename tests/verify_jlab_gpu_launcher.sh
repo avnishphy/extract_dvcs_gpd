@@ -23,7 +23,16 @@ cat > "${temp}/bin/apptainer" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$@" > "${DVCS_TEST_ARGS}"
 EOF
+cat > "${temp}/bin/hostname" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' ifarm2402
+EOF
+cat > "${temp}/bin/srun" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "${DVCS_TEST_SRUN_ARGS}"
+EOF
 chmod +x "${temp}/bin/apptainer"
+chmod +x "${temp}/bin/hostname" "${temp}/bin/srun"
 
 args="${temp}/args"
 PATH="${temp}/bin:${PATH}" DVCS_TEST_ARGS="${args}" \
@@ -34,6 +43,28 @@ grep -Fx -- '--nv' "${args}" >/dev/null
 grep -Fx -- 'CUDA_VISIBLE_DEVICES=2' "${args}" >/dev/null
 grep -Fx -- 'SLURM_JOB_ID=123' "${args}" >/dev/null
 grep -Fx -- 'SLURM_CPUS_PER_TASK=4' "${args}" >/dev/null
+
+srun_args="${temp}/srun-args"
+PATH="${temp}/bin:${PATH}" DVCS_TEST_SRUN_ARGS="${srun_args}" \
+  DVCS_IFARM_GPU_DOCTOR=yes JLAB_ACCOUNT=hallc \
+  "${temp}/checkout/dvcs" doctor test
+grep -Fx -- '--partition=gpu' "${srun_args}" >/dev/null
+grep -Fx -- '--account=hallc' "${srun_args}" >/dev/null
+grep -Fx -- '--gres=gpu:1' "${srun_args}" >/dev/null
+grep -Fx -- '--unbuffered' "${srun_args}" >/dev/null
+grep -Fx -- 'DVCS_ACCELERATOR=cuda' "${srun_args}" >/dev/null
+grep -Fx -- 'DVCS_IFARM_GPU_DOCTOR=no' "${srun_args}" >/dev/null
+grep -Fx -- 'doctor' "${srun_args}" >/dev/null
+grep -Fx -- 'test' "${srun_args}" >/dev/null
+
+rm -f "${srun_args}"
+PATH="${temp}/bin:${PATH}" DVCS_TEST_ARGS="${args}" \
+  DVCS_TEST_SRUN_ARGS="${srun_args}" DVCS_IFARM_GPU_DOCTOR=yes \
+  "${temp}/checkout/dvcs" show doctor
+[[ ! -e "${srun_args}" ]] || {
+    echo "a project named doctor unexpectedly triggered GPU allocation" >&2
+    exit 1
+}
 
 PATH="${temp}/bin:${PATH}" DVCS_TEST_ARGS="${args}" \
   DVCS_ACCELERATOR=cpu CUDA_VISIBLE_DEVICES=2 SLURM_CPUS_PER_TASK=4 \

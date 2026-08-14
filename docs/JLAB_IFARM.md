@@ -96,9 +96,10 @@ apptainer inspect .dvcs/*.sif
 ./dvcs corpus-plan ifarm-acceptance ifarm-corpus
 ```
 
-`doctor` on a login node validates installation but cannot validate a GPU that
-is not allocated. Run it again through `salloc`/`srun` or the GPU batch
-template before accepting CUDA.
+On an ifarm login node, `doctor` asks whether to validate through a temporary
+Slurm GPU allocation. Answering yes requests one GPU, reruns `doctor` with
+required CUDA, prints the allocated compute hostname, and releases the job on
+completion. Answering no performs the ordinary CPU login-node check.
 
 ## Included templates
 
@@ -218,24 +219,18 @@ host driver libraries and devices, while `CUDA_VISIBLE_DEVICES` keeps CUDA
 applications restricted to the scheduler-assigned set. The entrypoint asks
 PyTorch to initialize CUDA and fails if explicit `cuda` is unusable.
 
-For a short interactive smoke test after installation:
+For the automatic interactive smoke test after installation:
 
 ```bash
-salloc --account="$JLAB_ACCOUNT" --partition="$JLAB_GPU_PARTITION" \
-  --nodes=1 --ntasks=1 --cpus-per-task=2 --gres=gpu:1 --time=00:15:00
-srun --pty bash
-export DVCS_ACCELERATOR=cuda
-echo "$CUDA_VISIBLE_DEVICES"
-nvidia-smi
 ./dvcs doctor ifarm-acceptance
-exit  # srun shell
-exit  # release the salloc allocation
+# Answer yes at the GPU prompt.
 ```
 
-Use `sacct` to confirm that the allocation ended; use `scancel JOB_ID` if an
-interactive allocation is left running. Successful `doctor` output must show
-the requested accelerator as `cuda`, at least one visible GPU, and the
-container CUDA runtime. Device detection alone does not accept training.
+For automation, use
+`DVCS_IFARM_GPU_DOCTOR=yes ./dvcs doctor ifarm-acceptance`. Successful output
+must show an allocated `sciml` hostname, requested accelerator `cuda`, at least
+one visible GPU, and the container CUDA runtime. The `srun` allocation ends
+when `doctor` exits. Device detection alone does not accept training.
 
 With more than one requested/visible GPU, training starts one NCCL rank per
 device and shards ensemble seeds. Ensure the selected profile has at least as

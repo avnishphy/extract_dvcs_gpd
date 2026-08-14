@@ -16,6 +16,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import platform
 import subprocess
 import time
 from typing import Any, Mapping, Sequence
@@ -4083,6 +4084,7 @@ def doctor(
     record = {
         "schema_version": 1,
         "status": "ok",
+        "hostname": platform.node(),
         "configuration": str(configuration_path.resolve(strict=True)),
         "configuration_sha256": sha256(configuration_path.resolve(strict=True)),
         "physics_configuration": str(physics_path),

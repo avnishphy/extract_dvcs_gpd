@@ -68,7 +68,10 @@ It performs no native or neural computation.
 Checks the native bridge, configuration, accelerator policy, CPU affinity,
 worker resolution, batch/update policy, and neural dependencies. It writes
 `results/doctor.json`. Run it after initialization, after editing an
-experiment, and inside a new scheduler allocation.
+experiment, and inside a new scheduler allocation. Output includes the
+execution hostname. On a JLab ifarm login host, an interactive invocation asks
+whether to rerun automatically in a short Slurm GPU allocation. Set
+`DVCS_IFARM_GPU_DOCTOR=yes` or `no` for noninteractive control.
 
 ## Corpus actions
 

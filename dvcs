@@ -26,6 +26,79 @@ source "${config}"
 [[ -n "${runtime_database_set}" ]] && DVCS_DATABASE="${runtime_database}"
 
 if [[ "${DVCS_PROFILE}" == jlab_ifarm ]]; then
+    doctor_command=false
+    skip_argument=false
+    for argument in "$@"; do
+        if [[ "${skip_argument}" == true ]]; then
+            skip_argument=false
+            continue
+        fi
+        case "${argument}" in
+            --bridge) skip_argument=true ;;
+            --*) ;;
+            doctor) doctor_command=true; break ;;
+            *) break ;;
+        esac
+    done
+    host_name="$(hostname -s)"
+    if [[ "${doctor_command}" == true ]] && \
+       [[ "${host_name}" == ifarm* ]] && \
+       [[ -z "${SLURM_JOB_ID:-}" ]]; then
+        gpu_doctor="${DVCS_IFARM_GPU_DOCTOR:-ask}"
+        if [[ "${gpu_doctor}" == ask ]]; then
+            if [[ -t 0 ]]; then
+                read -r -p "ifarm detected; run doctor in a Slurm GPU allocation? [y/N] " gpu_doctor
+            else
+                gpu_doctor=no
+            fi
+        fi
+        case "${gpu_doctor,,}" in
+            y|yes)
+                command -v srun >/dev/null 2>&1 || {
+                    echo "srun is required for the JLab GPU doctor" >&2
+                    exit 69
+                }
+                jlab_account="${JLAB_ACCOUNT:-}"
+                jlab_gpu_partition="${JLAB_GPU_PARTITION:-gpu}"
+                resources_file="${root}/jobs/jlab_ifarm/resources.env"
+                if [[ -f "${resources_file}" ]]; then
+                    if [[ -z "${jlab_account}" ]]; then
+                        jlab_account="$(
+                          unset JLAB_ACCOUNT
+                          # shellcheck disable=SC1090
+                          source "${resources_file}"
+                          printf '%s' "${JLAB_ACCOUNT:-}"
+                        )"
+                    fi
+                    if [[ -z "${JLAB_GPU_PARTITION:-}" ]]; then
+                        jlab_gpu_partition="$(
+                          unset JLAB_GPU_PARTITION
+                          # shellcheck disable=SC1090
+                          source "${resources_file}"
+                          printf '%s' "${JLAB_GPU_PARTITION:-gpu}"
+                        )"
+                    fi
+                fi
+                [[ "${jlab_account}" == REQUIRED_* ]] && jlab_account=""
+                srun_args=(
+                  --partition="${jlab_gpu_partition}"
+                  --nodes=1 --ntasks=1 --cpus-per-task=2
+                  --mem=8G --gres=gpu:1 --time=00:15:00 --unbuffered
+                )
+                [[ -n "${jlab_account}" ]] && \
+                  srun_args+=(--account="${jlab_account}")
+                echo "requesting a short Slurm GPU allocation for doctor" >&2
+                exec srun "${srun_args[@]}" env \
+                  DVCS_ACCELERATOR=cuda DVCS_IFARM_GPU_DOCTOR=no \
+                  "${root}/dvcs" "$@"
+                ;;
+            n|no|"") ;;
+            *)
+                echo "DVCS_IFARM_GPU_DOCTOR must be ask, yes, or no" >&2
+                exit 64
+                ;;
+        esac
+    fi
     apptainer_gpu_args=()
     if [[ "${DVCS_ACCELERATOR}" == cuda ]]; then
         if [[ -z "${CUDA_VISIBLE_DEVICES:-}" ]] || \

@@ -60,6 +60,10 @@ jobs/jlab_ifarm/submit_workflow.sh
 squeue -u "$USER"
 ```
 
+Answer yes when the ifarm GPU-doctor prompt appears. In noninteractive
+acceptance, run
+`DVCS_IFARM_GPU_DOCTOR=yes ./dvcs doctor ifarm-acceptance` instead.
+
 Before submitting the full workflow, run the allocated GPU smoke test in
 [JLab ifarm and farm guide](JLAB_IFARM.md#gpu-resource-propagation). It follows
 JLab's [GPU access instructions](https://scicomp.jlab.org/docs/Access_GPUs)

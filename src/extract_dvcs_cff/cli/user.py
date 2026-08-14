@@ -1218,6 +1218,7 @@ def _public_result(
         public["profile"] = profile
         public["results"] = str(output)
     if command == "doctor":
+        public["hostname"] = result["hostname"]
         public["neural_device"] = result["neural_device"]
         public["native_accelerator"] = result["native_accelerator"]
     elif command == "train":
