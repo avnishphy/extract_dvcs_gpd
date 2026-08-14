@@ -148,7 +148,7 @@ not a broken executable.
   counters, while each native request contains all required kinematics for up
   to two samples.
 - `unphysical_fixed_target_kinematics` means the coupled
-  $0<Q^2/(2M_pEx_B)<1$ condition failed. Do not force or resume that legacy
+  $0<Q^2/(2M_pEx_B)<1$ condition failed. Do not resume that older
   project; create a new selector-v2 project.
 
 ## What the release does not establish

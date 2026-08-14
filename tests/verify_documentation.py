@@ -19,6 +19,7 @@ REQUIRED = {
     "INDEX.md",
     "INSTALLATION.md",
     "USER_GUIDE.md",
+    "CORPUS_AND_DATA_SELECTION.md",
     "CLI_REFERENCE.md",
     "EXPERIMENT_JSON_REFERENCE.md",
     "WORKFLOW_AND_PHYSICS.md",
@@ -136,12 +137,18 @@ assert not missing, f"undocumented experiment leaves: {missing}"
 assert len(paths) >= 110
 
 root_readme = (ROOT / "README.md").read_text(encoding="utf-8")
-for key in ("docs/INDEX.md", "docs/USER_GUIDE.md", "docs/EXPERIMENT_JSON_REFERENCE.md"):
+for key in (
+    "docs/INDEX.md",
+    "docs/USER_GUIDE.md",
+    "docs/CORPUS_AND_DATA_SELECTION.md",
+    "docs/EXPERIMENT_JSON_REFERENCE.md",
+):
     assert key in root_readme
 
 project_readme = _generated_readme("documentation-test")
 for key in (
     "docs/USER_GUIDE.md",
+    "docs/CORPUS_AND_DATA_SELECTION.md",
     "docs/EXPERIMENT_JSON_REFERENCE.md",
     "docs/WORKFLOW_AND_PHYSICS.md",
     "docs/RESULTS_AND_INTERPRETATION.md",

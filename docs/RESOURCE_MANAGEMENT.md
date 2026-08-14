@@ -81,13 +81,13 @@ Use all affinity-visible native workers and eight Torch CPU threads:
 ```bash
 DVCS_NATIVE_WORKERS=all_available \
 DVCS_CPU_THREADS=8 \
-./dvcs generate study --profile quick
+./dvcs corpus-generate study study-corpus
 ```
 
 Limit native pressure for a shared workstation:
 
 ```bash
-DVCS_NATIVE_WORKERS=4 ./dvcs generate study --profile quick
+DVCS_NATIVE_WORKERS=4 ./dvcs corpus-generate study study-corpus
 ```
 
 For Podman/Docker the launcher supplies the current process affinity as a
@@ -153,6 +153,12 @@ across visible devices. Each process sees one device and runs a one-process
 trial stream. All processes coordinate through the same SQLite-backed Optuna
 study; the database timeout is configured for concurrent access.
 
+Before trials start, corpus-backed realization publication is protected by a
+project/profile process lock. The first process materializes the deterministic
+arrays; other GPU workers verify matching corpus, selection, configuration,
+bridge, and complete-file identity and reuse them. This prevents concurrent
+manifest publication and avoids rebuilding the same tensor set per GPU.
+
 Rank logs and a combined exit code are retained under results provenance. A
 worker failure fails the parent action. Concurrent-study behavior remains a
 hardware/site acceptance item.
@@ -161,7 +167,7 @@ hardware/site acceptance item.
 
 | Phase | Primary resource | Notes |
 |---|---|---|
-| `generate` | CPU + memory | Many isolated native workers; keep math threads low. |
+| `corpus-generate` | CPU + memory/storage | Many isolated native workers; atomically publishes reusable shards and consolidated evidence. |
 | `train` | GPU preferred | CPU fallback supported; candidate members parallelize across GPUs. |
 | `optimize` | GPU preferred | Independent trials; persistent shared study. |
 | `evaluate` | mixed | Neural coverage/sampling plus CPU exact reevaluation. |
@@ -177,6 +183,7 @@ the entire workflow.
 Inspect:
 
 - `results/doctor.json` for resolved policy;
+- `$DVCS_WORKSPACE/.corpora/CORPUS/corpus.json` for shard/native identity;
 - `generated/generation_metrics.json` for worker/cache/timing details;
 - `evaluation/evaluation_metrics.json` for each exact parallel phase;
 - `training/training_summary.json` for device and peak-memory data;

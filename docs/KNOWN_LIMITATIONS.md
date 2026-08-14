@@ -24,12 +24,24 @@
   distributed native simulation is implemented.
 - Native parallelism uses isolated subprocesses because PARTONS thread safety
   is not established. Initialization/memory overhead may limit scaling.
+- Corpus generation is atomically sharded and resumable, but the public
+  command currently advances shards within one allocation; multi-node Slurm
+  array generation is not implemented.
+- The current sbi path materializes all selected nuisance/noise tensors before
+  training. It does not yet stream a very large corpus lazily by minibatch.
+- Native evidence is consolidated per shard, reducing inode pressure, but
+  storage quota, purge policy, throughput, and practical shard size still need
+  measurement on the target iFarm filesystem.
+- Multi-process realization publication uses an advisory file lock. Its local
+  behavior is regression-tested, but the target iFarm shared filesystem's
+  locking semantics and contention under a real multi-GPU allocation remain
+  an acceptance item.
 
 ## Scientific model scope
 
 - The production path is the declared full-independent DD representation at
-  `Q0²=1 GeV²`, fixed-three-flavor LO evolution, LO standard DVCS CFFs, and six
-  observables. It is not a general selector for arbitrary PARTONS modules,
+  `Q0²=1 GeV²`, fixed-three-flavor LO evolution, LO standard DVCS CFFs, and an
+  ordered nonempty subset of six audited observables. It is not a general selector for arbitrary PARTONS modules,
   orders, twists, schemes, thresholds, or processes.
 - Five controls per GPD/channel are inferred. Fixed shadow/stress coefficients
   are simulator-family settings, not posterior coordinates. Only the H/u
@@ -55,6 +67,13 @@
   not map to the inferred DD coordinates.
 - No validation threshold may be interpreted beyond the campaign for which it
   was frozen.
+- Corpus integrity and reuse do not establish posterior calibration or
+  real-data readiness. Closure, SBC/coverage, predictive checks, exact
+  reevaluation, and output-blind named-model validation remain separate.
+- Adding an admitted observable can repeat evolution/CFF work inside PARTONS.
+  Existing stored shards are not recomputed or rewritten, but no unverified
+  internal PARTONS cache is claimed.
+- One selection freezes one grouped split; k-fold training is not implemented.
 
 ## Real data and database
 
@@ -80,7 +99,8 @@
 ## Verification record
 
 Exact passed, partial, and unverified checks are recorded in
-`provenance/verification-2026-08-12.json`. In particular, a complete editable
+`provenance/verification-2026-08-14.json`. The earlier acceptance evidence
+includes a complete editable
 eight-vector native generation and two-member CPU NPE training smoke passed;
 the full standard 2,048-vector quick generation was time-bounded after 215
 successful native bridge requests and is not marked complete.

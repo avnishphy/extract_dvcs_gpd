@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "extract-dvcs-gpd"
-version = "0.1.0"
+version = "0.2.0"
 description = "Containerized posterior inference workflow for proton GPDs"
 requires-python = ">=3.11"
 dependencies = [
@@ -26,7 +26,6 @@ neural = [
 ]
 
 [project.scripts]
-dvcs-pseudodata = "extract_dvcs_cff.cli.pseudodata:main"
 dvcs-infer = "extract_dvcs_cff.cli.user:main"
 
 [tool.setuptools.packages.find]

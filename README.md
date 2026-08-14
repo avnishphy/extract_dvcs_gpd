@@ -1,8 +1,9 @@
 # extract-dvcs-gpd
 
 `extract-dvcs-gpd` is a containerized, non-root distribution of a validated
-DVCS/GPD synthetic-inference framework. It generates exact native PARTONS
-pseudodata, trains simulation-based neural posteriors, evaluates calibration
+DVCS/GPD synthetic-inference framework. It generates reusable, verified,
+sharded exact-native PARTONS corpora, derives pseudodata realizations, trains
+simulation-based neural posteriors, evaluates calibration
 and exact predictions, compares with a conventional exact-bank posterior, and
 produces observable, CFF, and GPD diagnostics.
 
@@ -21,8 +22,13 @@ cd extract_dvcs_gpd
 ./install.sh --profile local --accelerator auto
 ./dvcs init first-study
 ./dvcs doctor first-study
-./dvcs generate first-study --profile quick
-./dvcs train first-study --profile quick
+./dvcs corpus-create first-study first-corpus --profile quick
+./dvcs corpus-plan first-study first-corpus
+./dvcs corpus-generate first-study first-corpus
+./dvcs corpus-verify first-corpus --deep
+./dvcs selection-create first-study first-corpus baseline --profile quick
+./dvcs train first-study --profile quick \
+  --corpus first-corpus --selection baseline
 ./dvcs evaluate first-study --profile quick
 ./dvcs compare first-study --profile quick
 ./dvcs plot first-study --profile quick
@@ -35,6 +41,8 @@ JLab ifarm:
 cp -n jobs/jlab_ifarm/resources.env.example jobs/jlab_ifarm/resources.env
 vi jobs/jlab_ifarm/resources.env
 ./dvcs init first-study
+./dvcs corpus-create first-study first-corpus --profile validation
+./dvcs corpus-plan first-study first-corpus
 jobs/jlab_ifarm/submit_workflow.sh
 ```
 
@@ -51,8 +59,8 @@ The production posterior has 82 coordinates:
 - two standard-normal normalization nuisance parameters.
 
 The native backend defines input GPDs at `Q0² = 1 GeV²`, evolves them with
-APFEL++ to each datum Q², computes H/E/Htilde/Etilde CFFs, and evaluates six
-DVCS observables. Synthetic data use a dense declared covariance with
+APFEL++ to each datum Q², computes H/E/Htilde/Etilde CFFs, and evaluates an
+ordered nonempty subset of six audited DVCS observables. Synthetic data use a dense declared covariance with
 independent, local-correlated, phi-shape, and normalization contributions.
 
 The neural posterior uses a permutation-invariant DeepSets context encoder and
@@ -64,8 +72,9 @@ vector never cross train/internal-validation/outer-test roles.
 
 ```text
 editable experiment.json
-  -> exact isolated PARTONS generation
-  -> correlated pseudodata and grouped splits
+  -> immutable sharded exact-PARTONS corpus
+  -> immutable train/validation/outer-test selection
+  -> deterministic correlated pseudodata realization
   -> NPE ensemble training
   -> outer-test coverage and exact reevaluation
   -> conventional exact-bank comparison
@@ -103,6 +112,7 @@ Start at the [documentation map](docs/INDEX.md). The primary guides are:
 - [User guide](docs/USER_GUIDE.md)
 - [CLI reference](docs/CLI_REFERENCE.md)
 - [Experiment JSON reference](docs/EXPERIMENT_JSON_REFERENCE.md)
+- [Corpus and data selection](docs/CORPUS_AND_DATA_SELECTION.md)
 - [Workflow and physics](docs/WORKFLOW_AND_PHYSICS.md)
 - [Results and interpretation](docs/RESULTS_AND_INTERPRETATION.md)
 - [Architecture](docs/ARCHITECTURE.md)
@@ -125,7 +135,7 @@ Verified on the packaging host:
 
 Docker/Podman, Apptainer, Slurm, usable CUDA hardware, and multi-GPU hardware
 were unavailable on that host and remain explicitly unverified. See the
-[latest verification record](provenance/verification-2026-08-13.json) and [acceptance
+[latest verification record](provenance/verification-2026-08-14.json) and [acceptance
 procedures](docs/ACCEPTANCE.md).
 
 ## Reproducibility and provenance

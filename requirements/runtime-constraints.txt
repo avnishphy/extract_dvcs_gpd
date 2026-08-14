@@ -1,4 +1,4 @@
-# Fully resolved non-platform runtime dependencies for the 0.1.0 image.
+# Fully resolved non-platform runtime dependencies for the 0.2.0 image.
 # Direct project requirements remain authoritative in pyproject.toml.
 absl-py==2.5.0
 alembic==1.19.1

@@ -75,6 +75,21 @@ thresholds unless the upstream change deliberately and evidentially changes
 them. Reapply packaging behavior against the new code rather than copying an
 old patch blindly.
 
+After every conflicting destination has been reviewed and merged, record the
+adapted snapshot without replacing those bytes:
+
+```bash
+python3 tools/sync_upstream.py \
+  --upstream /path/to/extract_dvcs_cff \
+  --record-merged
+```
+
+This mode requires every approved destination to exist, stores both the new
+upstream hash and the reviewed distribution hash, and lists differing paths in
+`merge_adapted_files`. It is an explicit maintainer attestation, not an
+automatic conflict resolver. Finish by rerunning `--check`; it must report no
+revision change, file changes, or removals.
+
 If upstream adds a user/runtime file, amend the allowlist only after confirming
 it is not development machinery and is necessary for the public runtime.
 

@@ -66,6 +66,14 @@ def main() -> int:
     parser.add_argument("--upstream", type=Path, default=DEFAULT_UPSTREAM)
     parser.add_argument("--check", action="store_true")
     parser.add_argument(
+        "--record-merged",
+        action="store_true",
+        help=(
+            "record a reviewed packaging adaptation without copying upstream "
+            "bytes; every approved destination must already exist"
+        ),
+    )
+    parser.add_argument(
         "--allow-dirty",
         action="store_true",
         help="import an explicitly recorded working-tree snapshot",
@@ -80,6 +88,7 @@ def main() -> int:
         )
     previous = json.loads(STATE.read_text(encoding="utf-8")) if STATE.exists() else {}
     previous_files = previous.get("files", {})
+    revision_changed = previous.get("upstream_commit") != revision
     entries: dict[str, dict[str, str]] = {}
     changes: list[str] = []
     conflicts: list[str] = []
@@ -88,34 +97,46 @@ def main() -> int:
         source_hash = digest(source)
         old = previous_files.get(relative, {})
         current_hash = digest(destination) if destination.is_file() else None
-        if current_hash != source_hash:
+        if not old or old.get("upstream_sha256") != source_hash:
             changes.append(relative)
         if destination.exists() and old and current_hash != old.get("imported_sha256"):
             conflicts.append(relative)
+        if args.record_merged and current_hash is None:
+            raise RuntimeError(
+                f"reviewed merged destination is missing: {relative}"
+            )
         entries[relative] = {
             "upstream_sha256": source_hash,
-            "imported_sha256": source_hash,
+            "imported_sha256": (
+                current_hash if args.record_merged else source_hash
+            ),
         }
     removed = sorted(set(previous_files) - set(entries))
     for relative in removed:
         destination = ROOT / relative
         if destination.exists() and digest(destination) != previous_files[relative]["imported_sha256"]:
             conflicts.append(relative)
-    if conflicts:
+    if conflicts and not args.record_merged:
         print("conflicts (local file changed since last import):", file=sys.stderr)
         for item in sorted(conflicts):
             print(f"  {item}", file=sys.stderr)
         return 3
     if args.check:
-        print(json.dumps({"revision": revision, "changes": changes, "removed": removed}, indent=2))
-        return 1 if changes or removed else 0
-    for source, destination in approved_files(upstream):
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, destination)
-    for relative in removed:
-        destination = ROOT / relative
-        if destination.exists():
-            destination.unlink()
+        print(json.dumps({
+            "revision": revision,
+            "revision_changed": revision_changed,
+            "changes": changes,
+            "removed": removed,
+        }, indent=2))
+        return 1 if revision_changed or changes or removed else 0
+    if not args.record_merged:
+        for source, destination in approved_files(upstream):
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, destination)
+        for relative in removed:
+            destination = ROOT / relative
+            if destination.exists():
+                destination.unlink()
     snapshot = hashlib.sha256()
     for relative, value in sorted(entries.items()):
         snapshot.update(f"{relative}\0{value['upstream_sha256']}\n".encode())
@@ -125,6 +146,11 @@ def main() -> int:
         "upstream_commit": revision,
         "upstream_dirty": bool(dirty_paths),
         "upstream_dirty_status": dirty_paths,
+        "merge_adapted_files": sorted(
+            relative
+            for relative, value in entries.items()
+            if value["imported_sha256"] != value["upstream_sha256"]
+        ),
         "approved_manifest": str(APPROVED.relative_to(ROOT)),
         "runtime_snapshot_sha256": snapshot.hexdigest(),
         "files": entries,
@@ -135,7 +161,8 @@ def main() -> int:
         ],
     }
     STATE.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(f"imported {len(entries)} approved files from {revision}")
+    action = "recorded reviewed merge of" if args.record_merged else "imported"
+    print(f"{action} {len(entries)} approved files from {revision}")
     if dirty_paths:
         print(f"recorded {len(dirty_paths)} upstream dirty paths")
     return 0

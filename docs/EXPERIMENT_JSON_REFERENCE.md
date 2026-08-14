@@ -1,7 +1,7 @@
 # `experiment.json` reference
 
 This is the complete field reference for the public, user-editable
-`experiment.json` **schema 7** created by:
+`experiment.json` **schema 8** created by:
 
 ```bash
 ./dvcs init NAME
@@ -39,7 +39,7 @@ missing, or misspelled keys fail closed.
 
 | Path | Type/default | Meaning and edit policy |
 |---|---|---|
-| `schema_version` | integer, `7` | **Frozen identifier.** Selects the full-independent multi-$Q^2$ public schema. Schemas 2–6 are retired rather than silently migrated. |
+| `schema_version` | integer, `8` | **Frozen identifier.** Adds explicit selectable-observable metadata to the full-independent multi-$Q^2$ schema. Schema 7 remains readable with the canonical six-observable list; schemas 2–6 are retired. |
 | `experiment.name` | string, project name | **Frozen identity.** Must exactly equal the directory name below the configured workspace root. |
 | `experiment.description` | string | **Experiment control.** Free-form human description; it does not enter simulation or inference. |
 
@@ -122,8 +122,8 @@ fractional responses are specified separately in the uncertainty model.
 ### 3.1 Kinematic points
 
 `synthetic_dataset.kinematics` is an array with at least four points. Each
-point is evaluated for the six frozen native observables, so six points create
-36 DeepSets tokens.
+point is evaluated for every selected native observable. The default six
+observables therefore turn six kinematic points into 36 DeepSets tokens.
 
 | Path | Type/unit | Enforced range | Meaning |
 |---|---|---|---|
@@ -190,12 +190,33 @@ Each selected record contains:
 | `synthetic_dataset.kinematics_source.selected_records[].reference` | Source literature/reference string. |
 | `synthetic_dataset.kinematics_source.selected_records[].source_Q2_GeV2` | Catalog $Q^2$ in GeV$^2$. |
 | `synthetic_dataset.kinematics_source.selected_records[].source_beam_energy_GeV` | Catalog beam energy in GeV. |
-| `synthetic_dataset.kinematics_source.selected_records[].generated_Q2_GeV2` | $Q^2$ actually sent to PARTONS; schema 7 retains the source value. |
-| `synthetic_dataset.kinematics_source.selected_records[].Q2_projected` | Boolean projection flag; generated schema-7 projects no $Q^2$. |
-| `synthetic_dataset.kinematics_source.selected_records[].generated_beam_energy_GeV` | Beam energy actually sent to PARTONS; schema 7 retains the source value. |
+| `synthetic_dataset.kinematics_source.selected_records[].generated_Q2_GeV2` | $Q^2$ actually sent to PARTONS; schema 8 retains the source value. |
+| `synthetic_dataset.kinematics_source.selected_records[].Q2_projected` | Boolean projection flag; generated schema 8 projects no $Q^2$. |
+| `synthetic_dataset.kinematics_source.selected_records[].generated_beam_energy_GeV` | Beam energy actually sent to PARTONS; schema 8 retains the source value. |
 | `synthetic_dataset.kinematics_source.selected_records[].measurement_values_used` | Must be `false`; any other value aborts. |
 
-### 3.3 Uncertainty and nuisance-response model
+### 3.3 Native observable selection
+
+`synthetic_dataset.observables` is a nonempty array in canonical order. It may
+contain any ordered subset of the six audited entries below. Unknown,
+duplicated, reordered, or metadata-altered entries fail before native work.
+The default contains all six.
+
+| Path | Type | Meaning/edit policy |
+|---|---|---|
+| `synthetic_dataset.observables[].id` | native module ID | **Experiment control.** One of `DVCSCrossSectionUUMinus`, `DVCSCrossSectionDifferenceLUMinus`, `DVCSAc`, `DVCSAluMinus`, `DVCSAulMinus`, or `DVCSAllMinus`. |
+| `synthetic_dataset.observables[].native_unit` | `nb/GeV4` or `1` | **Frozen metadata.** Cross sections use nb/GeV$^4$; asymmetries are dimensionless. |
+| `synthetic_dataset.observables[].normalization_scale` | positive number | **Frozen metadata.** Native-to-neural scaling: `0.1` for the LU difference and `1.0` otherwise. |
+| `synthetic_dataset.observables[].user_label` | string | **Frozen metadata.** Human-readable plot/report label bound to the ID. |
+
+Removing an observable changes the neural input but not the DD parameter
+family. A reusable corpus can append a missing admitted observable without
+rewriting existing core, CFF, or observable shards; see
+[Corpus and data selection](CORPUS_AND_DATA_SELECTION.md). Other installed
+PARTONS observable classes remain disabled pending convention and fixture
+audits.
+
+### 3.4 Uncertainty and nuisance-response model
 
 All seven values are finite and nonnegative; `local_correlation_length` must
 be strictly positive. They are **experiment controls**. The covariance is
@@ -372,7 +393,7 @@ not enable real-data fitting or establish representation/shadow robustness.
 
 The documentation regression normalizes repeated list, GPD, channel, and
 profile entries to the following paths and verifies that every leaf generated
-by the schema-7 template appears in this document:
+by the schema-8 template appears in this document:
 
 ```text
 schema_version
@@ -412,6 +433,10 @@ synthetic_dataset.kinematics_source.selected_records[].measurement_values_used
 synthetic_dataset.kinematics_source.measurements_quarantined
 synthetic_dataset.kinematics_source.data_evolved
 synthetic_dataset.kinematics_source.gpd_evolved_to_each_datum_Q2
+synthetic_dataset.observables[].id
+synthetic_dataset.observables[].native_unit
+synthetic_dataset.observables[].normalization_scale
+synthetic_dataset.observables[].user_label
 synthetic_dataset.uncertainty_model.uncorrelated_relative_sigma
 synthetic_dataset.uncertainty_model.uncorrelated_absolute_floor_normalized
 synthetic_dataset.uncertainty_model.local_correlation_fraction

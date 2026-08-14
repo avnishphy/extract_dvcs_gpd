@@ -15,3 +15,5 @@ sbi-logs/
 jobs/jlab_ifarm/resources.env
 jobs/jlab_ifarm/logs/
 user/workspaces/
+user/corpora/
+user/corpus_exports/

@@ -52,6 +52,8 @@ Set every field:
 |---|---|
 | `JLAB_ACCOUNT` | Your valid Slurm project account; placeholder values are rejected. |
 | `DVCS_PROJECT` | Existing project name initialized through `./dvcs init`. |
+| `DVCS_CORPUS` | Existing corpus name created and planned before submission. |
+| `DVCS_SELECTION` | New immutable selection name created after corpus generation. |
 | `DVCS_REPOSITORY` | Absolute path to this distribution checkout. |
 | `DVCS_WORKSPACE` | Large writable project workspace root. |
 | `DVCS_RESULTS` | Writable runtime/Slurm provenance root. |
@@ -74,6 +76,12 @@ Use the same absolute mounts for every step in one project. Moving only part
 of a result tree breaks content contracts and hashes. The database is mounted
 read-only even when its host parent is user-owned.
 
+Reusable corpora live under `DVCS_WORKSPACE/.corpora/` on the host and portable
+exports under `DVCS_WORKSPACE/.corpus_exports/`. Native request evidence is
+consolidated per shard, but a large campaign still needs measured quota,
+throughput, inode, backup, and purge behavior. Do not place the only copy on
+node-local scratch.
+
 ## Initialize and verify interactively
 
 Short commands only:
@@ -83,6 +91,9 @@ Short commands only:
 ./dvcs show ifarm-acceptance
 apptainer inspect .dvcs/*.sif
 ./dvcs doctor ifarm-acceptance
+./dvcs corpus-create ifarm-acceptance ifarm-corpus \
+  --profile validation --shard-size 256
+./dvcs corpus-plan ifarm-acceptance ifarm-corpus
 ```
 
 `doctor` on a login node validates installation but cannot validate a GPU that
@@ -94,6 +105,7 @@ template before accepting CUDA.
 | File | Default resources | Role |
 |---|---|---|
 | `generate.sbatch` | production, 16 CPUs, 64 GiB, 24 h | CPU PARTONS corpus generation. |
+| `selection.sbatch` | production, 1 CPU, 4 GiB, 30 min | Freeze grouped train/validation/outer-test ownership. |
 | `optimize_gpu.sbatch` | gpu, 1 GPU, 8 CPUs, 64 GiB, 12 h | Optional Optuna study. |
 | `train_gpu.sbatch` | gpu, 1 GPU, 8 CPUs, 64 GiB, 12 h | NPE ensemble training. |
 | `evaluate.sbatch` | production, 16 CPUs, 64 GiB, 12 h | Neural coverage plus exact CPU reevaluation. |
@@ -124,7 +136,8 @@ The submitted graph is:
 
 ```text
 generate
-  -> optimize
+  -> selection
+      -> optimize
       -> train
           -> evaluate
               -> compare
@@ -135,9 +148,16 @@ generate
 Every edge uses `afterok`, so a failed prerequisite prevents scientifically
 invalid downstream execution. Optimization is included in this full template
 chain. If you intend to use the frozen default architecture instead, submit
-`generate.sbatch`, then `train_gpu.sbatch` with an `afterok` dependency, and
-continue the same evaluate/compare/holdout/plot ordering. Do not simply delete
-the optimize job while leaving train dependent on its missing ID.
+`generate.sbatch`, `selection.sbatch`, then `train_gpu.sbatch` with `afterok`
+dependencies, and continue the same evaluate/compare/holdout/plot ordering.
+Do not simply delete the optimize job while leaving train dependent on its
+missing ID.
+
+The Optuna job records recommendations but deliberately does not rewrite
+`experiment.json`; the following train job therefore uses the project's
+already frozen architecture. To promote an Optuna result, create a new project,
+apply the chosen neural controls before its selection/training campaign, and
+reuse the corpus only if compatibility checks pass.
 
 Holdout requires evaluation and comparison gates to pass, which is why it
 depends on `compare`, not merely `train`.
@@ -146,6 +166,7 @@ depends on `compare`, not merely `train`.
 
 ```bash
 sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/generate.sbatch
+sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/selection.sbatch
 sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/optimize_gpu.sbatch
 sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/train_gpu.sbatch
 sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/evaluate.sbatch
@@ -158,7 +179,7 @@ sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/plot.sbatch
 
 ## CPU resource propagation
 
-Generation/holdout export `DVCS_NATIVE_WORKERS=all_available`. Inside the
+Corpus generation/holdout export `DVCS_NATIVE_WORKERS=all_available`. Inside the
 container, a direct interactive invocation uses the full process affinity and
 does not make any Slurm CPU request. When `SLURM_JOB_ID` is present, the worker
 resolver intersects the process affinity mask with `SLURM_CPUS_PER_TASK`.
@@ -260,7 +281,7 @@ sacct --format=JobID%18,State,ExitCode,Partition,AllocCPUS,ReqMem,Elapsed -j JOB
 An `afterok`-dependent job may remain pending with a dependency reason when an
 upstream job fails. Inspect the upstream `exit-code.txt`, stderr, and Slurm
 record. Correct the cause and resubmit from the failed step with appropriate
-dependencies; complete caches/checkpoints remain resumable.
+dependencies; complete corpus shards/checkpoints remain resumable.
 
 For out-of-memory or timeout failures, use `sacct`/site tools to measure peak
 use before changing resources. Do not alter scientific profile counts merely

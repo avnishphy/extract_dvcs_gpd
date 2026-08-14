@@ -1795,28 +1795,20 @@
                 },
                 "observable_modules": {
                     "type": "array",
-                    "prefixItems": [
-                        {
-                            "const": "DVCSCrossSectionUUMinus"
-                        },
-                        {
-                            "const": "DVCSCrossSectionDifferenceLUMinus"
-                        },
-                        {
-                            "const": "DVCSAc"
-                        },
-                        {
-                            "const": "DVCSAluMinus"
-                        },
-                        {
-                            "const": "DVCSAulMinus"
-                        },
-                        {
-                            "const": "DVCSAllMinus"
-                        }
-                    ],
-                    "minItems": 6,
-                    "maxItems": 6
+                    "items": {
+                        "enum": [
+                            "DVCSCrossSectionUUMinus",
+                            "DVCSCrossSectionDifferenceLUMinus",
+                            "DVCSAc",
+                            "DVCSAluMinus",
+                            "DVCSAulMinus",
+                            "DVCSAllMinus"
+                        ]
+                    },
+                    "uniqueItems": true,
+                    "minItems": 1,
+                    "maxItems": 6,
+                    "description": "Runtime additionally requires canonical admitted order."
                 },
                 "xi_converter_module": {
                     "const": "DVCSXiConverterXBToXi"

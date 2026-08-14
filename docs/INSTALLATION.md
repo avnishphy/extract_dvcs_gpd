@@ -191,8 +191,13 @@ For an additional project-level check:
 For a local CPU workflow:
 
 ```bash
-./dvcs generate installation-check --profile quick
-./dvcs train installation-check --profile quick
+./dvcs corpus-create installation-check installation-corpus --profile quick
+./dvcs corpus-plan installation-check installation-corpus
+./dvcs corpus-generate installation-check installation-corpus
+./dvcs corpus-verify installation-corpus --deep
+./dvcs selection-create installation-check installation-corpus baseline --profile quick
+./dvcs train installation-check --profile quick \
+  --corpus installation-corpus --selection baseline
 ```
 
 The default quick generation is substantial. For release acceptance use the

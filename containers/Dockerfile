@@ -70,7 +70,7 @@ RUN ${PREFIX}/venv/bin/pip install --no-cache-dir --retries 10 --timeout 120 --i
     ${PREFIX}/venv/bin/python -c 'import matplotlib, numpy, optuna, particle, scipy, sbi, torch, yaml, zuko'
 
 FROM ubuntu:24.04@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90 AS runtime
-ARG IMAGE_VERSION=0.1.0
+ARG IMAGE_VERSION=0.2.0
 ARG IMAGE_SOURCE
 ARG IMAGE_REVISION=unknown
 LABEL org.opencontainers.image.title="extract-dvcs-gpd" \

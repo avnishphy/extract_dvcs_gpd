@@ -29,9 +29,19 @@ traversal/symlink escape. Workspaces, results, and caches are writable mounts;
 the database is read-only. The framework does not delete user projects or
 clean dirty database checkouts.
 
+Corpus and selection names obey the same direct-child naming boundary. Corpus
+creation/import refuses existing targets and symlink roots. Export deep-
+verifies content and rejects symlinks. Import rejects absolute paths, parent
+traversal, links, devices, FIFOs, and other special archive members before
+extracting to a partial directory, then deep-verifies before publication.
+Treat a portable corpus archive as untrusted until that import succeeds.
+
 Generated results may be scientifically valuable and large. Apply site backup,
 quota, retention, and access-control policy. Container isolation is not a
 substitute for filesystem permissions between collaborating users.
+Corpora are reusable scientific assets rather than disposable caches; preserve
+their manifest, evidence archives, and selection lineage together with access
+controls appropriate to the collaboration.
 
 ## Credentials and secrets
 

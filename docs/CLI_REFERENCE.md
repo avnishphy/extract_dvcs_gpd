@@ -70,7 +70,85 @@ worker resolution, batch/update policy, and neural dependencies. It writes
 `results/doctor.json`. Run it after initialization, after editing an
 experiment, and inside a new scheduler allocation.
 
-## Workflow actions
+## Corpus actions
+
+### `corpus-create`
+
+```bash
+./dvcs corpus-create PROJECT CORPUS --profile validation --shard-size 256
+```
+
+Freezes the expensive native-data identity without running PARTONS. The
+identity includes parameter order/support/count/seed, physics, exact
+kinematics, bridge hash, and requested observables. Shard size must be in
+`[1,4096]`. The corpus is stored under `$DVCS_WORKSPACE/.corpora/` in the
+packaged runtime and cannot overwrite an existing name.
+
+### `corpus-plan`
+
+```bash
+./dvcs corpus-plan PROJECT CORPUS
+```
+
+Checks project/corpus compatibility and reports parameter/kinematic counts,
+already available observables, missing observables, and the immutable-shard
+policy. Inspect both this output and `experiment.json` before allocating
+substantial CPU time.
+
+### `corpus-generate`
+
+```bash
+./dvcs corpus-generate PROJECT CORPUS
+./dvcs corpus-generate PROJECT CORPUS --force-native --no-progress
+```
+
+Generates missing exact PARTONS core and observable shards. Each shard is
+written to a same-directory partial file, reopened and checked, atomically
+published, hashed, and committed to the manifest. Rejected candidates are
+retained. Native request evidence is consolidated per shard. Re-running
+continues at the first missing shard; a complete compatible corpus is a
+no-native-call cache hit. `--force-native` is an audit control.
+
+When a compatible project requests another admitted observable, this command
+appends only that observable's shards. Existing core/CFF/observable hashes are
+unchanged, and returned CFFs must match the stored route within the declared
+tolerance.
+
+### `corpus-verify`
+
+```bash
+./dvcs corpus-verify CORPUS
+./dvcs corpus-verify CORPUS --deep
+```
+
+Fast verification checks manifest structure, completeness, and absence of
+unfinished partial files. `--deep` additionally hashes and opens every shard
+and evidence archive and proves core group indices are unique and contiguous.
+
+### `corpus-export` and `corpus-import`
+
+```bash
+./dvcs corpus-export CORPUS ARCHIVE_NAME
+./dvcs corpus-import ARCHIVE_NAME NEW_CORPUS
+```
+
+Export deep-verifies and creates a portable `.tar.gz` below
+`$DVCS_WORKSPACE/.corpus_exports/`. Import rejects traversal, links, special
+members, and existing targets, then rebinds only the corpus location/name and
+deep-verifies it.
+
+### `selection-create`
+
+```bash
+./dvcs selection-create PROJECT CORPUS SELECTION --profile validation
+```
+
+Creates an immutable project-local selection containing disjoint, complete
+native-parameter group lists for training, internal validation, and locked
+outer test. It stores no physics arrays. Names cannot be overwritten, and the
+profile/count must match the corpus.
+
+## Inference and validation actions
 
 All actions below accept:
 
@@ -81,37 +159,18 @@ NAME --profile quick|validation [--no-progress]
 The profile defaults to `quick`. `--no-progress` disables interactive stderr
 bars and is useful in scripts and logs.
 
-### `generate`
-
-```bash
-./dvcs generate NAME --profile quick
-./dvcs generate NAME --profile quick --force-native
-```
-
-Creates the result contract, evaluates injected truth, draws prior parameters,
-runs exact native simulations, replaces invalid draws, makes noise replicas,
-builds grouped data splits, and writes the displayed pseudodataset.
-
-Generation is resumable through its content-addressed native cache. Completed
-requests are reused only when request and executable hashes match. The
-`--force-native` option deliberately recomputes native requests instead of
-using exact cache hits; use it for backend auditing, not routine recovery.
-
-The printed `native_parameter_count` includes the separately evaluated truth
-in the current public summary, while the profile's configured count refers to
-accepted prior vectors. Inspect `generated/generation_metrics.json` for full
-counts and scheduling provenance.
-
 ### `train`
 
 ```bash
-./dvcs train NAME --profile quick
+./dvcs train PROJECT --profile quick --corpus CORPUS --selection SELECTION
 ```
 
-Requires a matching generated contract. It trains every candidate seeded NPE
-member, records histories and metrics, then selects active members using only
-grouped internal-validation NLL. Complete hash-valid member checkpoints are
-resumed; partial or incompatible checkpoints are not treated as complete.
+Requires the named verified corpus and immutable selection. It first
+deterministically materializes nuisance/noise replicas and DeepSets tensors
+without calling PARTONS, then trains every candidate seeded NPE member. Active
+members are selected using grouped internal-validation NLL only. Complete
+hash-valid member checkpoints are resumed; checkpoints are also bound to the
+materialized input manifest.
 
 On multiple visible GPUs the container entrypoint launches one process per
 GPU. Independent ensemble members are deterministically sharded. Asking for
@@ -120,8 +179,9 @@ more ranks than ensemble seeds fails.
 ### `optimize`
 
 ```bash
-./dvcs optimize NAME --profile quick
-./dvcs optimize NAME --profile validation --trials 50
+./dvcs optimize PROJECT --profile quick --corpus CORPUS --selection SELECTION
+./dvcs optimize PROJECT --profile validation --trials 50 \
+  --corpus CORPUS --selection SELECTION
 ```
 
 Runs a separate Optuna study whose objective is grouped internal-validation
@@ -195,30 +255,24 @@ Training, likelihood, hyperparameter selection, and posterior updates remain
 explicitly false in the result. Missing database data, unsupported mappings,
 or failed audits do not become a fit.
 
-### `run`
-
-```bash
-./dvcs run NAME --profile quick
-```
-
-Runs generation, training, evaluation, comparison, and plotting in order. It
-does not run Optuna, native-model holdout, or real-data comparison. For long
-campaigns prefer stepwise actions so scheduler resources can match each phase.
-
 ## Required ordering
 
 ```text
-init -> doctor -> generate -> train -> evaluate -> compare -> plot
-                              |
-                              +-- optimize (separate study)
+init -> doctor -> corpus-create -> corpus-plan -> corpus-generate
+                                            -> corpus-verify
+                                            -> selection-create
+                                            -> train -> evaluate -> compare -> plot
+                                                 |
+                                                 +-- optimize (separate study)
 
 after passed closure ----------+-- holdout
 after frozen posterior --------+-- compare-real
 ```
 
-`plot`, `holdout`, and `compare-real` can be repeated if their source contract
-still matches. Any experiment/profile/bridge change requires regeneration in
-a new project.
+`corpus-verify`, `plot`, `holdout`, and `compare-real` can be repeated if their
+source contracts still match. A neural-only change requires a new project and
+selection but not a new compatible corpus. A physics, prior/count/seed,
+kinematic, or bridge change requires a new corpus.
 
 ## Environment overrides
 
@@ -243,6 +297,7 @@ and are recorded in runtime provenance.
 - Check the process exit code and the JSON `status` field.
 - Do not infer success solely from the presence of an output directory.
 - Preserve `experiment.json`, `workspace_contract.json`, summary JSON, image
-  digest, and distribution commit with published results.
+  digest, corpus/selection manifests, and distribution commit with published
+  results.
 - Use a new project name for changed science or method controls.
 - Use `--no-progress` in noninteractive automation.

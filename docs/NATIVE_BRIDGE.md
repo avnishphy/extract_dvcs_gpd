@@ -100,7 +100,7 @@ workflow operation.
 | `evaluate_coupled_basis_gpd`, `batch_evaluate_coupled_basis_gpd` | Explicit Σ/T3/gluon basis-injection and mixing diagnostic. |
 | `evaluate_conformal_moment_gpd`, `batch_evaluate_conformal_moment_gpd` | Zero-skewness conformal-moment reconstruction diagnostic. |
 | `evaluate_shadow_dvcs`, `batch_evaluate_shadow_dvcs` | Restricted GK16 plus BDMMS21 shadow/CFF/observable diagnostic. |
-| `evaluate_pseudodata_dvcs`, `batch_evaluate_pseudodata_dvcs` | Production 80-control DD, multi-Q² evolution, four-CFF, six-observable synthetic simulator. |
+| `evaluate_pseudodata_dvcs`, `batch_evaluate_pseudodata_dvcs` | Production 80-control DD, multi-Q² evolution, four-CFF simulator with an ordered nonempty subset of six audited observables. |
 | `evaluate_post_training_comparison_dvcs`, batch form | Exact reevaluation used for post-training comparison. |
 | `evaluate_native_model_holdout_dvcs`, batch form | Fresh GK11/GK16/GK19/VGG99 external native validation. |
 
@@ -117,12 +117,14 @@ The production representation is
 - fixed type-level shadow coefficients and channel amplitudes;
 - one or more physical DVCS kinematic points;
 - a fixed LO, three-flavor, MSbar APFEL evolution configuration;
-- fixed CFF/process/observable module identifiers.
+- fixed CFF/process identifiers and an ordered nonempty subset of the six
+  audited observable module identifiers.
 
 The input GPD is defined at `Q0² = 1 GeV²` and evolved to each datum Q². The
 bridge owns one APFEL evolution table per GPD type for a request and exposes it
 to PARTONS through `TabulatedPseudodataGPD`; the adapter does not calculate an
-evolution kernel, CFF, or observable. PARTONS evaluates:
+evolution kernel, CFF, or observable. PARTONS always evaluates the four CFFs
+and computes only the requested observable subset from:
 
 - real and imaginary parts of H, E, Htilde, and Etilde CFFs;
 - `DVCSCrossSectionUUMinus`;
@@ -162,6 +164,11 @@ cache/HASH/
 operation, evaluation count, cache schema, exit code, and `surrogate_used:
 false`. A complete exact hit requires consistent files and hashes. Interrupted
 directories are not accepted as successful cache entries.
+
+These directories are transient during reusable-corpus generation. Once a
+native shard succeeds, they are consolidated into one compressed, hashed
+evidence archive owned by that shard and removed from working state. This
+retains the audit trail without creating a permanent many-small-file corpus.
 
 ## Parallelism
 

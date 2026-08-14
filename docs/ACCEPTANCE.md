@@ -7,8 +7,13 @@
 ./install.sh --profile local --accelerator cpu
 ./dvcs init acceptance
 ./dvcs doctor acceptance
-./dvcs generate acceptance --profile quick
-./dvcs train acceptance --profile quick
+./dvcs corpus-create acceptance acceptance-corpus --profile quick
+./dvcs corpus-plan acceptance acceptance-corpus
+./dvcs corpus-generate acceptance acceptance-corpus
+./dvcs corpus-verify acceptance-corpus --deep
+./dvcs selection-create acceptance acceptance-corpus baseline --profile quick
+./dvcs train acceptance --profile quick \
+  --corpus acceptance-corpus --selection baseline
 ./dvcs evaluate acceptance --profile quick
 ./dvcs plot acceptance --profile quick
 ./tests/run.sh offline
@@ -20,8 +25,12 @@
 ./install.sh --profile local --accelerator cuda
 ./dvcs init acceptance-cuda
 ./dvcs doctor acceptance-cuda
-./dvcs generate acceptance-cuda --profile quick
-./dvcs train acceptance-cuda --profile quick
+./dvcs corpus-create acceptance-cuda acceptance-cuda-corpus --profile quick
+./dvcs corpus-plan acceptance-cuda acceptance-cuda-corpus
+./dvcs corpus-generate acceptance-cuda acceptance-cuda-corpus
+./dvcs selection-create acceptance-cuda acceptance-cuda-corpus baseline --profile quick
+./dvcs train acceptance-cuda --profile quick \
+  --corpus acceptance-cuda-corpus --selection baseline
 nvidia-smi
 ```
 
@@ -40,8 +49,11 @@ vi jobs/jlab_ifarm/resources.env
 ./dvcs init ifarm-acceptance
 apptainer inspect .dvcs/*.sif
 ./dvcs doctor ifarm-acceptance
+./dvcs corpus-create ifarm-acceptance ifarm-acceptance-corpus --profile validation
+./dvcs corpus-plan ifarm-acceptance ifarm-acceptance-corpus
 sinfo -o '%P %G %c %m %l %f'
 sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/generate.sbatch
+sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/selection.sbatch
 sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/train_gpu.sbatch
 sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/compare.sbatch
 jobs/jlab_ifarm/submit_workflow.sh

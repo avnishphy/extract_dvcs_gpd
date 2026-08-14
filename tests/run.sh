@@ -5,8 +5,12 @@ root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 mode="${1:-static}"
 case "${mode}" in
   static)
+    static_cache="$(mktemp -d)"
+    trap 'rm -rf -- "${static_cache}"' EXIT
+    export MPLCONFIGDIR="${static_cache}/matplotlib"
     python3 "${root}/tests/verify_distribution.py"
     python3 "${root}/tests/verify_documentation.py"
+    PYTHONPATH="${root}/src" python3 -m unittest tests.test_reusable_corpus
     "${root}/tests/verify_jlab_gpu_launcher.sh"
     while IFS= read -r script; do bash -n "${script}"; done < <(find "${root}" -type f \( -name '*.sh' -o -name '*.sbatch' -o -name install.sh -o -name dvcs \) -not -path '*/.git/*' | sort)
     install_state_before="$(if [[ -f "${root}/.dvcs/install.env" ]]; then sha256sum "${root}/.dvcs/install.env"; else echo absent; fi)"
@@ -35,7 +39,9 @@ case "${mode}" in
     export PYTHONPATH="${root}/src" DVCS_INFER_REPOSITORY_ROOT="${root}" DVCS_WORKSPACE_ROOT="${temp}/workspace" DVCS_GPDDATABASE_ROOT="${temp}/no-database" DVCS_ACCELERATOR=cpu DVCS_CPU_THREADS=1 DVCS_NATIVE_WORKERS=1 MPLCONFIGDIR="${temp}/matplotlib"
     "${python_bin}" -m extract_dvcs_cff.cli.user --bridge "${bridge}" init acceptance
     "${python_bin}" -m extract_dvcs_cff.cli.user --bridge "${bridge}" doctor acceptance
-    "${python_bin}" -m extract_dvcs_cff.cli.user --bridge "${bridge}" generate acceptance --profile quick --no-progress
+    "${python_bin}" -m extract_dvcs_cff.cli.user --bridge "${bridge}" corpus-create acceptance acceptance-corpus --profile quick
+    "${python_bin}" -m extract_dvcs_cff.cli.user --bridge "${bridge}" corpus-generate acceptance acceptance-corpus --no-progress
+    "${python_bin}" -m extract_dvcs_cff.cli.user --bridge "${bridge}" corpus-verify acceptance-corpus --deep
     ;;
   offline)
     [[ -f "${root}/.dvcs/install.env" ]] || { echo "install first" >&2; exit 77; }

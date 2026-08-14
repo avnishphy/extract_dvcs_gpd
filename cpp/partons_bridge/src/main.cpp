@@ -233,6 +233,7 @@ struct PseudodataEvaluation {
     unsigned int quadratureOrder;
     double q0Squared;
     ShadowObservableKinematics observableKinematics;
+    std::vector<std::string> observableNames;
     std::vector<double> diagnosticX;
 };
 
@@ -248,8 +249,8 @@ struct PseudodataGPDValues {
 struct PseudodataValues {
     std::array<std::complex<double>, 4> cffs;
     double cffXi;
-    std::array<double, 6> observables;
-    std::array<std::string, 6> observableUnits;
+    std::vector<double> observables;
+    std::vector<std::string> observableUnits;
     std::vector<PseudodataGPDValues> gpdDiagnostics;
 };
 
@@ -1042,7 +1043,8 @@ ShadowEvaluation parseShadowEvaluation(const json::object& object,
         requestId, coefficients, gpdKinematics, observableKinematics};
 }
 
-void parsePseudodataTheoryConfiguration(const json::object& object,
+std::vector<std::string> parsePseudodataTheoryConfiguration(
+        const json::object& object,
         const std::string& context) {
     requireOnlyKeys(object,
         {"cff_module", "process_module", "observable_modules",
@@ -1076,7 +1078,7 @@ void parsePseudodataTheoryConfiguration(const json::object& object,
             context + ".observable_modules must be an array",
             kExitValidation);
     }
-    const std::array<std::string, 6> expected{
+    const std::array<std::string, 6> admitted{
         "DVCSCrossSectionUUMinus",
         "DVCSCrossSectionDifferenceLUMinus",
         "DVCSAc",
@@ -1084,22 +1086,37 @@ void parsePseudodataTheoryConfiguration(const json::object& object,
         "DVCSAulMinus",
         "DVCSAllMinus"};
     const json::array modules = observableValue.as_array();
-    if (modules.size() != expected.size()) {
+    if (modules.empty() || modules.size() > admitted.size()) {
         throw BridgeError("unsupported_observable_configuration",
-            context + ".observable_modules does not match the verified "
-                      "Stage 10 list",
+            context + ".observable_modules must contain a nonempty subset "
+                      "of the six verified modules",
             kExitValidation);
     }
-    for (std::size_t index = 0; index < expected.size(); ++index) {
-        if (!modules[index].is_string() ||
-                std::string(modules[index].as_string()) != expected[index]) {
+    std::vector<std::string> selected;
+    std::size_t admittedOffset = 0;
+    for (const json::value& value : modules) {
+        if (!value.is_string()) {
             throw BridgeError("unsupported_observable_configuration",
-                context + ".observable_modules has the wrong order or name",
+                context + ".observable_modules contains a non-string value",
                 kExitValidation);
         }
+        const std::string name(value.as_string());
+        while (admittedOffset < admitted.size() &&
+                admitted[admittedOffset] != name) {
+            ++admittedOffset;
+        }
+        if (admittedOffset == admitted.size()) {
+            throw BridgeError("unsupported_observable_configuration",
+                context + ".observable_modules is not an ordered unique "
+                          "subset of the six verified modules",
+                kExitValidation);
+        }
+        selected.push_back(name);
+        ++admittedOffset;
     }
     requireNull(object, "twist", context);
     requireNull(object, "analysis_order_label", context);
+    return selected;
 }
 
 DVCSInference::DDParameters parsePseudodataDD(
@@ -1289,7 +1306,8 @@ PseudodataEvaluation parsePseudodataEvaluation(
     const json::object theory = requireObject(
         requireField(object, "theory_configuration", context),
         context + ".theory_configuration");
-    parsePseudodataTheoryConfiguration(
+    const std::vector<std::string> observableNames =
+        parsePseudodataTheoryConfiguration(
         theory, context + ".theory_configuration");
     std::vector<double> diagnosticX;
     const auto diagnosticIterator = object.find("gpd_diagnostic_x");
@@ -1328,7 +1346,7 @@ PseudodataEvaluation parsePseudodataEvaluation(
     }
     return PseudodataEvaluation{
         requestId, nativeParameters, order, q0Squared, kinematics,
-        diagnosticX};
+        observableNames, diagnosticX};
 }
 
 NativeModelHoldoutEvaluation parseNativeModelHoldoutEvaluation(
@@ -2060,7 +2078,7 @@ PseudodataValues evaluatePseudodataDVCS(PARTONS::Partons* partons,
     PARTONS::DVCSXiConverterModule* xi = nullptr;
     PARTONS::DVCSScalesModule* scales = nullptr;
     PARTONS::DVCSProcessModule* process = nullptr;
-    std::array<PARTONS::DVCSObservable*, 6> observables{};
+    std::vector<PARTONS::DVCSObservable*> observables;
 
     try {
         combined = factory->newGPDModule(
@@ -2158,17 +2176,35 @@ PseudodataValues evaluatePseudodataDVCS(PARTONS::Partons* partons,
         process->setScaleModule(scales);
         process->setXiConverterModule(xi);
         process->setConvolCoeffFunctionModule(cff);
-        const std::array<unsigned int, 6> observableClassIds{
-            PARTONS::DVCSCrossSectionUUMinus::classId,
-            PARTONS::DVCSCrossSectionDifferenceLUMinus::classId,
-            PARTONS::DVCSAc::classId,
-            PARTONS::DVCSAluMinus::classId,
-            PARTONS::DVCSAulMinus::classId,
-            PARTONS::DVCSAllMinus::classId};
-        for (std::size_t index = 0; index < observables.size(); ++index) {
-            observables[index] =
-                factory->newDVCSObservable(observableClassIds[index]);
-            observables[index]->setProcessModule(process);
+        const auto observableClassId = [](const std::string& name) {
+            if (name == "DVCSCrossSectionUUMinus") {
+                return PARTONS::DVCSCrossSectionUUMinus::classId;
+            }
+            if (name == "DVCSCrossSectionDifferenceLUMinus") {
+                return PARTONS::DVCSCrossSectionDifferenceLUMinus::classId;
+            }
+            if (name == "DVCSAc") {
+                return PARTONS::DVCSAc::classId;
+            }
+            if (name == "DVCSAluMinus") {
+                return PARTONS::DVCSAluMinus::classId;
+            }
+            if (name == "DVCSAulMinus") {
+                return PARTONS::DVCSAulMinus::classId;
+            }
+            if (name == "DVCSAllMinus") {
+                return PARTONS::DVCSAllMinus::classId;
+            }
+            throw BridgeError("unsupported_observable_configuration",
+                "unreachable unverified pseudodata observable '" + name +
+                    "'", kExitValidation);
+        };
+        observables.reserve(evaluation.observableNames.size());
+        for (const std::string& name : evaluation.observableNames) {
+            PARTONS::DVCSObservable* observable =
+                factory->newDVCSObservable(observableClassId(name));
+            observable->setProcessModule(process);
+            observables.push_back(observable);
         }
 
         const PARTONS::DVCSObservableKinematic observableKinematics(
@@ -2316,8 +2352,8 @@ PseudodataValues evaluatePseudodataDVCS(PARTONS::Partons* partons,
 
         PARTONS::DVCSObservableService* observableService =
             partons->getServiceObjectRegistry()->getDVCSObservableService();
-        std::array<double, 6> observableValues{};
-        std::array<std::string, 6> observableUnits{};
+        std::vector<double> observableValues(observables.size());
+        std::vector<std::string> observableUnits(observables.size());
         for (std::size_t index = 0; index < observables.size(); ++index) {
             const auto result = observableService->computeSingleKinematic(
                 observableKinematics, observables[index]);
@@ -2388,14 +2424,10 @@ PseudodataValues evaluatePseudodataDVCS(PARTONS::Partons* partons,
             requireFinite(values.cffs[index].imag(),
                 "cff." + gpdTypeNames[index] + ".imaginary");
         }
-        const std::array<std::string, 6> observableNames{
-            "DVCSCrossSectionUUMinus",
-            "DVCSCrossSectionDifferenceLUMinus", "DVCSAc",
-            "DVCSAluMinus", "DVCSAulMinus", "DVCSAllMinus"};
         for (std::size_t index = 0;
                 index < values.observables.size(); ++index) {
             requireFinite(values.observables[index],
-                "observable." + observableNames[index]);
+                "observable." + evaluation.observableNames[index]);
         }
         const std::array<std::string, 3> flavorNames{"u", "d", "s"};
         for (std::size_t pointIndex = 0;
@@ -2595,8 +2627,8 @@ PseudodataValues evaluateNativeModelHoldout(PARTONS::Partons* partons,
             }
             gpdDiagnostics.push_back(point);
         }
-        std::array<double, 6> observableValues{};
-        std::array<std::string, 6> observableUnits{};
+        std::vector<double> observableValues(observables.size());
+        std::vector<std::string> observableUnits(observables.size());
         auto* observableService =
             partons->getServiceObjectRegistry()->getDVCSObservableService();
         for (std::size_t index = 0; index < observables.size(); ++index) {
@@ -2832,6 +2864,36 @@ json::object pseudodataEvaluationJson(
                     {"Htilde", distributionJson(point.byType[2])},
                     {"Etilde", distributionJson(point.byType[3])}}}});
     }
+    const auto observableQuantity = [](const std::string& name) {
+        if (name == "DVCSCrossSectionUUMinus") {
+            return std::string("d4sigma_nb_per_GeV4");
+        }
+        if (name == "DVCSCrossSectionDifferenceLUMinus") {
+            return std::string("delta_d4sigma_nb_per_GeV4");
+        }
+        if (name == "DVCSAc") {
+            return std::string("beam_charge_asymmetry");
+        }
+        if (name == "DVCSAluMinus") {
+            return std::string("beam_spin_asymmetry");
+        }
+        if (name == "DVCSAulMinus") {
+            return std::string("target_spin_asymmetry");
+        }
+        return std::string("double_spin_asymmetry");
+    };
+    json::object observableResults;
+    for (std::size_t index = 0; index < evaluation.observableNames.size();
+            ++index) {
+        observableResults[evaluation.observableNames[index]] = json::object{
+            {"value", values.observables[index]},
+            {"native_unit_symbol", values.observableUnits[index]},
+            {"quantity", observableQuantity(evaluation.observableNames[index])}};
+    }
+    json::array selectedObservableModules;
+    for (const std::string& name : evaluation.observableNames) {
+        selectedObservableModules.emplace_back(name);
+    }
     return json::object{
         {"request_id", evaluation.requestId},
         {"representation", "stage11_lo_multiq2_full_independent_dd_v1"},
@@ -2932,45 +2994,7 @@ json::object pseudodataEvaluationJson(
                             json::object{
                                 {"real", values.cffs[3].real()},
                                 {"imaginary", values.cffs[3].imag()}}}}},
-                {"observables",
-                    json::object{
-                        {"DVCSCrossSectionUUMinus",
-                            json::object{
-                                {"value", values.observables[0]},
-                                {"native_unit_symbol",
-                                    values.observableUnits[0]},
-                                {"quantity", "d4sigma_nb_per_GeV4"}}},
-                        {"DVCSCrossSectionDifferenceLUMinus",
-                            json::object{
-                                {"value", values.observables[1]},
-                                {"native_unit_symbol",
-                                    values.observableUnits[1]},
-                                {"quantity",
-                                    "delta_d4sigma_nb_per_GeV4"}}},
-                        {"DVCSAc",
-                            json::object{
-                                {"value", values.observables[2]},
-                                {"native_unit_symbol",
-                                    values.observableUnits[2]},
-                                {"quantity", "beam_charge_asymmetry"}}},
-                        {"DVCSAluMinus",
-                            json::object{
-                                {"value", values.observables[3]},
-                                {"native_unit_symbol",
-                                    values.observableUnits[3]},
-                                {"quantity", "beam_spin_asymmetry"}}},
-                        {"DVCSAulMinus",
-                            json::object{
-                                {"value", values.observables[4]},
-                                {"native_unit_symbol",
-                                    values.observableUnits[4]},
-                                {"quantity", "target_spin_asymmetry"}}},
-                        {"DVCSAllMinus",
-                            json::object{
-                                {"value", values.observables[5]},
-                                {"native_unit_symbol",
-                                    values.observableUnits[5]},
-                                {"quantity", "double_spin_asymmetry"}}}}},
+                {"observables", std::move(observableResults)},
                 {"gpd_diagnostics", std::move(gpdDiagnostics)},
                 {"finite", true}}},
         {"theory_configuration",
@@ -2998,12 +3022,7 @@ json::object pseudodataEvaluationJson(
                 {"cff_module", "DVCSCFFStandard"},
                 {"coefficient_function_order", "LO"},
                 {"process_module", "DVCSProcessGV08"},
-                {"observable_modules",
-                    json::array{
-                        "DVCSCrossSectionUUMinus",
-                        "DVCSCrossSectionDifferenceLUMinus",
-                        "DVCSAc", "DVCSAluMinus", "DVCSAulMinus",
-                        "DVCSAllMinus"}},
+                {"observable_modules", std::move(selectedObservableModules)},
                 {"xi_converter_module", "DVCSXiConverterXBToXi"},
                 {"scales_module", "DVCSScalesQ2Multiplier"},
                 {"factorization_scale_squared", "Q2"},
@@ -3041,6 +3060,9 @@ json::object nativeModelHoldoutJson(
     const PseudodataEvaluation outputShape{
         evaluation.requestId, {}, 128U, 1.0,
         evaluation.observableKinematics,
+        {"DVCSCrossSectionUUMinus",
+            "DVCSCrossSectionDifferenceLUMinus", "DVCSAc",
+            "DVCSAluMinus", "DVCSAulMinus", "DVCSAllMinus"},
         evaluation.diagnosticX};
     json::object result = pseudodataEvaluationJson(outputShape, values);
     result["representation"] = "stage11_native_model_holdout_v1";
@@ -3555,6 +3577,8 @@ json::object capabilitiesResponse() {
                           "DVCSCrossSectionDifferenceLUMinus",
                           "DVCSAc", "DVCSAluMinus", "DVCSAulMinus",
                           "DVCSAllMinus"}},
+                  {"observable_selection",
+                      "ordered_nonempty_subset_of_observable_modules"},
                   {"analysis_order_label", nullptr},
                   {"off_scale_dvcs_campaign_available", true},
                   {"thread_safe_parallel_execution", false}}},

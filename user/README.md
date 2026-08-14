@@ -13,11 +13,16 @@ From the repository root:
 ./install.sh --profile local --accelerator auto
 ./dvcs init my-study
 ./dvcs doctor my-study
-./dvcs run my-study --profile quick
+./dvcs corpus-create my-study my-corpus --profile quick
+./dvcs corpus-plan my-study my-corpus
 ```
 
-Installation builds or retrieves the complete container runtime. `auto` uses
-CUDA whenever container PyTorch can initialize it and otherwise records a CPU
+Inspect the generated `experiment.json` in the configured workspace and the
+plan before the
+expensive generation command. The complete required sequence is shown below.
+
+Installation builds or retrieves the complete container runtime. `auto`
+uses CUDA whenever PyTorch can initialize it and otherwise records a CPU
 fallback. Use `--accelerator cuda` to require CUDA and fail rather than fall
 back. PARTONS simulation/evaluation is CPU work; NPE training, scoring, and
 sampling use the selected Torch device. `native_workers: "all_available"`
@@ -41,7 +46,7 @@ not validated adequate sample sizes for an 82-dimensional posterior.
 
 ## What a project contains
 
-`experiment.json` is readable, four-space-indented JSON. Public schema 7 has:
+`experiment.json` is readable, four-space-indented JSON. Public schema 8 has:
 
 - `injected_truth.gpd_parameters`: independent H, E, Htilde, and Etilde
   shapes for u, d, s, and gluon;
@@ -49,6 +54,8 @@ not validated adequate sample sizes for an 82-dimensional posterior.
   `t_slope_GeV_minus2`;
 - fixed shadow coefficients and channel amplitudes (editable simulator
   settings, not posterior coordinates in this release);
+- an ordered, nonempty selection from the six audited native observables,
+  with explicit units, normalization scales, and user labels;
 - six multi-Q2 kinematic sites copied from the read-only database catalog,
   with source Q2 and beam energy retained;
 - a declared full synthetic covariance and two explicit normalization
@@ -81,24 +88,34 @@ If you edit database-derived kinematics, replace `kinematics_source` with:
 
 Otherwise the provenance validator correctly rejects the mismatch.
 
-## Run step by step
+## Required workflow
+
+The reusable-corpus sequence is the only supported public workflow. Its exact
+data ownership and leakage rules are specified in
+[`docs/CORPUS_AND_DATA_SELECTION.md`](../docs/CORPUS_AND_DATA_SELECTION.md).
+It computes exact clean PARTONS shards once, freezes group-disjoint
+train/validation/outer-test membership separately, and adds nuisance/noise
+replicas only when training tensors are materialized.
 
 ```bash
-./dvcs generate my-study --profile validation
-./dvcs train my-study --profile validation
-./dvcs evaluate my-study --profile validation
-./dvcs compare my-study --profile validation
-./dvcs plot my-study --profile validation
+./dvcs corpus-create my-study my-corpus --profile quick
+./dvcs corpus-plan my-study my-corpus
+./dvcs corpus-generate my-study my-corpus
+./dvcs corpus-verify my-corpus --deep
+./dvcs selection-create my-study my-corpus baseline --profile quick
+./dvcs train my-study --profile quick \
+  --corpus my-corpus --selection baseline
+./dvcs evaluate my-study --profile quick
+./dvcs compare my-study --profile quick
+./dvcs plot my-study --profile quick
 ```
 
 `plot` reads compatible saved artifacts and writes figures plus
 `plots/plot_manifest.json`; it does not rerun PARTONS, training, posterior
 sampling, evaluation, or comparison. Scientific gate failures remain recorded
-but do not prevent their diagnostic plots. `run` executes all computational
-steps with restart/cache checks and then calls the same plotting path. `generate`
-means create exact PARTONS DD simulations and one noisy pseudodataset; `run`
-also trains and validates the NPE. Use `generate --force-native` only when you
-intentionally want to bypass exact content-addressed cache hits.
+but do not prevent their diagnostic plots. `corpus-generate` computes missing
+exact shards or admitted observable extensions. It never silently replaces an
+existing corpus.
 
 Live progress is on stderr; structured JSON is on stdout. Exact generation
 uses independent two-parameter native batches and redraws immediately after
@@ -118,8 +135,8 @@ the same affinity-bounded `native_workers` pool. Their postfix reports
 completed, valid, invalid, and active-worker counts. GPU activity is expected
 for coverage/posterior sampling; native reevaluation remains CPU work.
 
-If a legacy project reports `unphysical_fixed_target_kinematics`, do not
-resume it or use `--force-native`. Its catalog selection predates the required
+If an older project reports `unphysical_fixed_target_kinematics`, do not
+resume it. Its catalog selection predates the required
 $0<y=Q^2/(2M_pEx_B)<1$ filter. Create a new project name; the corrected
 selection is part of project provenance and is intentionally not migrated
 silently.
@@ -129,8 +146,13 @@ silently.
 The default architecture is used unless you explicitly run:
 
 ```bash
-./dvcs optimize my-study --profile validation --trials 50
+./dvcs optimize my-study --profile quick --trials 50 \
+  --corpus my-corpus --selection baseline
 ```
+
+The profile must match the profile used by both `corpus-create` and
+`selection-create`. For a scientific campaign, create a separate validation
+profile corpus and selection rather than relabeling a quick corpus.
 
 The resumable study is under
 `results/validation/optimization/` (`study.sqlite3`, trial table, and

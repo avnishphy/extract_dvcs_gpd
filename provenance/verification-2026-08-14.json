@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-14",
+  "scope": "reusable PARTONS corpus upstream update and packaging integration",
+  "upstream_commit": "255b8f79738681b4cb0c8dc2174a111e9f6fcb46",
+  "passed": [
+    "approved upstream runtime state was recorded with separate upstream and reviewed packaging-adaptation hashes; the follow-up synchronization check reports no revision change, file changes, or removals",
+    "distribution, documentation, shell syntax, JLab launcher, and non-mutating installer static checks passed",
+    "documentation verification covers 22 required guides, all local links, and all 118 generated schema-8 leaves",
+    "five reusable-corpus Python test methods passed, covering atomic shard extension, deep corruption rejection, deterministic realization, mandatory corpus/selection CLI arguments, frozen observable metadata, and exclusion of internal corpus stores from project listing",
+    "the C++ bridge rebuilt with C++17 warnings-as-errors after the observable-subset and provenance merge",
+    "bridge capabilities and deterministic self-test passed",
+    "stage03 DD, stage06 evolution, stage07 basis mixing, stage08 conformal, and stage09 shadow native physics executables passed",
+    "all nine upstream Stage 10 native pseudodata bridge regressions passed against the rebuilt distribution bridge, including scalar/batch equality, four-GPD sensitivity, all six observables, singleton observable equality, and rejection of noncanonical observable order",
+    "a real CPU corpus smoke generated four accepted 80-parameter groups in two atomic shards for all six observables, deep-verified 24 files, and froze disjoint 2/1/1 training/internal-validation/outer-test group ownership",
+    "doctor passed with allocation-aware native generation wave sizing; a stale fixed-size symbol discovered by the real smoke was removed and guarded by static regression",
+    "multi-GPU realization publication is serialized and identity-matched repeats reuse the complete generated tensor set; the reuse path is covered without rerunning materialization, and downstream contracts bind the corpus, selection, realization schema, and generated-array manifest hash"
+  ],
+  "inherited_evidence": [
+    "provenance/verification-2026-08-12.json",
+    "provenance/verification-2026-08-13.json"
+  ],
+  "unverified": [
+    {
+      "test": "complete standard 2048-group quick corpus and full validation-scale corpus campaign",
+      "reason": "the acceptance run intentionally used four groups to verify the real integration path without spending campaign-scale CPU allocation"
+    },
+    {
+      "test": "corpus-backed full neural optimization, training, evaluation, comparison, holdout, and plotting after this update",
+      "reason": "prior CPU neural smoke evidence is retained, while a full corpus-backed campaign remains an allocated acceptance task"
+    },
+    {
+      "test": "Docker/Podman, Apptainer, Slurm, JLab filesystem, CUDA, and multi-GPU execution",
+      "reason": "those runtimes and hardware are unavailable on the packaging host; definitions, syntax, propagation, and launch policy were verified statically"
+    }
+  ],
+  "publication_blockers": [
+    "repository-level application license grant is unresolved",
+    "provenance/images.lock.json still requires the real GitHub owner and post-publication OCI digests"
+  ]
+}

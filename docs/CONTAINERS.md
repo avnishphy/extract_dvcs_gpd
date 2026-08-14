@@ -38,7 +38,7 @@ podman build \
   -f containers/Dockerfile \
   --target runtime \
   --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu \
-  -t localhost/extract-dvcs-gpd:0.1.0-cpu .
+  -t localhost/extract-dvcs-gpd:0.2.0-cpu .
 ```
 
 Docker CUDA:
@@ -48,7 +48,7 @@ docker build \
   -f containers/Dockerfile \
   --target runtime \
   --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu126 \
-  -t localhost/extract-dvcs-gpd:0.1.0-cuda12.6 .
+  -t localhost/extract-dvcs-gpd:0.2.0-cuda12.6 .
 ```
 
 Apptainer source build:
@@ -76,7 +76,7 @@ in both runtimes.
 
 | Container path | Access | Purpose |
 |---|---|---|
-| `/workspace` | read/write | Projects, experiments, profile results. |
+| `/workspace` | read/write | Projects/results plus `.corpora` and `.corpus_exports`. |
 | `/results` | read/write | Runtime and scheduler provenance. |
 | `/cache` | read/write | LHAPDF, Matplotlib, and reusable caches. |
 | `/database` | read-only | Parent of the pinned `gpddatabase` checkout. |
@@ -113,6 +113,14 @@ DVCS_GPDDATABASE_ROOT=/database/gpddatabase
 LHAPDF_DATA_PATH=/cache/lhapdf
 MPLCONFIGDIR=/cache/matplotlib
 ```
+
+Unless explicitly overridden, the CLI derives `DVCS_CORPUS_ROOT` as
+`/workspace/.corpora` and `DVCS_CORPUS_EXPORT_ROOT` as
+`/workspace/.corpus_exports`. The standard launcher intentionally keeps both
+inside the configured `DVCS_WORKSPACE` host mount. A custom container
+deployment may set either internal variable only after adding a corresponding
+persistent bind; every workflow step must then see the same container path and
+content.
 
 The launcher additionally passes accelerator and image-digest provenance.
 

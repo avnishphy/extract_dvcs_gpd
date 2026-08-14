@@ -11,12 +11,12 @@ and compatibility relationship. The main rules are:
 - arrays are accompanied by dtype, shape, and SHA-256 metadata;
 - covariance is never stored without its point-order map;
 - cached native output is bound to the exact request and bridge executable;
-- later actions verify generation contracts before reading earlier results;
+- later actions verify corpus/materialization contracts before reading earlier results;
 - synthetic, outer-test, holdout, and real-diagnostic roles remain separate.
 
 ## Public project contract
 
-`experiment.json` is the only user-editable scientific contract. Schema 7
+`experiment.json` is the only user-editable scientific contract. Schema 8
 contains exactly these top-level blocks:
 
 ```text
@@ -32,6 +32,11 @@ validation_gates
 The validator rejects missing and unknown keys. See the [field-by-field
 reference](EXPERIMENT_JSON_REFERENCE.md).
 
+Schema 8 adds `synthetic_dataset.observables`: an ordered nonempty subset of
+the six audited native modules, including frozen unit, normalization-scale,
+and label metadata. Schema 7 remains readable as the canonical six-observable
+selection.
+
 `real_data_mapping_readiness.json` is generated at initialization. It records
 whether the database is installed, candidate observable mappings, units,
 uncertainty/covariance-field presence, required audits, and
@@ -44,7 +49,8 @@ making its internal configuration another public edit surface.
 
 ## Workspace contract
 
-Generation creates `results/PROFILE/workspace_contract.json` with:
+Corpus-backed training or optimization materialization creates
+`results/PROFILE/workspace_contract.json` with:
 
 | Field | Role |
 |---|---|
@@ -55,12 +61,34 @@ Generation creates `results/PROFILE/workspace_contract.json` with:
 | `bridge_sha256` | Exact native executable identity. |
 | `real_data` | Must remain `false` for the synthetic corpus. |
 | `synthetic_split_policy` | Grouped train/internal-validation/outer-test policy. |
+| `corpus_manifest_sha256` | Exact reusable corpus manifest used by the realization. |
+| `selection_manifest_sha256` | Exact immutable group selection. |
+| `realization_schema_version` | Deterministic materialization algorithm version. |
+| `realization_manifest_sha256` | Exact generated array manifest consumed downstream. |
 
 Every downstream action compares the observed object with a freshly computed
-expected object. A mismatch instructs the user to create a new project; the
-runtime never combines old arrays with a changed experiment.
+expected object and the current realization-manifest hash. A mismatch
+instructs the user to create a new project; the runtime never combines old
+arrays with a changed experiment, corpus, or selection.
 
-## Native cache contract
+## Reusable native corpus contract
+
+The reusable corpus is the expensive, noise-free PARTONS asset. Corpus schema
+1 content-binds the 80-parameter order and prior, parameter seed/count,
+kinematics, complete GPD/CFF/process configuration, bridge hash, atomic
+parameter/CFF shards, independent observable shards, rejected draws, and
+consolidated native-evidence hashes. It deliberately excludes neural
+architecture, split roles, nuisance draws, and noise replicas.
+
+Selection schema 1 stores only disjoint, complete train/internal-validation/
+outer-test group lists, their split seed and policy, a locked-test assertion,
+and the corpus core-identity hash. Realization schema 1 deterministically
+creates nuisance/noise rows and neural tensors immediately before training or
+Optuna, binding the result to corpus, selection, configuration, bridge, and
+every materialized array hash. See
+[Corpus and data selection](CORPUS_AND_DATA_SELECTION.md).
+
+## Transient native cache contract
 
 Each native cache entry stores the exact request, exact response, raw streams,
 exit code, and metadata. Cache keys derive from canonical request content and
@@ -71,9 +99,10 @@ Only complete successful entries are reused. Force recomputation is available
 for audit. Cache entries may be copied between machines only if their full
 hash contract and dependency assumptions remain valid.
 
-## Generated corpus
+## Materialized realization
 
-`generated/` contains the native corpus and displayed pseudodataset. Principal
+`generated/` contains one corpus-backed neural realization and the displayed
+pseudodataset. Principal
 artifacts include:
 
 | Artifact | Meaning |
@@ -84,8 +113,8 @@ artifacts include:
 | `array_manifest.json` | Shape, dtype, and SHA-256 for persisted arrays. |
 | `.npy` arrays | Parameter vectors, contexts, split identifiers, predictions, CFFs, covariance-derived values, and related numerical records. |
 
-Point order is kinematic-major with the six frozen observables for each
-kinematic point. A six-point experiment therefore has 36 tokens. A dense
+Point order is kinematic-major with each selected observable in canonical
+order. The default six-observable, six-point experiment has 36 tokens. A dense
 covariance uses that exact flattened order.
 
 The pseudodataset distinguishes:

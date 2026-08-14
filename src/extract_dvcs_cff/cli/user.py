@@ -25,20 +25,31 @@ import sys
 from typing import Any, Mapping
 
 from extract_dvcs_cff.workflows.pseudodata import (
+    ADMITTED_OBSERVABLE_IDS,
     compare_real_observables,
     compare_posteriors,
     doctor,
     evaluate_model,
     evaluate_native_model_holdouts,
-    generate_pseudodata,
     load_configuration,
     plot_saved_results,
-    run_workflow,
     sha256,
     train_model,
     write_json,
 )
 from extract_dvcs_cff.optimization import optimize_hyperparameters
+from extract_dvcs_cff.corpus import (
+    ADMITTED_OBSERVABLE_METADATA,
+    assert_corpus_compatible,
+    create_corpus,
+    create_selection,
+    export_corpus,
+    generate_corpus,
+    import_corpus,
+    materialize_selection,
+    plan_corpus,
+    verify_corpus,
+)
 from extract_dvcs_cff.data.gpddatabase import (
     build_kinematic_catalog,
     build_real_data_mapping_readiness,
@@ -90,7 +101,13 @@ NUISANCE_TRUTH_KEYS = {
     "eta_lu_normalization",
 }
 SYNTHETIC_DATASET_KEYS_V5 = {"kinematics", "uncertainty_model"}
-SYNTHETIC_DATASET_KEYS = SYNTHETIC_DATASET_KEYS_V5 | {"kinematics_source"}
+SYNTHETIC_DATASET_KEYS_V7 = SYNTHETIC_DATASET_KEYS_V5 | {
+    "kinematics_source"
+}
+SYNTHETIC_DATASET_KEYS = SYNTHETIC_DATASET_KEYS_V7 | {"observables"}
+OBSERVABLE_KEYS = {
+    "id", "native_unit", "normalization_scale", "user_label"
+}
 KINEMATICS_SOURCE_KEYS = {
     "mode",
     "database_root",
@@ -209,6 +226,38 @@ def _database_root(repository: Path) -> Path:
     return Path(configured) if configured else repository.parent / "gpddatabase"
 
 
+def _corpus_root(repository: Path) -> Path:
+    """Return the writable corpus store for local or container execution."""
+
+    configured = os.environ.get("DVCS_CORPUS_ROOT")
+    if configured:
+        path = Path(configured)
+    elif os.environ.get("DVCS_WORKSPACE_ROOT"):
+        path = _user_root(repository) / ".corpora"
+    else:
+        path = repository / "user" / "corpora"
+    path.mkdir(parents=True, exist_ok=True)
+    if path.is_symlink():
+        raise RuntimeError("corpus root must not be a symlink")
+    return path.resolve(strict=True)
+
+
+def _corpus_export_root(repository: Path) -> Path:
+    """Return the writable portable-corpus archive store."""
+
+    configured = os.environ.get("DVCS_CORPUS_EXPORT_ROOT")
+    if configured:
+        path = Path(configured)
+    elif os.environ.get("DVCS_WORKSPACE_ROOT"):
+        path = _user_root(repository) / ".corpus_exports"
+    else:
+        path = repository / "user" / "corpus_exports"
+    path.mkdir(parents=True, exist_ok=True)
+    if path.is_symlink():
+        raise RuntimeError("corpus export root must not be a symlink")
+    return path.resolve(strict=True)
+
+
 def _validate_name(name: str) -> None:
     if not PROJECT_NAME.fullmatch(name):
         raise ValueError(
@@ -235,6 +284,56 @@ def _project_path(repository: Path, name: str, *, existing: bool) -> Path:
             f"project {name!r} already exists; choose a new name"
         )
     return candidate
+
+
+def _corpus_path(repository: Path, name: str, *, existing: bool) -> Path:
+    """Resolve one safe direct child of the Git-ignored corpus store."""
+
+    _validate_name(name)
+    root = _corpus_root(repository)
+    candidate = root / name
+    if existing:
+        resolved = candidate.resolve(strict=True)
+        if candidate.is_symlink() or not resolved.is_dir() or resolved.parent != root:
+            raise RuntimeError("corpus must be one real direct child of its store")
+        return resolved
+    if candidate.exists() or candidate.is_symlink():
+        raise FileExistsError(f"corpus {name!r} already exists")
+    return candidate
+
+
+def _selection_path(project: Path, name: str, *, existing: bool) -> Path:
+    _validate_name(name)
+    root = project / "selections"
+    root.mkdir(exist_ok=True)
+    if root.is_symlink():
+        raise RuntimeError("project selections must not be a symlink")
+    root = root.resolve(strict=True)
+    path = root / f"{name}.json"
+    if existing:
+        resolved = path.resolve(strict=True)
+        if path.is_symlink() or not resolved.is_file() or resolved.parent != root:
+            raise RuntimeError("selection must be one real project selection file")
+        return resolved
+    if path.exists() or path.is_symlink():
+        raise FileExistsError(f"selection {name!r} already exists")
+    return path
+
+
+def _corpus_archive_path(repository: Path, name: str, *, existing: bool) -> Path:
+    """Resolve one safe portable archive below the ignored export store."""
+
+    _validate_name(name)
+    root = _corpus_export_root(repository)
+    path = root / f"{name}.tar.gz"
+    if existing:
+        resolved = path.resolve(strict=True)
+        if path.is_symlink() or not resolved.is_file() or resolved.parent != root:
+            raise RuntimeError("corpus archive must be one real export file")
+        return resolved
+    if path.exists() or path.is_symlink():
+        raise FileExistsError(f"corpus archive {name!r} already exists")
+    return path
 
 
 def _canonical_paths(repository: Path) -> tuple[Path, Path]:
@@ -268,7 +367,7 @@ def _public_experiment(
     }
     truth = canonical_configuration["truth"]
     return {
-        "schema_version": 7,
+        "schema_version": 8,
         "experiment": {
             "name": name,
             "description": (
@@ -316,6 +415,7 @@ def _public_experiment(
         "synthetic_dataset": {
             "kinematics": deepcopy(canonical_configuration["kinematics"]),
             "kinematics_source": deepcopy(kinematics_source),
+            "observables": deepcopy(canonical_configuration["observables"]),
             "uncertainty_model": {
                 "uncorrelated_relative_sigma": model[
                     "uncorrelated_relative_sigma"
@@ -386,18 +486,22 @@ Run commands from the repository root:
 
 ```bash
 ./dvcs doctor {name}
-./dvcs run {name} --profile quick
-```
-
-For step-by-step execution:
-
-```bash
-./dvcs generate {name} --profile quick
-./dvcs train {name} --profile quick
+./dvcs corpus-create {name} {name}-corpus --profile quick
+./dvcs corpus-plan {name} {name}-corpus
+./dvcs corpus-generate {name} {name}-corpus
+./dvcs corpus-verify {name}-corpus --deep
+./dvcs selection-create {name} {name}-corpus baseline --profile quick
+./dvcs train {name} --profile quick --corpus {name}-corpus --selection baseline
 ./dvcs evaluate {name} --profile quick
 ./dvcs compare {name} --profile quick
 ./dvcs plot {name} --profile quick
 ```
+
+Read `docs/CORPUS_AND_DATA_SELECTION.md` in the distribution checkout before
+the expensive
+generation command. It defines atomic shards, immutable group splits,
+deterministic noise replicas, safe observable extension, verification, and
+export/import. Always inspect `experiment.json` first.
 
 `plot` consumes compatible saved results without repeating PARTONS or neural
 inference. For custom analysis, consume the saved non-pickled arrays using
@@ -521,7 +625,8 @@ def _load_experiment(project: Path) -> dict[str, Any]:
     """Load the full-independent public schema; reject reduced schemas.
 
     Schema v1 remains readable only for historical developer tests. New user
-    New projects receive schema v7. Earlier schemas encoded a different,
+    projects receive schema v8. Schema v7 remains readable as the same physics
+    contract with the canonical six observables. Earlier schemas encoded a different,
     reduced posterior and are never migrated silently.
     """
 
@@ -559,7 +664,7 @@ def _load_experiment(project: Path) -> dict[str, Any]:
             "validation_gates": validation_gates,
             "kinematics_source": {"mode": "manual"},
         }
-    elif value.get("schema_version") == 7:
+    elif value.get("schema_version") in {7, 8}:
         public_schema = int(value["schema_version"])
         _exact_keys(value, EXPERIMENT_KEYS_V3, "experiment")
         _exact_keys(
@@ -609,12 +714,12 @@ def _load_experiment(project: Path) -> dict[str, Any]:
             value["synthetic_dataset"],
             (
                 SYNTHETIC_DATASET_KEYS
-                if public_schema == 7
-                else SYNTHETIC_DATASET_KEYS_V5
+                if public_schema == 8
+                else SYNTHETIC_DATASET_KEYS_V7
             ),
             "synthetic_dataset",
         )
-        if public_schema == 7:
+        if public_schema >= 7:
             source = value["synthetic_dataset"]["kinematics_source"]
             if not isinstance(source, dict):
                 raise ValueError("kinematics_source must be an object")
@@ -652,7 +757,7 @@ def _load_experiment(project: Path) -> dict[str, Any]:
         _exact_keys(value["inference"], INFERENCE_KEYS, "inference")
         _exact_keys(
             value["inference"]["runtime"],
-            RUNTIME_KEYS if public_schema == 7 else RUNTIME_KEYS_V5,
+            RUNTIME_KEYS if public_schema >= 7 else RUNTIME_KEYS_V5,
             "inference.runtime",
         )
         _exact_keys(
@@ -676,6 +781,31 @@ def _load_experiment(project: Path) -> dict[str, Any]:
             )
         if not isinstance(value["experiment"]["description"], str):
             raise ValueError("experiment.description must be a string")
+        if public_schema == 8:
+            observables = value["synthetic_dataset"]["observables"]
+            if not isinstance(observables, list) or not observables:
+                raise ValueError("synthetic_dataset.observables must be nonempty")
+            for index, observable in enumerate(observables):
+                if not isinstance(observable, dict):
+                    raise ValueError(f"observables[{index}] must be an object")
+                _exact_keys(observable, OBSERVABLE_KEYS,
+                    f"observables[{index}]")
+            observable_ids = [item["id"] for item in observables]
+            expected = [
+                name for name in ADMITTED_OBSERVABLE_IDS
+                if name in observable_ids
+            ]
+            if observable_ids != expected:
+                raise ValueError(
+                    "observables must be an ordered unique subset of the six "
+                    "admitted native modules"
+                )
+            for index, observable in enumerate(observables):
+                if observable != ADMITTED_OBSERVABLE_METADATA[observable["id"]]:
+                    raise ValueError(
+                        f"observables[{index}] metadata does not match its "
+                        "frozen native unit, scale, and label"
+                    )
         validation_gates = deepcopy(value["validation_gates"])
         retired_width_key = "minimum_shadow_posterior_prior_width_ratio"
         current_width_key = (
@@ -708,8 +838,13 @@ def _load_experiment(project: Path) -> dict[str, Any]:
             "kinematics": value["synthetic_dataset"]["kinematics"],
             "kinematics_source": (
                 value["synthetic_dataset"]["kinematics_source"]
-                if public_schema == 7
+                if public_schema >= 7
                 else {"mode": "manual"}
+            ),
+            "observables": (
+                value["synthetic_dataset"]["observables"]
+                if public_schema == 8
+                else None
             ),
             "uncertainties": value["synthetic_dataset"][
                 "uncertainty_model"
@@ -732,7 +867,7 @@ def _load_experiment(project: Path) -> dict[str, Any]:
     elif value.get("schema_version") in {2, 3, 4, 5, 6}:
         raise ValueError(
             "this experiment schema is retired; create a new project to use "
-            "the full-independent multi-Q2 schema_version 7"
+            "the full-independent multi-Q2 schema_version 8"
         )
     else:
         raise ValueError("unsupported experiment schema_version")
@@ -919,6 +1054,8 @@ def prepare_engine(
     configuration["physics_configuration"] = "physics.json"
     configuration["truth"] = deepcopy(experiment["truth"])
     configuration["kinematics"] = deepcopy(experiment["kinematics"])
+    if experiment.get("observables") is not None:
+        configuration["observables"] = deepcopy(experiment["observables"])
     configuration["data_provenance"] = deepcopy(
         experiment["kinematics_source"]
     )
@@ -956,6 +1093,9 @@ def prepare_engine(
     engine.mkdir(exist_ok=True)
     engine_physics = engine / "physics.json"
     physics = json.loads(physics_path.read_text(encoding="utf-8"))
+    physics["theory_configuration"]["observable_modules"] = [
+        item["id"] for item in configuration["observables"]
+    ]
     for name, public_channels in experiment["gpd_shapes"].items():
         for channel, public_shape in public_channels.items():
             shape = physics["parameters"]["gpd_shapes"][name][channel]
@@ -1002,18 +1142,30 @@ def assert_result_contract(
 ) -> None:
     """Refuse stepwise reuse after any experiment/profile/backend change.
 
-    Generation creates the authoritative contract.  The full ``run`` command
-    reaches the same check through generation, but direct ``train``,
-    ``evaluate``, and ``compare`` calls need this preflight before consuming
-    arrays from an earlier step.
+    Corpus-backed materialization creates the authoritative contract. Direct
+    downstream calls need this preflight before consuming arrays from an
+    earlier step.
     """
 
     path = workspace / "workspace_contract.json"
     if not path.is_file():
         raise RuntimeError(
-            f"generate must run first; missing {path}"
+            "train must first materialize a named corpus and selection; "
+            f"missing {path}"
         )
+    if path.is_symlink():
+        raise RuntimeError("workspace contract must not be a symlink")
     observed = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(observed, dict):
+        raise RuntimeError("workspace contract is malformed")
+    realization_path = workspace / "generated" / "array_manifest.json"
+    if not realization_path.is_file() or realization_path.is_symlink():
+        raise RuntimeError(
+            f"materialized realization manifest is missing: {realization_path}"
+        )
+    realization = json.loads(realization_path.read_text(encoding="utf-8"))
+    if not isinstance(realization, dict):
+        raise RuntimeError("materialized realization manifest is malformed")
     expected = {
         "schema_version": 1,
         "configuration": str(configuration.resolve(strict=True)),
@@ -1024,6 +1176,16 @@ def assert_result_contract(
         "synthetic_split_policy": (
             "native_parameter_grouped_train_validation_test_v1"
         ),
+        "corpus_manifest_sha256": realization.get(
+            "corpus_manifest_sha256"
+        ),
+        "selection_manifest_sha256": realization.get(
+            "selection_manifest_sha256"
+        ),
+        "realization_schema_version": realization.get(
+            "realization_schema_version"
+        ),
+        "realization_manifest_sha256": sha256(realization_path),
     }
     if observed != expected:
         raise RuntimeError(
@@ -1055,10 +1217,7 @@ def _public_result(
         output = project / "results" / profile
         public["profile"] = profile
         public["results"] = str(output)
-    if command == "generate":
-        public["native_parameter_count"] = result["native_parameter_count"]
-        public["native_invalid_count"] = result["native_invalid_count"]
-    elif command == "doctor":
+    if command == "doctor":
         public["neural_device"] = result["neural_device"]
         public["native_accelerator"] = result["native_accelerator"]
     elif command == "train":
@@ -1158,24 +1317,6 @@ def _public_result(
         public["summary"] = str(
             project / "results" / str(profile) / "holdout" / "summary.json"
         )
-    elif command == "run":
-        public["summary"] = str(project / "results" / profile / "summary.md")
-        public["mean_train_negative_log_density"] = result["training"][
-            "mean_train_negative_log_density"
-        ]
-        public["mean_test_negative_log_density"] = result["training"][
-            "mean_test_negative_log_density"
-        ]
-        public["effective_sample_size"] = result["comparison"][
-            "effective_sample_size"
-        ]
-        public["ensemble_sliced_wasserstein"] = result["comparison"][
-            "ensemble_sliced_wasserstein"
-        ]
-        public["neural_device"] = result["training"]["neural_device"]
-        public["maximum_cuda_peak_allocated_bytes"] = result["training"][
-            "maximum_cuda_peak_allocated_bytes"
-        ]
     return public
 
 
@@ -1207,9 +1348,49 @@ def _parser() -> argparse.ArgumentParser:
     commands.add_parser("list", help="list isolated user projects")
     show = commands.add_parser("show", help="show project controls and paths")
     show.add_argument("project")
+    corpus_create = commands.add_parser(
+        "corpus-create", help="freeze a reusable exact-native corpus definition"
+    )
+    corpus_create.add_argument("project")
+    corpus_create.add_argument("corpus")
+    corpus_create.add_argument("--profile", choices=("quick", "validation"), default="quick")
+    corpus_create.add_argument("--shard-size", type=int, default=256)
+    corpus_plan = commands.add_parser(
+        "corpus-plan", help="show native work missing from a corpus"
+    )
+    corpus_plan.add_argument("project")
+    corpus_plan.add_argument("corpus")
+    corpus_generate = commands.add_parser(
+        "corpus-generate", help="generate core shards or append missing observables"
+    )
+    corpus_generate.add_argument("project")
+    corpus_generate.add_argument("corpus")
+    corpus_generate.add_argument("--no-progress", action="store_true")
+    corpus_generate.add_argument("--force-native", action="store_true")
+    corpus_verify = commands.add_parser(
+        "corpus-verify", help="verify reusable corpus manifests and shards"
+    )
+    corpus_verify.add_argument("corpus")
+    corpus_verify.add_argument("--deep", action="store_true")
+    corpus_export = commands.add_parser(
+        "corpus-export", help="deep-verify and write a portable corpus archive"
+    )
+    corpus_export.add_argument("corpus")
+    corpus_export.add_argument("archive")
+    corpus_import = commands.add_parser(
+        "corpus-import", help="safely import and deep-verify a corpus archive"
+    )
+    corpus_import.add_argument("archive")
+    corpus_import.add_argument("corpus")
+    selection_create = commands.add_parser(
+        "selection-create", help="freeze a group-aware neural data selection"
+    )
+    selection_create.add_argument("project")
+    selection_create.add_argument("corpus")
+    selection_create.add_argument("selection")
+    selection_create.add_argument("--profile", choices=("quick", "validation"), default="quick")
     for command, help_text in (
         ("doctor", "verify the exact-native and neural runtime"),
-        ("generate", "generate native simulations and pseudodata"),
         ("train", "train or resume the neural posterior ensemble"),
         ("optimize", "tune neural hyperparameters on validation NLL"),
         ("evaluate", "run coverage and exact-predictive checks"),
@@ -1223,7 +1404,6 @@ def _parser() -> argparse.ArgumentParser:
             "compare-real",
             "compare quarantined real observables with frozen-NPE predictions",
         ),
-        ("run", "run generation, training, evaluation, comparison, and plots"),
     ):
         subparser = commands.add_parser(command, help=help_text)
         subparser.add_argument("project")
@@ -1242,18 +1422,21 @@ def _parser() -> argparse.ArgumentParser:
                         "disabled when stderr is not an interactive terminal)"
                     ),
                 )
-        if command == "generate":
-            subparser.add_argument(
-                "--force-native",
-                action="store_true",
-                help="recompute exact simulations instead of exact cache hits",
-            )
         if command == "optimize":
             subparser.add_argument(
                 "--trials",
                 type=int,
                 default=None,
                 help="new trials to add (default from experiment.json)",
+            )
+        if command in {"train", "optimize"}:
+            subparser.add_argument(
+                "--corpus", required=True,
+                help="named verified corpus from the configured corpus store",
+            )
+            subparser.add_argument(
+                "--selection", required=True,
+                help="named immutable group-aware project selection",
             )
         if command == "compare-real":
             subparser.add_argument(
@@ -1282,9 +1465,109 @@ def main() -> int:
                 "projects": sorted(
                     path.name
                     for path in root.iterdir()
-                    if path.is_dir() and not path.is_symlink()
+                    if (
+                        path.is_dir()
+                        and not path.is_symlink()
+                        and PROJECT_NAME.fullmatch(path.name)
+                    )
                 )
             }
+        elif args.command == "corpus-verify":
+            result = verify_corpus(
+                corpus=_corpus_path(repository, args.corpus, existing=True),
+                deep=args.deep,
+            )
+        elif args.command == "corpus-export":
+            result = export_corpus(
+                corpus=_corpus_path(repository, args.corpus, existing=True),
+                archive_path=_corpus_archive_path(
+                    repository, args.archive, existing=False
+                ),
+            )
+        elif args.command == "corpus-import":
+            result = import_corpus(
+                archive_path=_corpus_archive_path(
+                    repository, args.archive, existing=True
+                ),
+                corpus=_corpus_path(repository, args.corpus, existing=False),
+            )
+        elif args.command in {
+            "corpus-create", "corpus-plan", "corpus-generate",
+            "selection-create",
+        }:
+            project = _project_path(repository, args.project, existing=True)
+            configuration, experiment = prepare_engine(repository, project)
+            bridge = _bridge_path(repository, args.bridge)
+            if args.command == "corpus-create":
+                corpus_path = _corpus_path(
+                    repository, args.corpus, existing=False
+                )
+                created = create_corpus(
+                    corpus=corpus_path,
+                    bridge=bridge,
+                    configuration_path=configuration,
+                    profile=args.profile,
+                    shard_size=args.shard_size,
+                )
+                result = {
+                    "status": "planned",
+                    "corpus": args.corpus,
+                    "path": str(corpus_path),
+                    "parameter_count": created["core_identity"]["parameter_count"],
+                    "shard_count": created["shard_count"],
+                    "requested_observables": created["requested_observables"],
+                    "manifest_sha256": created["manifest_sha256"],
+                    "next_command": (
+                        f"./dvcs corpus-plan {args.project} {args.corpus}"
+                    ),
+                }
+            else:
+                corpus = _corpus_path(repository, args.corpus, existing=True)
+                assert_corpus_compatible(
+                    corpus=corpus, configuration_path=configuration,
+                    bridge=bridge,
+                )
+                observable_names = [
+                    item["id"]
+                    for item in load_configuration(configuration)["observables"]
+                ]
+                if args.command == "corpus-plan":
+                    result = plan_corpus(
+                        corpus=corpus,
+                        requested_observables=observable_names,
+                    )
+                elif args.command == "corpus-generate":
+                    result = generate_corpus(
+                        corpus=corpus, bridge=bridge,
+                        requested_observables=observable_names,
+                        show_progress=False if args.no_progress else None,
+                        force_native=args.force_native,
+                    )
+                else:
+                    selected = create_selection(
+                        corpus=corpus,
+                        selection_path=_selection_path(
+                            project, args.selection, existing=False
+                        ),
+                        profile=args.profile,
+                        configuration_path=configuration,
+                    )
+                    result = {
+                        "status": "created",
+                        "selection": args.selection,
+                        "corpus": args.corpus,
+                        "training_group_count": len(
+                            selected["training_group_indices"]
+                        ),
+                        "validation_group_count": len(
+                            selected["validation_group_indices"]
+                        ),
+                        "outer_test_group_count": len(
+                            selected["outer_test_group_indices"]
+                        ),
+                        "outer_test_locked": True,
+                        "manifest_sha256": selected["manifest_sha256"],
+                    }
         else:
             project = _project_path(
                 repository, args.project, existing=True
@@ -1323,6 +1606,27 @@ def main() -> int:
                             else None
                         ),
                     }
+                    if args.command in {"train", "optimize"}:
+                        corpus_name = args.corpus
+                        selection_name = args.selection
+                        corpus = _corpus_path(
+                            repository, corpus_name, existing=True
+                        )
+                        assert_corpus_compatible(
+                            corpus=corpus,
+                            configuration_path=configuration,
+                            bridge=bridge,
+                        )
+                        materialize_selection(
+                            corpus=corpus,
+                            selection_path=_selection_path(
+                                project, selection_name, existing=True
+                            ),
+                            configuration_path=configuration,
+                            workspace=workspace,
+                            profile=profile,
+                            bridge=bridge,
+                        )
                     if args.command in {
                         "train",
                         "optimize",
@@ -1338,13 +1642,7 @@ def main() -> int:
                             profile=profile,
                             bridge=bridge,
                         )
-                    if args.command == "generate":
-                        internal = generate_pseudodata(
-                            bridge=bridge,
-                            force_native=args.force_native,
-                            **common,
-                        )
-                    elif args.command == "train":
+                    if args.command == "train":
                         internal = train_model(**common)
                     elif args.command == "optimize":
                         internal = optimize_hyperparameters(
@@ -1375,7 +1673,9 @@ def main() -> int:
                             **common,
                         )
                     else:
-                        internal = run_workflow(bridge=bridge, **common)
+                        raise ValueError(
+                            f"unsupported public command {args.command!r}"
+                        )
                     result = _public_result(
                         args.command, project, profile, internal
                     )

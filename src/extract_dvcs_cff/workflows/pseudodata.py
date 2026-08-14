@@ -91,6 +91,14 @@ _PHYSICS_PARAMETER_COUNT = (
     len(_GPD_TYPES) * len(_PARTON_CHANNELS) * len(_DD_SHAPE_FIELDS)
 )
 _POSTERIOR_PARAMETER_COUNT = _PHYSICS_PARAMETER_COUNT + 2
+ADMITTED_OBSERVABLE_IDS = (
+    "DVCSCrossSectionUUMinus",
+    "DVCSCrossSectionDifferenceLUMinus",
+    "DVCSAc",
+    "DVCSAluMinus",
+    "DVCSAulMinus",
+    "DVCSAllMinus",
+)
 
 
 def _shape_parameter_name(gpd_type: str, channel: str, field: str) -> str:
@@ -367,18 +375,17 @@ def load_configuration(path: Path) -> dict[str, Any]:
                 f"profiles.{profile}.active_ensemble_member_count must be "
                 "an integer in [1,len(ensemble_seeds)]"
             )
-    if len(config["kinematics"]) < 4 or len(config["observables"]) != 6:
-        raise ValueError("workflow requires >=4 kinematics and 6 observables")
+    if len(config["kinematics"]) < 4 or not config["observables"]:
+        raise ValueError("workflow requires >=4 kinematics and observables")
     observable_ids = [item["id"] for item in config["observables"]]
-    if observable_ids != [
-        "DVCSCrossSectionUUMinus",
-        "DVCSCrossSectionDifferenceLUMinus",
-        "DVCSAc",
-        "DVCSAluMinus",
-        "DVCSAulMinus",
-        "DVCSAllMinus",
-    ]:
-        raise ValueError("observable order does not match the frozen contract")
+    admitted_order = [
+        name for name in ADMITTED_OBSERVABLE_IDS if name in observable_ids
+    ]
+    if observable_ids != admitted_order:
+        raise ValueError(
+            "observables must be an ordered unique nonempty subset of the "
+            "six admitted native modules"
+        )
     for gpd_type in ("H", "E", "Htilde", "Etilde"):
         key = f"{gpd_type}_shadow_coefficient"
         if not -1.0 <= float(config["truth"][key]) <= 1.0:
@@ -428,6 +435,7 @@ def _native_request(
     parameters: Sequence[float],
     kinematics: Mapping[str, float],
     physics: Mapping[str, Any],
+    observable_names: Sequence[str] = ADMITTED_OBSERVABLE_IDS,
 ) -> dict[str, Any]:
     """Build one strict bridge request without duplicating native physics."""
 
@@ -456,6 +464,8 @@ def _native_request(
                     "unit": "GeV-2",
                 },
             }
+    theory = dict(physics["theory_configuration"])
+    theory["observable_modules"] = list(observable_names)
     return {
         "request_id": request_id,
         "representation": physics["representation"],
@@ -481,7 +491,7 @@ def _native_request(
             "phi": {"value": kinematics["phi_rad"], "unit": "rad"},
         },
         "evolution_configuration": physics["evolution_configuration"],
-        "theory_configuration": physics["theory_configuration"],
+        "theory_configuration": theory,
     }
 
 
@@ -570,6 +580,9 @@ class NativeCache:
                         parameters=row,
                         kinematics=kinematics,
                         physics=physics,
+                        observable_names=[
+                            item["id"] for item in config["observables"]
+                        ],
                     )
                 if len(gpd_x_grid) != 0:
                     request["gpd_diagnostic_x"] = [
@@ -1726,7 +1739,16 @@ def generate_pseudodata(
         + int(not truth_native.cache_hit),
         "native_batch_count": len(native_batches) + 1,
         "native_generation_chunk_size": _NATIVE_GENERATION_CHUNK_SIZE,
-        "native_generation_wave_size": _NATIVE_GENERATION_WAVE_SIZE,
+        "native_generation_wave_size": min(
+            count,
+            max(
+                _NATIVE_GENERATION_MIN_WAVE_SIZE,
+                max(
+                    item["resolved_workers"]
+                    for item in native_worker_resolutions
+                ) * _NATIVE_GENERATION_CHUNK_SIZE,
+            ),
+        ),
         "native_worker_request": config["runtime"]["native_workers"],
         "native_worker_resolutions": native_worker_resolutions,
         "native_max_concurrent_workers": max(
@@ -1797,6 +1819,16 @@ class _MetricTracker:
 
 def _load_generated(workspace: Path) -> dict[str, np.ndarray]:
     directory = workspace / "generated"
+    manifest_path = directory / "array_manifest.json"
+    if not manifest_path.is_file():
+        raise RuntimeError(
+            "corpus selection must be materialized first; missing "
+            f"{manifest_path}"
+        )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    records = manifest.get("arrays")
+    if not isinstance(records, dict):
+        raise RuntimeError("generated array manifest is malformed")
     required = (
         "theta_physical",
         "theta_latent",
@@ -1821,8 +1853,18 @@ def _load_generated(workspace: Path) -> dict[str, np.ndarray]:
     for name in required:
         path = directory / f"{name}.npy"
         if not path.exists():
-            raise RuntimeError(f"generate must run first; missing {path}")
-        values[name] = np.load(path, allow_pickle=False)
+            raise RuntimeError(
+                f"corpus selection must be materialized first; missing {path}"
+            )
+        record = records.get(name)
+        if not isinstance(record, dict) or record.get("sha256") != sha256(path):
+            raise RuntimeError(f"generated array hash mismatch: {path}")
+        value = np.load(path, allow_pickle=False)
+        if record.get("shape") != list(value.shape) or record.get(
+            "dtype"
+        ) != str(value.dtype):
+            raise RuntimeError(f"generated array contract mismatch: {path}")
+        values[name] = value
     return values
 
 
@@ -1886,6 +1928,10 @@ def train_model(
     ).to(device)
     if not torch.isfinite(theta).all() or not torch.isfinite(context).all():
         raise RuntimeError("training tensors contain non-finite values")
+    fit_indices = torch.cat((train_indices, validation_indices))
+    training_input_manifest_sha256 = sha256(
+        workspace / "generated" / "array_manifest.json"
+    )
 
     output = workspace / "training"
     output.mkdir(parents=True, exist_ok=True)
@@ -1938,6 +1984,13 @@ def train_model(
                     "checkpoint predates grouped validation; use a new user "
                     "project"
                 )
+            if retained.get("training_input_manifest_sha256") != (
+                training_input_manifest_sha256
+            ):
+                raise RuntimeError(
+                    "checkpoint was trained from different generated arrays; "
+                    "use a new user project"
+                )
             seed_metrics[str(seed)] = retained
             continue
 
@@ -1952,7 +2005,6 @@ def train_model(
             torch.cuda.reset_peak_memory_stats()
         np.random.seed(int(seed))
         tracker = _MetricTracker()
-        fit_indices = torch.cat((train_indices, validation_indices))
         grouped_train_indices = torch.arange(
             len(train_indices), dtype=torch.long
         )
@@ -2021,6 +2073,9 @@ def train_model(
             "test_context_count": int(len(test_indices)),
             "synthetic_split_policy": (
                 "native_parameter_grouped_train_validation_test_v1"
+            ),
+            "training_input_manifest_sha256": (
+                training_input_manifest_sha256
             ),
             "internal_validation_grouped_by_native_parameter": True,
             "outer_test_used_for_training_or_early_stopping": False,
@@ -4053,7 +4108,11 @@ def doctor(
             _NATIVE_GENERATION_CHUNK_SIZE
         ),
         "native_generation_parameters_per_wave": (
-            _NATIVE_GENERATION_WAVE_SIZE
+            max(
+                _NATIVE_GENERATION_MIN_WAVE_SIZE,
+                native_workers.resolved_workers
+                * _NATIVE_GENERATION_CHUNK_SIZE,
+            )
         ),
         "native_progress_update_unit": (
             "one_completed_atomic_partons_batch_with_attempted_accepted_rejected"

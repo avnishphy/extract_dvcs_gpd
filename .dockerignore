@@ -6,6 +6,8 @@ results
 cache
 workspace
 user/workspaces
+user/corpora
+user/corpus_exports
 jobs/jlab_ifarm/*.env
 *.sif
 *.partial

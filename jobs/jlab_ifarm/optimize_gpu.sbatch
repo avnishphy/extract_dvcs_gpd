@@ -14,4 +14,5 @@ set -euo pipefail
 job_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 source "${job_dir}/resources.env"
 export DVCS_ACCELERATOR=cuda
-exec "${job_dir}/run_step.sh" optimize optimize "${DVCS_PROJECT}" --profile validation
+exec "${job_dir}/run_step.sh" optimize optimize "${DVCS_PROJECT}" \
+  --profile validation --corpus "${DVCS_CORPUS}" --selection "${DVCS_SELECTION}"

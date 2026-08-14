@@ -69,9 +69,13 @@ dpkg/Python package manifests
 ## Configuration identity
 
 The public `experiment.json` is translated into canonical `.engine` files.
-Generation hashes the canonical workflow configuration and exact bridge,
-then stores those values in `workspace_contract.json`. All later steps
-recompute and compare the contract.
+Corpus creation hashes the canonical native configuration and exact bridge.
+The corpus manifest additionally inventories every atomic native shard and
+evidence archive. Selection creation binds immutable group roles to the corpus
+core identity. Corpus-backed materialization then writes
+`workspace_contract.json` and a realization manifest binding configuration,
+bridge, corpus, selection, and every array. All later steps recompute and
+compare the result contract.
 
 This prevents accidental reuse after edits, but users must still retain the
 public experiment because it explains intent and edit classifications.
@@ -80,8 +84,8 @@ public experiment because it explains intent and edit classifications.
 
 Independent declared seeds control:
 
-- native prior parameter draws;
-- nuisance/noise replicas;
+- native prior parameter draws, derived deterministically per corpus shard;
+- nuisance/noise replicas, derived from immutable group and replica indices;
 - displayed pseudodata noise;
 - conventional nuisance proposals;
 - posterior comparison/resampling projections;
@@ -110,6 +114,13 @@ larger retained physics executables validate DD normalization/support,
 evolution behavior, basis mixing, conformal reconstruction, and shadow
 composition.
 
+A corpus is reproducible only as a complete verified object: retain
+`corpus.json`, all core/observable shards, and all declared evidence archives.
+Use `corpus-export` for transfer; its archive is deep-verified before creation,
+and import verifies the archive again. Preserve the project-local selection
+JSON separately. A corpus alone does not identify the neural data split or
+noise realization.
+
 ## Arrays, checkpoints, and plots
 
 Numerical arrays are saved without pickle and inventoried by dtype, shape, and
@@ -132,11 +143,13 @@ identical CUDA wheel on different GPUs does not guarantee bitwise identity.
 1. Check out the recorded distribution commit.
 2. Obtain the recorded image digest or rebuild from the dependency lock.
 3. Verify the SIF/image and native bridge capabilities/self-test.
-4. Restore the exact public project and database/LHAPDF identities.
+4. Restore the exact public project, verified corpus, immutable selection, and
+   database/LHAPDF identities.
 5. Use the recorded mount layout or an equivalent one.
 6. Match accelerator, visible devices, affinity, and scheduler resources.
 7. Run `doctor` and compare its resolution with the saved record.
-8. Run the same profile/actions without changing the experiment.
+8. Verify the corpus deeply, then run the same profile/actions with the
+   recorded corpus and selection names without changing the experiment.
 9. Compare contracts and hashes first, then numerical metrics/tolerances.
 10. Explain any expected nondeterminism instead of silently accepting drift.
 

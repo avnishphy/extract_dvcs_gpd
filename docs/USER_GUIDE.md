@@ -50,7 +50,8 @@ Use `./dvcs show tutorial` instead of assuming a path.
 Open `experiment.json` in a text editor. Its principal sections are:
 
 - `injected_truth`: one synthetic truth for 80 DD controls and two nuisances;
-- `synthetic_dataset`: kinematic sites, provenance, and uncertainty model;
+- `synthetic_dataset`: kinematic sites, observable selection, provenance, and
+  uncertainty model;
 - `inference.profiles`: corpus, replica, sample, epoch, and ensemble sizes;
 - `inference.neural_posterior`: DeepSets and flow controls;
 - `inference.random_seeds`: independent stochastic streams;
@@ -113,11 +114,32 @@ real 82-dimensional workflow, not finish in a few seconds. Begin with it, then
 evaluate whether simulation density and coverage precision are adequate for
 your claim. Never infer adequacy from the word `validation` alone.
 
-## Run step by step
+## Create one reusable native corpus
 
 ```bash
-./dvcs generate tutorial --profile quick
-./dvcs train tutorial --profile quick
+./dvcs corpus-create tutorial tutorial-corpus --profile quick --shard-size 256
+./dvcs corpus-plan tutorial tutorial-corpus
+```
+
+Stop and inspect both `experiment.json` and the printed plan. Then generate
+and deeply verify the expensive, noise-free PARTONS data:
+
+```bash
+./dvcs corpus-generate tutorial tutorial-corpus
+./dvcs corpus-verify tutorial-corpus --deep
+```
+
+The corpus stores immutable parameter vectors, CFFs, and each selected
+observable in independent atomic shards. It does not store neural
+architecture, train/test roles, nuisances, or measurement noise. Those can
+change later without repeating compatible PARTONS calculations.
+
+Create one immutable group assignment and run inference:
+
+```bash
+./dvcs selection-create tutorial tutorial-corpus baseline --profile quick
+./dvcs train tutorial --profile quick \
+  --corpus tutorial-corpus --selection baseline
 ./dvcs evaluate tutorial --profile quick
 ./dvcs compare tutorial --profile quick
 ./dvcs plot tutorial --profile quick
@@ -125,21 +147,31 @@ your claim. Never infer adequacy from the word `validation` alone.
 
 Stepwise execution is recommended because native generation/evaluation are
 CPU-heavy while neural training benefits from GPUs. It also makes failures and
-resumption easier to understand. `./dvcs run tutorial --profile quick` performs
-the same main sequence, excluding Optuna, holdout, and real-data comparison.
+resumption easier to understand. The former project-local `generate` and
+all-in-one `run` actions are intentionally no longer public: explicit corpus
+and selection names prevent accidental recomputation and split drift.
 
-### Generation
+### Corpus generation
 
 Generation performs an injected-truth native preflight, draws a deterministic
-prior bank, and requests exact predictions in bounded waves. The progress bar
-counts accepted vectors and separately displays attempts/rejections. Invalid
-draws are recorded and deterministically replaced until the requested accepted
-count is reached or the fail-fast policy aborts.
+prior bank per shard, and requests exact predictions in isolated native
+batches. Invalid draws are recorded and deterministically replaced. Each
+complete shard and its consolidated raw bridge evidence are verified, hashed,
+and atomically published before the manifest advances. An interruption leaves
+complete shards reusable and cannot convert a partial file into valid data.
 
-The full covariance and noise replicas are created only after native
-predictions are available. Replicas from one native parameter vector stay in
-one data split. Interrupting generation is safe: complete content-addressed
-native calls are reusable on the next run.
+The six audited observables are selectable in canonical order. A compatible
+new project may append a missing observable; its exact CFF route must match
+the stored CFFs, and no existing shard is modified. See
+[Corpus and data selection](CORPUS_AND_DATA_SELECTION.md).
+
+### Selection and realization
+
+`selection-create` deterministically partitions native parameter groups into
+training, internal validation, and locked outer test. Every noise replica of a
+group keeps the same role. Training and Optuna materialize full covariance,
+nuisances, noise, and contexts deterministically from the selected clean
+corpus; materialization calls no native backend.
 
 ### Training
 
@@ -189,7 +221,7 @@ workspace/tutorial/results/quick/summary.json
 Then use:
 
 ```text
-generated/                    native corpus, pseudodata, invalid map
+generated/                    corpus-backed realization, pseudodata, invalid map
 training/training_summary.json
 evaluation/evaluation_metrics.json
 comparison/comparison_metrics.json
@@ -222,7 +254,8 @@ location of one mode.
 ## Optional hyperparameter optimization
 
 ```bash
-./dvcs optimize tutorial --profile quick --trials 12
+./dvcs optimize tutorial --profile quick --trials 12 \
+  --corpus tutorial-corpus --selection baseline
 ```
 
 Optuna writes a resumable study under `results/quick/optimization/`. It does
@@ -256,16 +289,19 @@ a GPD extraction from data.
 
 ## Resumption and changes
 
-Safe resumable units include complete native cache entries, complete
-hash-compatible neural members, persistent Optuna trials, and presentation
-plots. The workflow always rechecks inputs before reuse.
+Safe resumable units include complete corpus shards, verified observable
+extensions, immutable selections, complete hash-compatible neural members,
+persistent Optuna trials, and presentation plots. The workflow rechecks
+manifest and content identities before reuse.
 
 Create a new project when changing:
 
-- any injected truth, kinematic, uncertainty, prior/support, or seed;
-- profile size or split fraction after generation;
-- neural architecture or training controls;
-- bridge/image/dependency version;
+- any injected truth, uncertainty, noise seed, split fraction, or neural
+  control (new project/selection, but a compatible native corpus can remain);
+- any kinematic, native parameter count/seed, prior/support, physics setting,
+  or bridge binary (new corpus required);
+- image/dependency version (revalidate compatibility; a changed bridge hash
+  requires a new corpus);
 - validation policy.
 
 Do not copy `workspace_contract.json` into a changed project to bypass checks.
@@ -278,15 +314,17 @@ Do not copy `workspace_contract.json` into a changed project to bypass checks.
 4. Run `doctor` in the real execution allocation.
 5. Complete `quick` and inspect failures, invalid draws, and resource records.
 6. Freeze architecture and gate policy before a larger campaign.
-7. Run generation, training, evaluation, and comparison.
-8. Interpret identifiability and calibration, not only point estimates.
-9. Run named-model holdout only after closure passes.
-10. Preserve configuration, hashes, manifests, image digest, and commit with
+7. Create, plan, generate, and deep-verify the corpus; freeze a selection.
+8. Run training, evaluation, and comparison.
+9. Interpret identifiability and calibration, not only point estimates.
+10. Run named-model holdout only after closure passes.
+11. Preserve configuration, hashes, manifests, image digest, and commit with
     any result publication.
 
 ## Where to go next
 
 - [CLI reference](CLI_REFERENCE.md)
+- [Corpus and data selection](CORPUS_AND_DATA_SELECTION.md)
 - [Experiment reference](EXPERIMENT_JSON_REFERENCE.md)
 - [Workflow and physics](WORKFLOW_AND_PHYSICS.md)
 - [Results and interpretation](RESULTS_AND_INTERPRETATION.md)

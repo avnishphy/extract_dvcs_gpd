@@ -2,8 +2,8 @@ cff-version: 1.2.0
 title: extract-dvcs-gpd
 message: Cite this distribution, PARTONS, APFEL++, LHAPDF, the selected PDF set when used, and the scientific references in docs/REFERENCES.md.
 type: software
-version: 0.1.0
-date-released: 2026-08-12
+version: 0.2.0
+date-released: 2026-08-14
 repository-code: https://github.com/OWNER/extract-dvcs-gpd
 license: NOASSERTION
 references:

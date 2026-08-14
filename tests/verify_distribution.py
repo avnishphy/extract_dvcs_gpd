@@ -32,12 +32,21 @@ matches = subprocess.run(
 assert matches.returncode == 1, matches.stdout
 
 state = json.loads((ROOT / "provenance/upstream-import.json").read_text())
-assert state["upstream_commit"] == "7d690f69af60082d0bca8eb22a3a44144a98cd30"
+assert state["upstream_commit"] == "255b8f79738681b4cb0c8dc2174a111e9f6fcb46"
 assert state["upstream_dirty"] is False
 assert len(state["files"]) >= 80
+assert "src/extract_dvcs_cff/corpus.py" in state["files"]
 images = json.loads((ROOT / "provenance/images.lock.json").read_text())
 assert images["published"] is False
 assert all(item["digest"] is None for item in images["images"].values())
+version = (ROOT / "VERSION").read_text().strip()
+compatibility = json.loads((ROOT / "COMPATIBILITY.json").read_text())
+assert version == "0.2.0"
+assert compatibility["distribution_version"] == version
+assert compatibility["experiment_schema"] == 8
+assert compatibility["compatible_experiment_schemas"] == [7, 8]
+assert compatibility["upstream_commit"] == state["upstream_commit"]
+assert all(version in item["tag"] for item in images["images"].values())
 
 sys.path.insert(0, str(ROOT / "src"))
 from extract_dvcs_cff.native_parallel import resolve_native_workers
@@ -53,6 +62,10 @@ with patch("extract_dvcs_cff.native_parallel.os.sched_getaffinity", return_value
     assert resolve_native_workers("all_available").resolved_workers == 4
 
 from extract_dvcs_cff.workflows.pseudodata import _native_generation_wave_size
+workflow_source = (
+    ROOT / "src/extract_dvcs_cff/workflows/pseudodata.py"
+).read_text()
+assert "_NATIVE_GENERATION_WAVE_SIZE" not in workflow_source
 with patch("extract_dvcs_cff.native_parallel.os.sched_getaffinity", return_value=set(range(256))), patch.dict("os.environ", {}, clear=True):
     assert _native_generation_wave_size(
         "all_available", remaining=4096, available_candidates=4096
@@ -68,6 +81,7 @@ assert _native_generation_wave_size(
 lock = json.loads((ROOT / "provenance/dependencies.lock.json").read_text())
 assert lock["native_sources"]["lhapdf"]["sha256"] == "6b8b7e38dc26a977a24f5a321215b7054c14a4469d04134d70cb93a860eeeea7"
 project = tomllib.loads((ROOT / "pyproject.toml").read_text())
+assert project["project"]["version"] == version
 direct = project["project"]["dependencies"] + project["project"]["optional-dependencies"]["neural"]
 direct_versions = dict(item.split("==", 1) for item in direct)
 lock_names = {"PyYAML": "PyYAML", **{name: name for name in lock["python"] if isinstance(lock["python"][name], str)}}
@@ -89,6 +103,10 @@ for recipe in (ROOT / "containers/Dockerfile", ROOT / "scripts/build-native-sour
     text = recipe.read_text()
     assert "torch==2.12.1" in text
     assert "runtime-constraints.txt" in text
+
+optimizer = (ROOT / "scripts/multi-gpu-optimize.sh").read_text()
+assert '--corpus "${corpus}"' in optimizer
+assert '--selection "${selection}"' in optimizer
 
 audit = json.loads((ROOT / "provenance/dependency-audit-2026-08-13.json").read_text())
 assert audit["python"]["torch"]["locked"] == "2.12.1"

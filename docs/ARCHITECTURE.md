@@ -50,7 +50,8 @@ host launcher ./dvcs
 ```
 
 Persistent host directories are mounted at `/workspace`, `/results`, `/cache`,
-and `/database`. The last mount is read-only. Images and containers are
+and `/database`. Projects, reusable corpora, and portable corpus exports live
+under `/workspace`; the database mount is read-only. Images and containers are
 replaceable; user state is not stored in the container writable layer.
 
 ## Repository layout
@@ -108,11 +109,13 @@ The public file is `experiment.json`. Before each action, the CLI validates it
 and translates it into `.engine/workflow.json` and `.engine/physics.json`.
 Those files are derived implementation inputs, not another editable API.
 
-Generation writes `workspace_contract.json`, binding results to the canonical
-engine configuration hash, profile, bridge executable hash, synthetic-only
-flag, and split policy. Training, optimization, evaluation, comparison,
-holdout, plotting, and real-data diagnostics refuse to consume results if the
-contract differs. A changed experiment therefore requires a new project.
+Training/optimization materialization writes `workspace_contract.json`,
+binding results to the canonical engine configuration hash, profile, bridge
+executable hash, synthetic-only flag, corpus, selection, and split policy.
+It also hashes the generated array manifest. Downstream evaluation, comparison,
+holdout, plotting, and real-data diagnostics refuse incompatible results. A
+changed experiment therefore requires a new project, although an unchanged
+native identity may reuse a verified corpus.
 
 ## Native physics boundary
 
@@ -144,17 +147,20 @@ bounded by:
 3. the user `native_workers` or `DVCS_NATIVE_WORKERS` request;
 4. the number of ready native tasks.
 
-Requests are evaluated in deterministic two-parameter chunks and submitted in
-bounded waves. Results are restored to input order. Each cache directory is
-named by a request-content hash and stores the request, response, executable
-hash, stdout, stderr, metadata, and exit code. A hash mismatch is a cache miss,
-never an approximate match.
+Requests are evaluated in deterministic two-parameter chunks and restored to
+input order. During corpus construction, content-addressed request directories
+are transient shard work state. After a shard succeeds, raw request/response,
+executable-hash, stream, metadata, and exit evidence are consolidated into one
+compressed hashed archive before the manifest advances. Partial files are
+never accepted as shards.
 
 ## Simulation and uncertainty layer
 
 The workflow draws 80 GPD-shape coordinates from declared uniform supports,
-asks the bridge for the six observables at every kinematic point, and then
-constructs covariance/noise in Python. The physics prediction is never
+asks the bridge for the selected ordered subset of six audited observables at
+every kinematic point, and stores noise-free parameter/CFF/observable shards.
+Covariance, nuisances, noise, and DeepSets contexts are materialized later
+from an immutable group selection. The physics prediction is never
 reimplemented in Python.
 
 Five controls are inferred for every combination of four GPD types and four
@@ -173,6 +179,11 @@ dataset embedding; a conditional normalizing flow represents the posterior.
 Candidate ensemble members use fixed seeds. Internal grouped-validation NLL
 selects the configured number of active members. The untouched outer DD test,
 named native holdouts, and real-data diagnostic are excluded from selection.
+
+Realization publication uses a project/profile process lock. This matters for
+multi-GPU Optuna, whose independent device workers share one generated tensor
+set: one process writes the atomic realization and matching workers reuse its
+fully published identity.
 
 On multiple allocated GPUs, `torchrun` starts one NCCL rank per visible device
 and deterministically shards independent ensemble seeds. Rank 0 aggregates
@@ -228,9 +239,11 @@ The framework fails closed for:
 - explicit CUDA requests without usable CUDA;
 - backend exception, nonzero exit, malformed JSON, or non-finite result;
 - bridge/configuration/profile mismatch with existing results;
+- corpus/configuration/bridge mismatch, corrupt/incomplete shard manifests,
+  overlapping selections, or changed materialized training arrays;
 - dirty or wrong-revision database checkout during installation;
 - absent prerequisites for a later workflow step;
 - holdout execution before synthetic closure gates pass.
 
-Invalid prior draws are recorded and replaced deterministically during corpus
-generation. They are not converted to zero or silently imputed.
+Invalid prior draws are recorded per corpus shard and replaced
+deterministically. They are not converted to zero or silently imputed.

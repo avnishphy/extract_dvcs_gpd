@@ -18,7 +18,10 @@ use the reference pages while running a study.
 - [CLI reference](CLI_REFERENCE.md) documents every `./dvcs` action, exit
   behavior, resumability, and command ordering.
 - [Experiment JSON reference](EXPERIMENT_JSON_REFERENCE.md) documents every
-  editable schema-7 field, support, unit, and edit policy.
+  editable schema-8 field, support, unit, and edit policy.
+- [Corpus and data selection](CORPUS_AND_DATA_SELECTION.md) documents reusable
+  sharded PARTONS data, immutable group selections, deterministic
+  realizations, observable extension, verification, and transfer.
 - [Resource management](RESOURCE_MANAGEMENT.md) explains CPU affinity,
   isolated PARTONS workers, CUDA selection, and multi-GPU behavior.
 - [Containers](CONTAINERS.md) explains image construction, mounts, non-root
@@ -56,7 +59,7 @@ use the reference pages while running a study.
 - [Dependency lock](../provenance/dependencies.lock.json), [image lock](../provenance/images.lock.json),
   [dated dependency/security audit](../provenance/dependency-audit-2026-08-13.json),
   [upstream import record](../provenance/upstream-import.json), and
-  [latest verification record](../provenance/verification-2026-08-13.json) are the
+  [latest verification record](../provenance/verification-2026-08-14.json) are the
   machine-readable authorities.
 
 ## Important vocabulary
@@ -69,7 +72,9 @@ use the reference pages while running a study.
 | neural | PyTorch/sbi conditional-density estimation and posterior sampling. |
 | exact | Re-evaluated through the authoritative native bridge, not a Python surrogate. |
 | injected truth | Parameters used to create the displayed synthetic pseudodataset. |
-| prior corpus | Native simulations drawn across declared parameter support for NPE training. |
+| reusable corpus | Immutable, verified, noise-free PARTONS parameter/CFF/observable shards. |
+| selection | Immutable group indices assigning corpus rows to training, internal validation, and locked outer test. |
+| realization | Deterministic nuisance/noise tensors materialized from a corpus and selection for one project. |
 | conventional posterior | Exact-bank importance-sampling comparison, not a second truth model. |
 | outer test | Grouped DD simulations withheld from training and model selection. |
 | native holdout | Frozen-NPE predictive evaluation against named PARTONS models. |

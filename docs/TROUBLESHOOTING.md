@@ -115,16 +115,42 @@ correct the coupled values. `--force-native` cannot bypass this gate.
 
 ## Result-contract failures
 
-### `generate must run first`
+### `train must first materialize a named corpus and selection`
 
-The selected profile lacks `workspace_contract.json`. Generate that exact
-project/profile before training or later actions.
+The selected profile lacks `workspace_contract.json`. First create, generate,
+and verify a compatible corpus and create a selection; then run `train` with
+both names. Evaluation and later actions consume that materialized realization
+and cannot infer corpus/split identity from loose arrays.
+
+### Corpus compatibility or verification failure
+
+Run `corpus-plan PROJECT CORPUS`, then `corpus-verify CORPUS --deep`. A changed
+prior, physics setting, kinematic point, parameter count/seed, or bridge binary
+requires a new corpus. A newly requested admitted observable may be appended
+with `corpus-generate`; existing core and observable shards are never edited.
+Do not repair a manifest or rename shard files manually.
+
+### Selection already exists or does not match
+
+Selections are immutable because they freeze train/internal-validation/outer-
+test ownership. Reuse the exact selection or create another name. If its
+profile, group count, or corpus core identity differs, create a compatible new
+selection; never edit group lists or move replicas across roles.
+
+### Corpus generation was interrupted
+
+Rerun the same `corpus-generate PROJECT CORPUS` command. Complete hashed shards
+are reused and unfinished `.partial` files are not accepted. Inspect the plan
+and manifest before removing any work. For quota or inode failures, move the
+whole corpus through verified export/import or configure a larger
+`DVCS_WORKSPACE` mount and import it there; do not copy a subset of shards.
 
 ### `result contract mismatch`
 
-The experiment, translated configuration, profile, or bridge hash differs
-from generation. Create a new project and regenerate. Do not copy/edit the
-contract or force old arrays through a changed method.
+The experiment, translated configuration, profile, bridge, corpus, selection,
+or materialized arrays differ from the saved result lineage. Create a new
+project and compatible selection/realization. Do not copy/edit the contract or
+force old arrays through a changed method.
 
 ### Checkpoint does not resume
 

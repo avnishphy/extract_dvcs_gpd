@@ -1,13 +1,24 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 - 2026-08-14
 
+- Ported the reusable PARTONS corpus workflow from upstream commit `255b8f7`:
+  atomic compressed parameter/CFF/observable shards, consolidated native
+  evidence, deep verification, safe export/import, append-only admitted
+  observables, immutable group selections, and deterministic neural
+  realizations.
+- Made the corpus-backed create/plan/generate/verify/select/train sequence the
+  sole public workflow, retired the legacy project-local generator console,
+  and bound checkpoints to verified materialized input arrays.
+- Adapted corpus/export storage to the packaged writable workspace and updated
+  JLab Slurm templates with an explicit selection job and corpus/selection
+  resource variables.
 - Expanded the public documentation into complete onboarding, CLI, schema,
   architecture, native-interface, data-contract, physics, result,
   installation, container, JLab, resource, dependency, reproducibility,
   security, troubleshooting, limitation, reference, and maintenance guides.
 - Added documentation regression checks for required coverage, local links,
-  and every generated schema-7 leaf.
+  and every generated schema-8 leaf.
 - Corrected the JLab workflow DAG to run the conventional comparison before
   holdout and plotting.
 - Updated PyTorch from 2.11.0 to security-fixed 2.12.1, constrained the full

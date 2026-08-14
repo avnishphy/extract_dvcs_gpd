@@ -5,13 +5,19 @@ bridge="${1:?bridge required}"; shift
 project="${2:?project required}"
 profile=quick
 requested=""
+corpus=""
+selection=""
 args=("$@")
 for ((index=0; index<${#args[@]}; index++)); do
     case "${args[index]}" in
         --profile) profile="${args[index+1]:?missing profile}" ;;
         --trials) requested="${args[index+1]:?missing trial count}" ;;
+        --corpus) corpus="${args[index+1]:?missing corpus}" ;;
+        --selection) selection="${args[index+1]:?missing selection}" ;;
     esac
 done
+[[ -n "${corpus}" ]] || { echo "--corpus is required" >&2; exit 64; }
+[[ -n "${selection}" ]] || { echo "--selection is required" >&2; exit 64; }
 if [[ -z "${requested}" ]]; then
     requested="$(/opt/dvcs/venv/bin/python - "${DVCS_WORKSPACE_ROOT}/${project}/experiment.json" "${profile}" <<'PY'
 import json, sys
@@ -29,7 +35,8 @@ mkdir -p "${log_root}"
 pids=()
 for ((rank=0; rank<workers; rank++)); do
     count=$((requested / workers + (rank < requested % workers ? 1 : 0)))
-    child=(optimize "${project}" --profile "${profile}" --trials "${count}" --no-progress)
+    child=(optimize "${project}" --profile "${profile}" --trials "${count}" \
+      --corpus "${corpus}" --selection "${selection}" --no-progress)
     CUDA_VISIBLE_DEVICES="${devices[rank]}" LOCAL_RANK=0 RANK=0 WORLD_SIZE=1 \
       /opt/dvcs/venv/bin/python -m extract_dvcs_cff.cli.user \
       --bridge "${bridge}" "${child[@]}" \

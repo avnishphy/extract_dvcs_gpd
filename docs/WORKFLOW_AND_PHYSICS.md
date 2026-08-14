@@ -1,6 +1,9 @@
 # Workflow and physics reference
 
-This document is the complete user-level specification for public schema 7.
+This document is the complete user-level physics specification for public
+schema 8 and compatible schema 7. Reusable native storage, observable
+extension, and group-selection mechanics are specified separately in
+[Corpus and data selection](CORPUS_AND_DATA_SELECTION.md).
 The release is a multi-Q2 synthetic posterior laboratory. It is ready for the
 user's DD closure and fresh native-model campaigns; real-data inference is
 still disabled.
@@ -225,7 +228,7 @@ observables are used only to generate training pairs and reevaluate samples.
 The release default is a three-layer 128-wide point network, a two-layer
 128-wide dataset network, 96 embedding features, and a zuko MAF with 96 hidden
 features, six transforms, and eight bins. Training uses batch size 256,
-learning rate (5\times10^{-4}), and a 10% internal-validation fraction.
+learning rate $5\times10^{-4}$, and a 10% internal-validation fraction.
 These values are frozen for the release campaign, not asserted optimal.
 
 Native parameter draws—not noisy replicas—are partitioned into train,
@@ -258,7 +261,9 @@ For a new configuration, require in order:
 
 The external manifest was selected from catalog kinematics with no
 measurements, uncertainties, or named-model outputs. It contains six fresh
-sites; all six observables make the same 36-token shape used in training.
+sites; with the default six observables they make the same 36-token shape used
+in training. A schema-8 subset changes the token count consistently and
+requires a fresh project/result contract.
 Named outputs are post-training only and may not drive Optuna or architecture
 changes. A mismatch reports lack of robustness.
 
