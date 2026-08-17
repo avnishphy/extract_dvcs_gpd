@@ -56,7 +56,7 @@ Corpus-backed training or optimization materialization creates
 |---|---|
 | `schema_version` | Contract format. |
 | `configuration` | Canonical private configuration path. |
-| `configuration_sha256` | Exact configuration identity. |
+| `configuration_sha256` | Exact materialization-time configuration identity. Downstream resource-only overrides are checked against the saved training runtime; scientific controls remain immutable. |
 | `profile` | `quick` or `validation`. |
 | `bridge_sha256` | Exact native executable identity. |
 | `real_data` | Must remain `false` for the synthetic corpus. |
@@ -70,6 +70,12 @@ Every downstream action compares the observed object with a freshly computed
 expected object and the current realization-manifest hash. A mismatch
 instructs the user to create a new project; the runtime never combines old
 arrays with a changed experiment, corpus, or selection.
+
+Execution-resource overrides (`accelerator`, `cpu_threads`, and
+`native_workers`) may differ for downstream stages such as comparison or
+plotting. Compatibility is accepted only when reconstructing the saved
+training configuration reproduces the contract hash; changes to all other
+configuration fields still fail closed.
 
 ## Reusable native corpus contract
 

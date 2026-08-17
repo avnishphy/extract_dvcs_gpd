@@ -109,7 +109,7 @@ completion. Answering no performs the ordinary CPU login-node check.
 | `selection.sbatch` | production, 1 CPU, 4 GiB, 30 min | Freeze grouped train/validation/outer-test ownership. |
 | `optimize_gpu.sbatch` | gpu, 1 GPU, 8 CPUs, 64 GiB, 12 h | Optional Optuna study. |
 | `train_gpu.sbatch` | gpu, 1 GPU, 8 CPUs, 64 GiB, 12 h | NPE ensemble training. |
-| `evaluate.sbatch` | production, 16 CPUs, 64 GiB, 12 h | Neural coverage plus exact CPU reevaluation. |
+| `evaluate.sbatch` | gpu, 1 GPU, 8 CPUs, 64 GiB, 12 h | Match GPU training for neural coverage plus exact reevaluation. |
 | `compare.sbatch` | production, 4 CPUs, 32 GiB, 4 h | Conventional exact-bank comparison. |
 | `holdout.sbatch` | production, 16 CPUs, 64 GiB, 12 h | Named native-model holdout after closure. |
 | `plot.sbatch` | production, 2 CPUs, 8 GiB, 1 h | Saved-result plotting. |
@@ -231,6 +231,25 @@ For automation, use
 must show an allocated `sciml` hostname, requested accelerator `cuda`, at least
 one visible GPU, and the container CUDA runtime. The `srun` allocation ends
 when `doctor` exits. Device detection alone does not accept training.
+
+Interactive training on an ifarm login host uses the same opt-in flow:
+
+```bash
+./dvcs train PROJECT --profile quick --corpus CORPUS --selection SELECTION
+# Answer yes to request the default 1 GPU, 8 CPUs, 64 GiB, 12 h allocation.
+```
+
+For automation, set `DVCS_IFARM_GPU_TRAIN=yes`. Answering no leaves the normal
+CPU training path unchanged. The supplied `train_gpu.sbatch` remains the
+recommended unattended production path and never prompts inside its existing
+Slurm allocation.
+
+Interactive `evaluate` reads the saved training summary, reports whether the
+project trained on CPU or GPU, and recommends the same device. Accepting the
+default uses a matching GPU allocation when needed; declining cancels to
+protect the result contract. Set `DVCS_IFARM_EVALUATE_MATCH_TRAINING=yes` for
+automation. The supplied workflow submits `evaluate.sbatch` to the GPU
+partition so it matches `train_gpu.sbatch`.
 
 With more than one requested/visible GPU, training starts one NCCL rank per
 device and shards ensemble seeds. Ensure the selected profile has at least as

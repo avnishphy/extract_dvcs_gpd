@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 from copy import deepcopy
+import hashlib
 import json
 import math
 import os
@@ -33,6 +34,7 @@ from extract_dvcs_cff.workflows.pseudodata import (
     evaluate_native_model_holdouts,
     load_configuration,
     plot_saved_results,
+    pretty_json,
     sha256,
     train_model,
     write_json,
@@ -1187,10 +1189,72 @@ def assert_result_contract(
         ),
         "realization_manifest_sha256": sha256(realization_path),
     }
-    if observed != expected:
+    if observed == expected:
+        return
+    non_runtime_match = (
+        set(observed) == set(expected)
+        and all(
+            observed.get(key) == value
+            for key, value in expected.items()
+            if key != "configuration_sha256"
+        )
+    )
+    training_summary_path = workspace / "training" / "training_summary.json"
+    training_configuration_sha256 = None
+    if non_runtime_match and training_summary_path.is_file():
+        summary = json.loads(training_summary_path.read_text(encoding="utf-8"))
+        if isinstance(summary, dict):
+            runtime_record = summary.get("training_runtime")
+            device_record = summary.get("neural_device")
+            if not isinstance(runtime_record, dict):
+                runtime_record = {}
+            if not isinstance(device_record, dict):
+                device_record = {}
+            accelerator = runtime_record.get("accelerator")
+            if accelerator not in {"cpu", "cuda"}:
+                accelerator = str(device_record.get("resolved", "")).split(
+                    ":", 1
+                )[0]
+            cpu_threads = runtime_record.get("cpu_threads")
+            if not isinstance(cpu_threads, int):
+                members = summary.get("members")
+                thread_counts = (
+                    {
+                        item.get("torch_num_threads")
+                        for item in members.values()
+                        if isinstance(item, dict)
+                        and isinstance(item.get("torch_num_threads"), int)
+                    }
+                    if isinstance(members, dict)
+                    else set()
+                )
+                if accelerator == "cpu" and len(thread_counts) == 1:
+                    cpu_threads = thread_counts.pop()
+                elif accelerator == "cuda":
+                    cpu_threads = 8
+            if accelerator in {"cpu", "cuda"} and isinstance(
+                cpu_threads, int
+            ):
+                training_configuration = json.loads(
+                    configuration.read_text(encoding="utf-8")
+                )
+                runtime = training_configuration.get("runtime")
+                if isinstance(runtime, dict):
+                    runtime["accelerator"] = accelerator
+                    runtime["cpu_threads"] = cpu_threads
+                    native_workers = runtime_record.get("native_workers")
+                    if native_workers is not None:
+                        runtime["native_workers"] = native_workers
+                    encoded = (pretty_json(training_configuration) + "\n").encode(
+                        "utf-8"
+                    )
+                    training_configuration_sha256 = hashlib.sha256(
+                        encoded
+                    ).hexdigest()
+    if observed.get("configuration_sha256") != training_configuration_sha256:
         raise RuntimeError(
             "result contract mismatch; create a new project after changing "
-            "experiment.json, profile, or native bridge"
+            "experiment.json, profile, corpus/selection, or native bridge"
         )
 
 

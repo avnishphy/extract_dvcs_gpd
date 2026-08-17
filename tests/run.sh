@@ -10,7 +10,8 @@ case "${mode}" in
     export MPLCONFIGDIR="${static_cache}/matplotlib"
     python3 "${root}/tests/verify_distribution.py"
     python3 "${root}/tests/verify_documentation.py"
-    PYTHONPATH="${root}/src" python3 -m unittest tests.test_reusable_corpus
+    PYTHONPATH="${root}/src" python3 -m unittest \
+      tests.test_reusable_corpus tests.test_result_contract
     "${root}/tests/verify_jlab_gpu_launcher.sh"
     while IFS= read -r script; do bash -n "${script}"; done < <(find "${root}" -type f \( -name '*.sh' -o -name '*.sbatch' -o -name install.sh -o -name dvcs \) -not -path '*/.git/*' | sort)
     install_state_before="$(if [[ -f "${root}/.dvcs/install.env" ]]; then sha256sum "${root}/.dvcs/install.env"; else echo absent; fi)"

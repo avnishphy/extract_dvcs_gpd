@@ -2264,6 +2264,11 @@ def train_model(
             "native_parameter_grouped_train_validation_test_v1"
         ),
         "outer_test_used_for_training_or_early_stopping": False,
+        "training_runtime": {
+            "accelerator": device_resolution.resolved,
+            "cpu_threads": int(runtime["cpu_threads"]),
+            "native_workers": runtime["native_workers"],
+        },
         "members": seed_metrics,
         "distributed_training": {
             "strategy": "deterministic_ensemble_member_sharding",

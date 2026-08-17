@@ -26,9 +26,12 @@ source "${config}"
 [[ -n "${runtime_database_set}" ]] && DVCS_DATABASE="${runtime_database}"
 
 if [[ "${DVCS_PROFILE}" == jlab_ifarm ]]; then
-    doctor_command=false
+    gpu_command=""
+    command_index=-1
+    arguments=("$@")
     skip_argument=false
-    for argument in "$@"; do
+    for index in "${!arguments[@]}"; do
+        argument="${arguments[index]}"
         if [[ "${skip_argument}" == true ]]; then
             skip_argument=false
             continue
@@ -36,26 +39,138 @@ if [[ "${DVCS_PROFILE}" == jlab_ifarm ]]; then
         case "${argument}" in
             --bridge) skip_argument=true ;;
             --*) ;;
-            doctor) doctor_command=true; break ;;
+            doctor|train|evaluate)
+                gpu_command="${argument}"
+                command_index="${index}"
+                break
+                ;;
             *) break ;;
         esac
     done
     host_name="$(hostname -s)"
-    if [[ "${doctor_command}" == true ]] && \
+    if [[ -n "${gpu_command}" ]] && \
        [[ "${host_name}" == ifarm* ]] && \
        [[ -z "${SLURM_JOB_ID:-}" ]]; then
-        gpu_doctor="${DVCS_IFARM_GPU_DOCTOR:-ask}"
-        if [[ "${gpu_doctor}" == ask ]]; then
-            if [[ -t 0 ]]; then
-                read -r -p "ifarm detected; run doctor in a Slurm GPU allocation? [y/N] " gpu_doctor
+        if [[ "${gpu_command}" == doctor ]]; then
+            prompt_variable=DVCS_IFARM_GPU_DOCTOR
+            gpu_cpus=2
+            gpu_memory=8G
+            gpu_time=00:15:00
+        elif [[ "${gpu_command}" == train ]]; then
+            prompt_variable=DVCS_IFARM_GPU_TRAIN
+            gpu_cpus=8
+            gpu_memory=64G
+            gpu_time=12:00:00
+        else
+            prompt_variable=DVCS_IFARM_EVALUATE_MATCH_TRAINING
+            project="${arguments[command_index + 1]:-}"
+            profile=quick
+            for ((index = command_index + 2; index < ${#arguments[@]}; index++)); do
+                case "${arguments[index]}" in
+                    --profile)
+                        ((index++))
+                        profile="${arguments[index]:-}"
+                        ;;
+                    --profile=*) profile="${arguments[index]#--profile=}" ;;
+                esac
+            done
+            training_summary="${DVCS_WORKSPACE}/${project}/results/${profile}/training/training_summary.json"
+            if [[ ! -f "${training_summary}" ]]; then
+                echo "cannot determine training device; missing ${training_summary}" >&2
+                exit 66
+            fi
+            training_metadata="$({ python3 - "${training_summary}" <<'PY'
+import json
+import sys
+
+summary = json.load(open(sys.argv[1], encoding="utf-8"))
+device = summary.get("neural_device", {})
+resolved = str(device.get("resolved", "")).split(":", 1)[0].lower()
+if resolved not in {"cpu", "cuda"}:
+    raise SystemExit("training summary has no resolved CPU/CUDA device")
+name = str(device.get("cuda_device_name") or "")
+threads = summary.get("training_runtime", {}).get("cpu_threads")
+if not isinstance(threads, int):
+    members = summary.get("members", {})
+    values = {
+        item.get("torch_num_threads")
+        for item in members.values()
+        if isinstance(item, dict) and isinstance(item.get("torch_num_threads"), int)
+    }
+    if resolved == "cpu" and len(values) == 1:
+        threads = values.pop()
+    elif resolved == "cuda":
+        threads = 8  # Legacy JLab GPU-training default.
+if not isinstance(threads, int) or not 1 <= threads <= 256:
+    raise SystemExit("training summary has no valid CPU-thread count")
+print(resolved)
+print(name)
+print(threads)
+PY
+            } 2>&1)" || {
+                echo "cannot read training device: ${training_metadata}" >&2
+                exit 65
+            }
+            mapfile -t training_fields <<<"${training_metadata}"
+            training_accelerator="${training_fields[0]}"
+            training_device_name="${training_fields[1]}"
+            gpu_cpus="${training_fields[2]}"
+            gpu_memory=64G
+            gpu_time=12:00:00
+            if [[ "${training_accelerator}" == cuda ]]; then
+                training_label="GPU"
+                [[ -n "${training_device_name}" ]] && \
+                  training_label+=" (${training_device_name})"
             else
-                gpu_doctor=no
+                training_label="CPU"
+            fi
+            echo "training used ${training_label} with ${gpu_cpus} configured CPU threads" >&2
+        fi
+        if [[ -v "${prompt_variable}" ]]; then
+            gpu_choice="${!prompt_variable}"
+        else
+            gpu_choice=ask
+        fi
+        if [[ "${gpu_choice}" == ask ]]; then
+            if [[ -t 0 ]]; then
+                if [[ "${gpu_command}" == evaluate ]]; then
+                    read -r -p "evaluate with same ${training_label} setup (recommended; no cancels)? [Y/n] " gpu_choice
+                    gpu_choice="${gpu_choice:-yes}"
+                else
+                    read -r -p "ifarm detected; run ${gpu_command} in a Slurm GPU allocation? [y/N] " gpu_choice
+                fi
+            else
+                if [[ "${gpu_command}" == evaluate ]]; then
+                    echo "set ${prompt_variable}=yes for noninteractive matching evaluation" >&2
+                    exit 64
+                fi
+                gpu_choice=no
             fi
         fi
-        case "${gpu_doctor,,}" in
+        case "${gpu_choice,,}" in
             y|yes)
+                if [[ "${gpu_command}" == evaluate ]] && \
+                   [[ "${training_accelerator}" == cpu ]]; then
+                    export DVCS_ACCELERATOR=cpu
+                    export DVCS_CPU_THREADS="${gpu_cpus}"
+                    gpu_choice=no
+                    echo "evaluating on CPU to match training" >&2
+                fi
+                ;;
+            n|no|"")
+                if [[ "${gpu_command}" == evaluate ]]; then
+                    echo "evaluation cancelled; matching training device is required by the result contract" >&2
+                    exit 0
+                fi
+                ;;
+            *)
+                echo "${prompt_variable} must be ask, yes, or no" >&2
+                exit 64
+                ;;
+        esac
+        if [[ "${gpu_choice,,}" == y || "${gpu_choice,,}" == yes ]]; then
                 command -v srun >/dev/null 2>&1 || {
-                    echo "srun is required for the JLab GPU doctor" >&2
+                    echo "srun is required for JLab GPU ${gpu_command}" >&2
                     exit 69
                 }
                 jlab_account="${JLAB_ACCOUNT:-}"
@@ -82,22 +197,17 @@ if [[ "${DVCS_PROFILE}" == jlab_ifarm ]]; then
                 [[ "${jlab_account}" == REQUIRED_* ]] && jlab_account=""
                 srun_args=(
                   --partition="${jlab_gpu_partition}"
-                  --nodes=1 --ntasks=1 --cpus-per-task=2
-                  --mem=8G --gres=gpu:1 --time=00:15:00 --unbuffered
+                  --nodes=1 --ntasks=1 --cpus-per-task="${gpu_cpus}"
+                  --mem="${gpu_memory}" --gres=gpu:1
+                  --time="${gpu_time}" --unbuffered
                 )
                 [[ -n "${jlab_account}" ]] && \
                   srun_args+=(--account="${jlab_account}")
-                echo "requesting a short Slurm GPU allocation for doctor" >&2
+                echo "requesting a Slurm GPU allocation for ${gpu_command}" >&2
                 exec srun "${srun_args[@]}" env \
-                  DVCS_ACCELERATOR=cuda DVCS_IFARM_GPU_DOCTOR=no \
+                  DVCS_ACCELERATOR=cuda "${prompt_variable}=no" \
                   "${root}/dvcs" "$@"
-                ;;
-            n|no|"") ;;
-            *)
-                echo "DVCS_IFARM_GPU_DOCTOR must be ask, yes, or no" >&2
-                exit 64
-                ;;
-        esac
+        fi
     fi
     apptainer_gpu_args=()
     if [[ "${DVCS_ACCELERATOR}" == cuda ]]; then
@@ -117,6 +227,9 @@ if [[ "${DVCS_PROFILE}" == jlab_ifarm ]]; then
       --env "DVCS_ACCELERATOR=${DVCS_ACCELERATOR}"
       --env "DVCS_IMAGE_DIGEST=${DVCS_IMAGE_DIGEST}"
     )
+    if [[ -n "${DVCS_CPU_THREADS:-}" ]]; then
+        apptainer_env_args+=(--env "DVCS_CPU_THREADS=${DVCS_CPU_THREADS}")
+    fi
     if [[ -v SLURM_JOB_ID ]]; then
         apptainer_env_args+=(--env "SLURM_JOB_ID=${SLURM_JOB_ID}")
         if [[ -v SLURM_CPUS_PER_TASK ]]; then

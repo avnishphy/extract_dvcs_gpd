@@ -179,6 +179,11 @@ On multiple visible GPUs the container entrypoint launches one process per
 GPU. Independent ensemble members are deterministically sharded. Asking for
 more ranks than ensemble seeds fails.
 
+On a JLab ifarm login host, interactive `train` asks whether to rerun through
+a Slurm GPU allocation using the supplied training-template defaults: one GPU,
+8 CPUs, 64 GiB, and 12 hours. Set `DVCS_IFARM_GPU_TRAIN=yes` or `no` for
+noninteractive control. The allocation ends when training exits.
+
 ### `optimize`
 
 ```bash
@@ -206,6 +211,12 @@ coverage, posterior-predictive checks, exact posterior reevaluation, and exact
 GPD diagnostics. Native phases use the same isolated affinity-bounded worker
 pool as generation. The command writes `evaluation/evaluation_metrics.json`
 and associated non-pickled arrays.
+
+On an ifarm login host, `evaluate` reports whether training used CPU or GPU and
+recommends the same device. Accepting the default reruns GPU-trained projects
+in a matching Slurm GPU allocation; declining cancels because changing device
+violates the saved result contract. For automation, set
+`DVCS_IFARM_EVALUATE_MATCH_TRAINING=yes`.
 
 ### `compare`
 
