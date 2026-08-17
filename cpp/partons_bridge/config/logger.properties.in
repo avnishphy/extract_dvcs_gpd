@@ -2,4 +2,4 @@
 enable = false
 default.level = ERROR
 print.mode = COUT
-log.folder.path = /tmp
+log.folder.path = /cache/partons-logs

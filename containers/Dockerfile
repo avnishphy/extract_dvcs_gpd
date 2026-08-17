@@ -65,7 +65,7 @@ RUN ${PREFIX}/venv/bin/pip install --no-cache-dir --retries 10 --timeout 120 --i
       --constraint /src/extract-dvcs-gpd/requirements/runtime-constraints.txt torch==2.12.1 && \
     ${PREFIX}/venv/bin/pip install --no-cache-dir --retries 10 --timeout 120 --no-build-isolation \
       --constraint /src/extract-dvcs-gpd/requirements/runtime-constraints.txt '/src/extract-dvcs-gpd[neural]' && \
-    ${PREFIX}/venv/bin/pip check && \
+    ${PREFIX}/venv/bin/pip check && mkdir -p /cache/partons-logs && \
     ${PREFIX}/bin/partons_bridge --self-test && \
     ${PREFIX}/venv/bin/python -c 'import matplotlib, numpy, optuna, particle, scipy, sbi, torch, yaml, zuko'
 
@@ -89,7 +89,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     groupadd --gid 1000 dvcs && useradd --uid 1000 --gid 1000 --create-home dvcs
 COPY --from=application-build /opt/dvcs /opt/dvcs
 COPY --from=application-build /src/extract-dvcs-gpd /opt/dvcs/app
-RUN mkdir -p /workspace /results /cache /database /opt/dvcs/share/extract-dvcs-gpd && \
+RUN mkdir -p /workspace /results /cache/partons-logs /database /opt/dvcs/share/extract-dvcs-gpd && \
     dpkg-query -W > /opt/dvcs/share/extract-dvcs-gpd/dpkg-manifest.tsv && \
     chown -R dvcs:dvcs /workspace /results /cache /database /opt/dvcs/app/user
 ENV PATH=/opt/dvcs/venv/bin:/opt/dvcs/bin:${PATH} \

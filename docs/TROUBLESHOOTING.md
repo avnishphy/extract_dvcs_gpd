@@ -233,6 +233,22 @@ workflow uses `afterok`; a failed generation/train/evaluation/comparison
 correctly blocks downstream jobs. Resubmit from the failed step after fixing
 the cause.
 
+### Batch job cannot find `resources.env`
+
+Slurm executes a spool copy of each script, so `BASH_SOURCE[0]` does not point
+to the repository. Submit with `jobs/jlab_ifarm/submit_workflow.sh`, which
+exports the original job directory and absolute log paths. Updated templates
+also fall back to `SLURM_SUBMIT_DIR/jobs/jlab_ifarm` for direct submissions
+made from the repository root.
+
+### PARTONS cannot open `/tmp/..._partons.log`
+
+Older images use the compute node's shared `/tmp`, while PARTONS names its log
+by date. Another user can therefore own that day's file. The bridge now writes
+disabled-backend logger output beneath the user-owned
+`DVCS_CACHE/partons-logs` mount. Rebuild the image after updating, then
+resubmit; failed native cache entries are never reused as successful results.
+
 ### Job timeout or out of memory
 
 Use `sacct` and site monitoring to measure actual usage. Increase explicit

@@ -40,7 +40,8 @@ elif [[ "${requested}" == cuda ]]; then
     ${python_bin} -c 'import torch; assert torch.cuda.is_available(), "CUDA explicitly requested but unusable"'
 fi
 
-mkdir -p /results/provenance "${LHAPDF_DATA_PATH}" "${MPLCONFIGDIR}"
+mkdir -p /results/provenance /cache/partons-logs \
+  "${LHAPDF_DATA_PATH}" "${MPLCONFIGDIR}"
 ${python_bin} - <<'PY'
 import json, os, platform, subprocess
 from pathlib import Path

@@ -118,7 +118,8 @@ if [[ "${profile}" == local ]]; then
 else
     require_command apptainer
 fi
-mkdir -p "${state}" "${workspace}" "${results}" "${cache}/lhapdf" "${database}"
+mkdir -p "${state}" "${workspace}" "${results}" "${cache}/lhapdf" \
+  "${cache}/partons-logs" "${database}"
 
 if [[ "${profile}" == local ]]; then
     log "preparing ${variant} container image with ${engine}"

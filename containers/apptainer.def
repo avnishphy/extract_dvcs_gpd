@@ -18,10 +18,11 @@ From: ubuntu@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc709
     rm -rf /var/lib/apt/lists/*
     export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
     export DVCS_TORCH_INDEX_URL=https://download.pytorch.org/whl/cu126
+    mkdir -p /cache/partons-logs
     /opt/dvcs/app/scripts/build-native-source.sh /opt/dvcs
     mkdir -p /opt/dvcs/share/extract-dvcs-gpd
     dpkg-query -W > /opt/dvcs/share/extract-dvcs-gpd/dpkg-manifest.tsv
-    mkdir -p /workspace /results /cache /database
+    mkdir -p /workspace /results /cache/partons-logs /database
 
 %environment
     export LANG=en_US.UTF-8

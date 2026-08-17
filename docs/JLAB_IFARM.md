@@ -123,7 +123,8 @@ node, and multi-GPU neural execution assumes one node.
 The templates contain an account placeholder for readability, while the
 submission wrapper overrides it with `JLAB_ACCOUNT` from `resources.env`.
 It also overrides partition with `JLAB_CPU_PARTITION` or
-`JLAB_GPU_PARTITION`.
+`JLAB_GPU_PARTITION`, exports the original job directory so Slurm's spool copy
+can find `resources.env`, and assigns absolute stdout/stderr paths.
 
 ## Workflow dependency graph
 
@@ -265,6 +266,20 @@ explicit site acceptance campaign.
 Slurm's direct output/error files are written beneath
 `jobs/jlab_ifarm/logs/`. The submission wrapper writes a timestamped map of
 step names to job IDs.
+
+To audit one job independently:
+
+```bash
+squeue -j JOB_ID -o '%.18i %.12P %.24j %.10T %.10M %.10l %R'
+sacct -j JOB_ID --format=JobID,JobName,State,ExitCode,Elapsed,AllocCPUS,ReqMem,NodeList
+tail -f jobs/jlab_ifarm/logs/JOB_NAME-JOB_ID.out
+tail -f jobs/jlab_ifarm/logs/JOB_NAME-JOB_ID.err
+```
+
+`squeue` shows only queued/running jobs. A job that disappears must be checked
+with `sacct`. For submissions made directly with `sbatch` instead of the
+wrapper, `#SBATCH --output=logs/...` is relative to the directory from which
+`sbatch` was invoked; prefer the wrapper's absolute paths.
 
 Each step additionally writes:
 

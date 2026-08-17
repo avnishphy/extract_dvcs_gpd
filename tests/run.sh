@@ -13,6 +13,11 @@ case "${mode}" in
     PYTHONPATH="${root}/src" python3 -m unittest \
       tests.test_reusable_corpus tests.test_result_contract
     "${root}/tests/verify_jlab_gpu_launcher.sh"
+    "${root}/tests/verify_jlab_batch_submission.sh"
+    grep -Fx 'log.folder.path = /cache/partons-logs' \
+      "${root}/cpp/partons_bridge/config/logger.properties.in" >/dev/null
+    grep -F '/cache/partons-logs' \
+      "${root}/scripts/container-entrypoint.sh" >/dev/null
     while IFS= read -r script; do bash -n "${script}"; done < <(find "${root}" -type f \( -name '*.sh' -o -name '*.sbatch' -o -name install.sh -o -name dvcs \) -not -path '*/.git/*' | sort)
     install_state_before="$(if [[ -f "${root}/.dvcs/install.env" ]]; then sha256sum "${root}/.dvcs/install.env"; else echo absent; fi)"
     "${root}/install.sh" --profile local --accelerator cpu --dry-run >/dev/null

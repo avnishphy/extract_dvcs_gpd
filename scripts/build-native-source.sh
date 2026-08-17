@@ -59,5 +59,6 @@ else
 fi
 pip_install --no-build-isolation --constraint "${constraints}" "${source_root}[neural]"
 "${prefix}/venv/bin/pip" check
+mkdir -p /cache/partons-logs
 "${prefix}/bin/partons_bridge" --self-test
 "${prefix}/venv/bin/python" -c 'import matplotlib, numpy, optuna, particle, scipy, sbi, torch, yaml, zuko'
