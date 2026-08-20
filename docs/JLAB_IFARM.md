@@ -8,8 +8,8 @@ holdout work on allocated farm nodes. The public templates use `production`
 for long CPU work and `gpu` for neural GPU work.
 
 Those names and account requirements were checked against JLab SciComp
-documentation on 2026-08-14. Site configuration can change; confirm it before
-the first campaign:
+documentation and live `sinfo` on 2026-08-20. Site configuration can change;
+confirm it before the first campaign:
 
 ```bash
 sinfo -o '%P %G %c %m %l %f'
@@ -19,7 +19,8 @@ sacctmgr list user name="$USER" withassoc
 JLab references: [partitions/resources](https://scicomp.jlab.org/docs/node/644),
 [accessing GPUs](https://scicomp.jlab.org/docs/Access_GPUs),
 [GPU batch jobs](https://scicomp.jlab.org/docs/node/631), [Slurm FAQ](https://scicomp.jlab.org/docs/farm_slurm_faq),
-and [Slurm commands](https://scicomp.jlab.org/docs/farm_slurm_commands).
+[Slurm commands](https://scicomp.jlab.org/docs/farm_slurm_commands), and
+[sample Slurm scripts](https://scicomp.jlab.org/docs/farm_slurm_scripts).
 
 ## Install on ifarm
 
@@ -61,6 +62,13 @@ Set every field:
 | `DVCS_DATABASE` | Parent of the clean pinned database checkout. |
 | `JLAB_CPU_PARTITION` | Current CPU partition, normally `production`. |
 | `JLAB_GPU_PARTITION` | Current GPU partition, normally `gpu`. |
+| `JLAB_GPU_TYPE` | Optional GRES type such as `A100`; blank accepts any GPU. |
+| `JLAB_MAX_GPUS_PER_JOB` | Portability cap; default 4, common to current GPU nodes. |
+| `JLAB_JOB_TAG` | Optional campaign label stored in Slurm's Comment field; defaults to the project name. |
+| `JLAB_SLURM_LOG_ROOT` | Scheduler stdout/stderr directory; defaults to JLab's `/farm_out/%u`. |
+| `JLAB_HEARTBEAT_SECONDS` | Periodic stdout progress interval; default 300, or 0 to disable. |
+| `JLAB_*_{CPUS,MEM,TIME}` | Per-stage Slurm requests; `_MEM=per-cpu:160M` emits `--mem-per-cpu=160M`. |
+| `JLAB_{TRAIN,OPTIMIZE,EVALUATE}_GPUS` | Per-stage GPU counts; training may be `auto`. |
 
 Do not commit `resources.env`; it may expose paths and account information.
 
@@ -105,26 +113,34 @@ completion. Answering no performs the ordinary CPU login-node check.
 
 | File | Default resources | Role |
 |---|---|---|
-| `generate.sbatch` | production, 16 CPUs, 64 GiB, 24 h | CPU PARTONS corpus generation. |
+| `generate.sbatch` | production, 128 CPUs, 160 MiB/CPU (~20 GiB), 24 h | CPU PARTONS corpus generation. |
 | `selection.sbatch` | production, 1 CPU, 4 GiB, 30 min | Freeze grouped train/validation/outer-test ownership. |
-| `optimize_gpu.sbatch` | gpu, 1 GPU, 8 CPUs, 64 GiB, 12 h | Optional Optuna study. |
-| `train_gpu.sbatch` | gpu, 1 GPU, 8 CPUs, 64 GiB, 12 h | NPE ensemble training. |
-| `evaluate.sbatch` | gpu, 1 GPU, 8 CPUs, 64 GiB, 12 h | Match GPU training for neural coverage plus exact reevaluation. |
-| `compare.sbatch` | production, 4 CPUs, 32 GiB, 4 h | Conventional exact-bank comparison. |
-| `holdout.sbatch` | production, 16 CPUs, 64 GiB, 12 h | Named native-model holdout after closure. |
-| `plot.sbatch` | production, 2 CPUs, 8 GiB, 1 h | Saved-result plotting. |
+| `optimize_gpu.sbatch` | gpu, 4 GPUs, 8 CPUs, 64 GiB, 12 h | Optional independent Optuna study. |
+| `train_gpu.sbatch` | gpu, 1 GPU direct; wrapper auto up to 4, 8 CPUs, 64 GiB, 12 h | NPE ensemble training. |
+| `evaluate.sbatch` | gpu, 1 GPU, 32 CPUs, 64 GiB, 12 h | Neural coverage plus exact-PARTONS batches. |
+| `compare.sbatch` | production, 1 CPU, 32 GiB, 4 h | Conventional exact-bank comparison. |
+| `holdout.sbatch` | production, 1 CPU, 32 GiB, 12 h | Current named-model holdout is serial by model. |
+| `plot.sbatch` | production, 1 CPU, 8 GiB, 1 h | Saved-result plotting. |
 
-Defaults are starting requests, not measured recommendations for every site or
-study. Edit explicit `#SBATCH` CPU, memory, GPU, and wall-time directives after
-examining a representative run. Keep `--nodes=1` and `--ntasks=1` unless the
-implementation is deliberately extended; native parallelism is within one
-node, and multi-GPU neural execution assumes one node.
+The wrapper takes requests from `resources.env` and overrides matching
+`#SBATCH` lines. Tune that file instead of every template. Keep `--nodes=1`
+and `--ntasks=1`: native parallelism is within one node and multi-GPU neural
+execution assumes one node.
+
+The generation default is evidence-based: job 8894649 averaged 14.9 active
+CPUs from a 16-CPU allocation (93%) and peaked near 1.59 GiB, about 102 MiB per
+worker. Scaling to 128 uses the largest CPU count common to current
+`production` nodes. The 160 MiB/CPU request totals 20 GiB and projects to about
+63% memory efficiency, leaving 37% of the allocation as headroom (the request
+is 57% above projected use). Requesting 256 CPUs would restrict the eligible
+node pool and can increase queue time. Recheck `seff` after each campaign.
 
 The templates contain an account placeholder for readability, while the
 submission wrapper overrides it with `JLAB_ACCOUNT` from `resources.env`.
 It also overrides partition with `JLAB_CPU_PARTITION` or
 `JLAB_GPU_PARTITION`, exports the original job directory so Slurm's spool copy
-can find `resources.env`, and assigns absolute stdout/stderr paths.
+can find `resources.env`, and assigns site-standard `/farm_out/%u`
+stdout/stderr paths.
 
 ## Workflow dependency graph
 
@@ -139,7 +155,6 @@ The submitted graph is:
 ```text
 generate
   -> selection
-      -> optimize
       -> train
           -> evaluate
               -> compare
@@ -148,18 +163,42 @@ generate
 ```
 
 Every edge uses `afterok`, so a failed prerequisite prevents scientifically
-invalid downstream execution. Optimization is included in this full template
-chain. If you intend to use the frozen default architecture instead, submit
-`generate.sbatch`, `selection.sbatch`, then `train_gpu.sbatch` with `afterok`
-dependencies, and continue the same evaluate/compare/holdout/plot ordering.
-Do not simply delete the optimize job while leaving train dependent on its
-missing ID.
+invalid downstream execution.
 
-The Optuna job records recommendations but deliberately does not rewrite
-`experiment.json`; the following train job therefore uses the project's
-already frozen architecture. To promote an Optuna result, create a new project,
-apply the chosen neural controls before its selection/training campaign, and
-reuse the corpus only if compatibility checks pass.
+Select a contiguous part of the workflow with stage tags:
+
+```bash
+# Generate and freeze a selection, then stop.
+jobs/jlab_ifarm/submit_workflow.sh --through selection --tag corpus-v1
+
+# Resume from existing, valid selection artifacts.
+jobs/jlab_ifarm/submit_workflow.sh --from train --tag fit-v1
+
+# Submit a bounded range or exactly one stage.
+jobs/jlab_ifarm/submit_workflow.sh --from train --through compare --tag closure-v1
+jobs/jlab_ifarm/submit_workflow.sh --only evaluate --tag evaluation-rerun
+```
+
+Valid stages are `generate`, `selection`, `train`, `evaluate`, `compare`,
+`holdout`, and `plot`. The first selected stage has no Slurm dependency; its
+required upstream artifacts must already exist and pass framework contracts.
+Jobs inside the selected range retain `afterok` dependencies. `--only` cannot
+be combined with `--from` or `--through`.
+
+Each job receives the Slurm comment `dvcs:TAG:STAGE`. `--tag` overrides
+`JLAB_JOB_TAG`; if neither is set, `DVCS_PROJECT` is used.
+
+Optuna is deliberately separate because it records recommendations but does
+not rewrite `experiment.json`:
+
+```bash
+jobs/jlab_ifarm/submit_workflow.sh --optimization-only
+```
+
+Run it only after the referenced corpus and selection exist. To promote a
+result, create a new project, apply the chosen neural controls, and submit that
+new training campaign. Otherwise an optimize-before-train dependency spends
+GPU time without changing training.
 
 Holdout requires evaluation and comparison gates to pass, which is why it
 depends on `compare`, not merely `train`.
@@ -197,11 +236,10 @@ orchestrator; request one task with `--cpus-per-task=16`.
 
 `nproc` may show every CPU on a shared ifarm login node. The framework uses
 that full affinity-visible count by default for direct interactive testing.
-No CPUs are reserved in this mode, so other users can contend for them. To use
-more than a submitted template's default allocation, increase its
-`#SBATCH --cpus-per-task` request to a count supported by the current
-`production` partition and size memory accordingly. The runtime will use all
-allocated CPUs, subject only to the amount of ready native work. Larger
+No CPUs are reserved in this mode, so other users can contend for them. To
+change a batch allocation, edit the matching `JLAB_*_CPUS` value in
+`resources.env`. The runtime will use all allocated CPUs, subject only to the
+amount of ready native work. Larger
 requests can restrict eligible nodes and increase queue time.
 
 ## GPU resource propagation
@@ -210,8 +248,8 @@ JLab requires GPU work to be run through a Slurm GPU allocation. Its
 [GPU access guide](https://scicomp.jlab.org/docs/Access_GPUs) demonstrates
 requesting the `gpu` partition and GPU resources, then checking the allocation
 with `nvidia-smi` and `CUDA_VISIBLE_DEVICES`. The supplied templates request
-one GPU generically with `--gres=gpu:1`; consult `sinfo -o '%P %G %f'` before
-selecting a site-specific GPU type.
+GPU resources with `--gres`; consult `sinfo -o '%P %G %f'` before selecting a
+site-specific `JLAB_GPU_TYPE`.
 
 Slurm sets `CUDA_VISIBLE_DEVICES` to the allocated devices. The launcher adds
 Apptainer `--nv` only for an allocated CUDA job and explicitly forwards that
@@ -252,34 +290,70 @@ protect the result contract. Set `DVCS_IFARM_EVALUATE_MATCH_TRAINING=yes` for
 automation. The supplied workflow submits `evaluate.sbatch` to the GPU
 partition so it matches `train_gpu.sbatch`.
 
-With more than one requested/visible GPU, training starts one NCCL rank per
-device and shards ensemble seeds. Ensure the selected profile has at least as
-many candidate seeds as GPUs. Multi-GPU Optuna starts one independent trial
-worker per visible GPU against a shared study.
+With `JLAB_TRAIN_GPUS=auto`, the wrapper requests the smaller of the validation
+ensemble-member count and `JLAB_MAX_GPUS_PER_JOB`. Training starts one NCCL
+rank per device and shards ensemble seeds, so it never allocates a GPU with no
+member to train. Evaluation remains one-GPU because that stage has one neural
+process; its 32 CPUs serve exact PARTONS reevaluation. Multi-GPU Optuna starts
+one independent trial worker per visible GPU.
 
-The templates conservatively request one GPU because the packaging machine
-could not validate multi-GPU equivalence. Increase `--gres` only as part of an
-explicit site acceptance campaign.
+Set `JLAB_GPU_TYPE` only when measured throughput and queue time justify
+restricting eligible nodes. Multi-GPU correctness still requires the site
+acceptance comparison below; use `JLAB_TRAIN_GPUS=1` until accepted if
+reproducibility risk outweighs throughput.
 
 ## Logs and provenance
 
-Slurm's direct output/error files are written beneath
-`jobs/jlab_ifarm/logs/`. The submission wrapper writes a timestamped map of
-step names to job IDs.
+Slurm's direct output/error files are written under `/farm_out/$USER/`, as in
+JLab's sample scripts. These are operational logs, not the scientific result
+store. The wrapper still writes its timestamped job-ID map under
+`jobs/jlab_ifarm/logs/`, while detailed application/provenance logs remain
+under `DVCS_RESULTS/slurm/`. Change `JLAB_SLURM_LOG_ROOT` only if the selected
+directory is visible and writable from farm nodes.
 
 To audit one job independently:
 
 ```bash
 squeue -j JOB_ID -o '%.18i %.12P %.24j %.10T %.10M %.10l %R'
+squeue -u "$USER" -o '%.18i %.12P %.24j %.10T %.30k %R'
+seff JOB_ID
 sacct -j JOB_ID --format=JobID,JobName,State,ExitCode,Elapsed,AllocCPUS,ReqMem,NodeList
-tail -f jobs/jlab_ifarm/logs/JOB_NAME-JOB_ID.out
-tail -f jobs/jlab_ifarm/logs/JOB_NAME-JOB_ID.err
+sacct -j JOB_ID --format=JobID,Elapsed,TotalCPU,AllocCPUS,MaxRSS,ReqMem
+tail -f /farm_out/"$USER"/JOB_NAME-JOB_ID-*.out
+tail -f /farm_out/"$USER"/JOB_NAME-JOB_ID-*.err
 ```
 
 `squeue` shows only queued/running jobs. A job that disappears must be checked
-with `sacct`. For submissions made directly with `sbatch` instead of the
-wrapper, `#SBATCH --output=logs/...` is relative to the directory from which
-`sbatch` was invoked; prefer the wrapper's absolute paths.
+with `sacct`. Clean old `/farm_out/$USER` logs periodically after retaining any
+records needed for provenance.
+
+Every farm stdout begins with a `[dvcs-job] start` record, prints a heartbeat
+every `JLAB_HEARTBEAT_SECONDS`, and ends with the elapsed time and exit code.
+Generation heartbeats include completed/total shards; training includes
+completed/total ensemble members; optimization includes completed/total
+trials. Other stages report elapsed time so an alive but otherwise quiet job
+is visible. Example:
+
+```text
+[dvcs-job] heartbeat ... step=generate elapsed_seconds=900 progress=shards=6/16
+```
+
+After a job finishes, `seff` reports CPU and memory efficiency directly. Its
+CPU calculation is:
+
+```text
+CPU efficiency = TotalCPU / (Elapsed × AllocCPUS) × 100%
+```
+
+For job 8894649, `TotalCPU=1-11:45:22`, `Elapsed=02:23:58`, and
+`AllocCPUS=16`, giving 93.14%. Peak memory is on the `.batch` row in `sacct`.
+For a still-running job, inspect live resource use with:
+
+```bash
+sstat -j JOB_ID.batch --format=JobID,AveCPU,AveRSS,MaxRSS
+```
+
+Take final efficiency from accounting after completion.
 
 Each step additionally writes:
 
@@ -293,6 +367,7 @@ DVCS_RESULTS/slurm/JOB_ID/STEP/
   images.lock.json
   stdout.log
   stderr.log
+  progress.log
   exit-code.txt
 ```
 

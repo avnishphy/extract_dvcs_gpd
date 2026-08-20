@@ -60,6 +60,10 @@ jobs/jlab_ifarm/submit_workflow.sh
 squeue -u "$USER"
 ```
 
+The production wrapper excludes optional Optuna optimization. When needed,
+validate its separate submission with
+`jobs/jlab_ifarm/submit_workflow.sh --optimization-only`.
+
 Answer yes when the ifarm GPU-doctor prompt appears. In noninteractive
 acceptance, run
 `DVCS_IFARM_GPU_DOCTOR=yes ./dvcs doctor ifarm-acceptance` instead.

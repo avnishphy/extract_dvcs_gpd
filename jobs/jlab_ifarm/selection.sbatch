@@ -7,8 +7,8 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=4G
 #SBATCH --time=00:30:00
-#SBATCH --output=logs/%x-%j.out
-#SBATCH --error=logs/%x-%j.err
+#SBATCH --output=/farm_out/%u/%x-%j-%N.out
+#SBATCH --error=/farm_out/%u/%x-%j-%N.err
 set -euo pipefail
 job_dir="${DVCS_JOB_DIR:-${SLURM_SUBMIT_DIR:-}/jobs/jlab_ifarm}"
 if [[ ! -f "${job_dir}/resources.env" ]] && \

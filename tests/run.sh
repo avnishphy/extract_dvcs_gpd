@@ -14,6 +14,7 @@ case "${mode}" in
       tests.test_reusable_corpus tests.test_result_contract
     "${root}/tests/verify_jlab_gpu_launcher.sh"
     "${root}/tests/verify_jlab_batch_submission.sh"
+    "${root}/tests/verify_jlab_progress_logging.sh"
     grep -Fx 'log.folder.path = /cache/partons-logs' \
       "${root}/cpp/partons_bridge/config/logger.properties.in" >/dev/null
     grep -F '/cache/partons-logs' \

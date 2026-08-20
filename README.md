@@ -46,6 +46,15 @@ vi jobs/jlab_ifarm/resources.env
 jobs/jlab_ifarm/submit_workflow.sh
 ```
 
+The wrapper sizes PARTONS generation for common 128-CPU nodes, caps training
+GPUs by ensemble size, and keeps optional Optuna outside the production chain.
+See [JLab ifarm and farm guide](docs/JLAB_IFARM.md).
+
+Use `--from`, `--through`, or `--only` to submit selected workflow stages and
+`--tag LABEL` to make the campaign searchable in Slurm's Comment field.
+Scheduler stdout/stderr go to `/farm_out/$USER`; five-minute heartbeat lines
+make long quiet stages observable without flooding the log.
+
 `quick` is a real 82-dimensional workflow with 2,048 accepted native prior
 vectors by default; it is not a seconds-long mock. Use it to establish the
 pipeline, then assess whether a larger campaign supports your intended claim.

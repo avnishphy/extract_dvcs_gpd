@@ -4,11 +4,11 @@
 #SBATCH --job-name=dvcs-holdout
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=64G
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=32G
 #SBATCH --time=12:00:00
-#SBATCH --output=logs/%x-%j.out
-#SBATCH --error=logs/%x-%j.err
+#SBATCH --output=/farm_out/%u/%x-%j-%N.out
+#SBATCH --error=/farm_out/%u/%x-%j-%N.err
 set -euo pipefail
 job_dir="${DVCS_JOB_DIR:-${SLURM_SUBMIT_DIR:-}/jobs/jlab_ifarm}"
 if [[ ! -f "${job_dir}/resources.env" ]] && \
