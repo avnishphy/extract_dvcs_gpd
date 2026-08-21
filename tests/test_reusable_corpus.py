@@ -17,6 +17,7 @@ from extract_dvcs_cff.corpus import (
     generate_corpus,
     import_corpus,
     materialize_selection,
+    merge_corpora,
     verify_corpus,
 )
 from extract_dvcs_cff.cli.user import (
@@ -73,19 +74,21 @@ class ReusableCorpusTests(unittest.TestCase):
         cffs = cffs.reshape(count, kinematics, 4, 2)
         return predictions, cffs
 
-    def _create(self):
+    def _create(self, *, corpus=None):
         capabilities = SimpleNamespace(
             returncode=0, stderr="",
             stdout=json.dumps({"status": "ok", "backend": {"test": True}}),
         )
         with patch("extract_dvcs_cff.corpus.subprocess.run", return_value=capabilities):
             create_corpus(
-                corpus=self.corpus, bridge=self.bridge,
+                corpus=corpus or self.corpus, bridge=self.bridge,
                 configuration_path=self.configuration, profile="quick",
                 shard_size=2,
             )
 
-    def _generate(self, names):
+    def _generate(
+        self, names, *, corpus=None, max_shards=None, shard_start=None,
+    ):
         def fake_evaluate(_client, *, parameters, config, **_kwargs):
             predictions, cffs = self._native_result(parameters, config)
             return SimpleNamespace(
@@ -116,8 +119,10 @@ class ReusableCorpusTests(unittest.TestCase):
             new=fake_parallel,
         ):
             return generate_corpus(
-                corpus=self.corpus, bridge=self.bridge,
+                corpus=corpus or self.corpus, bridge=self.bridge,
                 requested_observables=names, show_progress=False,
+                max_shards=max_shards,
+                shard_start=shard_start,
             )
 
     def test_atomic_shards_extension_selection_and_deterministic_realization(self):
@@ -203,6 +208,91 @@ class ReusableCorpusTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "hash mismatch"):
             verify_corpus(corpus=self.corpus, deep=True)
 
+    def test_partial_checkpoint_export_import_and_resume(self):
+        self._create()
+        observable = "DVCSCrossSectionUUMinus"
+        partial = self._generate([observable], max_shards=1)
+        self.assertEqual(partial["status"], "partial")
+        self.assertEqual(partial["completed_shards"], 1)
+        with self.assertRaisesRegex(RuntimeError, "core is incomplete"):
+            verify_corpus(corpus=self.corpus, deep=True)
+        with self.assertRaisesRegex(RuntimeError, "core is incomplete"):
+            export_corpus(
+                corpus=self.corpus,
+                archive_path=self.root / "ordinary-export.tar.gz",
+            )
+        checkpoint = self.root / "checkpoint.tar.gz"
+        exported = export_corpus(
+            corpus=self.corpus, archive_path=checkpoint,
+            allow_partial=True,
+        )
+        self.assertEqual(exported["status"], "checkpoint_exported")
+        resumed = self.root / "resumed"
+        imported = import_corpus(
+            archive_path=checkpoint, corpus=resumed, allow_partial=True,
+        )
+        self.assertEqual(imported["verification"]["completed_shards"], 1)
+        with self.assertRaisesRegex(RuntimeError, "core is incomplete"):
+            import_corpus(
+                archive_path=checkpoint,
+                corpus=self.root / "ordinary-import",
+            )
+        self.assertFalse((self.root / "ordinary-import").exists())
+        completed = self._generate([observable], corpus=resumed, max_shards=1)
+        self.assertEqual(completed["status"], "complete")
+        self.assertEqual(
+            verify_corpus(corpus=resumed, deep=True)["status"], "verified"
+        )
+
+    def test_disjoint_shard_batches_merge_and_reject_overlap(self):
+        observable = "DVCSCrossSectionUUMinus"
+        first = self.root / "batch-first"
+        second = self.root / "batch-second"
+        overlap = self.root / "batch-overlap"
+        for corpus in (first, second, overlap):
+            self._create(corpus=corpus)
+        first_result = self._generate(
+            [observable], corpus=first, max_shards=1, shard_start=0,
+        )
+        second_result = self._generate(
+            [observable], corpus=second, max_shards=1, shard_start=1,
+        )
+        self._generate(
+            [observable], corpus=overlap, max_shards=1, shard_start=0,
+        )
+        self.assertEqual(first_result["generated_shard_indices"], [0])
+        self.assertEqual(second_result["generated_shard_indices"], [1])
+
+        imported_batches = []
+        for index, corpus in enumerate((first, second), 1):
+            archive = self.root / f"batch-{index}.tar.gz"
+            export_corpus(
+                corpus=corpus, archive_path=archive, allow_partial=True,
+            )
+            imported = self.root / f"imported-batch-{index}"
+            import_corpus(
+                archive_path=archive, corpus=imported, allow_partial=True,
+            )
+            imported_batches.append(imported)
+
+        merged = self.root / "merged"
+        result = merge_corpora(
+            corpora=list(reversed(imported_batches)), destination=merged,
+            consume_sources=True,
+        )
+        self.assertEqual(result["status"], "merged")
+        self.assertEqual(result["shard_count"], 2)
+        self.assertTrue(result["sources_consumed"])
+        self.assertTrue(all(not path.exists() for path in imported_batches))
+        self.assertEqual(
+            verify_corpus(corpus=merged, deep=True)["status"], "verified"
+        )
+        with self.assertRaisesRegex(RuntimeError, "duplicate corpus shard"):
+            merge_corpora(
+                corpora=[first, overlap],
+                destination=self.root / "overlapping-merge",
+            )
+
 
 class PublicCorpusInterfaceTests(unittest.TestCase):
     def test_parser_requires_explicit_corpus_and_selection(self):
@@ -266,6 +356,30 @@ class PublicCorpusInterfaceTests(unittest.TestCase):
                 json.dumps(legacy), encoding="utf-8"
             )
             self.assertIsNone(_load_experiment(project)["observables"])
+
+    def test_public_schema_accepts_documented_broad_kinematics(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary) / "study"
+            project.mkdir()
+            configuration = json.loads(WORKFLOW.read_text(encoding="utf-8"))
+            configuration["_physics"] = json.loads(
+                PHYSICS.read_text(encoding="utf-8")
+            )
+            experiment = _public_experiment(
+                "study", configuration, {"mode": "manual"}
+            )
+            experiment["synthetic_dataset"]["kinematics"][0].update({
+                "x_b": 0.40,
+                "t_GeV2": -0.70,
+                "Q2_GeV2": 7.0,
+                "beam_energy_GeV": 10.6,
+            })
+            (project / "experiment.json").write_text(
+                json.dumps(experiment), encoding="utf-8"
+            )
+            loaded = _load_experiment(project)
+            self.assertEqual(loaded["kinematics"][0]["x_b"], 0.40)
+            self.assertEqual(loaded["kinematics"][0]["t_GeV2"], -0.70)
 
 
 if __name__ == "__main__":

@@ -140,6 +140,23 @@ Export deep-verifies and creates a portable `.tar.gz` below
 members, and existing targets, then rebinds only the corpus location/name and
 deep-verifies it.
 
+Parallel producers use explicit shard batches and a verified merge:
+
+```bash
+./dvcs corpus-generate PROJECT CORPUS --shard-start 0 --max-shards 32
+./dvcs corpus-checkpoint-export CORPUS BATCH_ARCHIVE
+./dvcs corpus-checkpoint-import BATCH_ARCHIVE BATCH_CORPUS
+./dvcs corpus-merge --consume-sources COMPLETE_CORPUS BATCH_CORPUS [BATCH_CORPUS ...]
+```
+
+`--shard-start` is a zero-based shard index. A merge accepts only deeply
+verified batches with identical corpus identity, configuration, backend,
+truth, and observables. Shard indices must be disjoint and cover the complete
+declared range; the merged result is deep-verified before publication.
+`--consume-sources` moves node-local batch files into the result and removes
+the imported source trees after verification, reducing peak scratch usage for
+large validation corpora.
+
 ### `selection-create`
 
 ```bash
