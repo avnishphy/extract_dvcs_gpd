@@ -6,25 +6,11 @@ set -euo pipefail
 : "${SLURM_CPUS_PER_TASK:?Slurm CPU allocation is required}"
 cd "${SWIF_JOB_WORK_DIR}"
 
-if [[ -s extract-dvcs-gpd-jlab_ifarm-0.2.0-validation.sif ]]; then
-    image="extract-dvcs-gpd-jlab_ifarm-0.2.0-validation.sif"
-    corpus="my_test_bigcorpus_validation_1-partons-validation-16384"
-    export_name="partons-corpus-validation-16384"
-    batch_count=32
-    expected_shards=1024
-    consume=(--consume-sources)
-elif [[ -s extract-dvcs-gpd-jlab_ifarm-0.2.0.sif ]]; then
-    image="extract-dvcs-gpd-jlab_ifarm-0.2.0.sif"
-    corpus="my_test_bigcorpus_1-partons-quick-2048"
-    export_name="partons-corpus-2048"
-    batch_count=4
-    expected_shards=128
-    consume=()
-else
-    echo "staged container image is missing" >&2
-    exit 66
-fi
-for batch in $(seq 1 "${batch_count}"); do
+image="extract-dvcs-gpd-jlab_ifarm-0.2.0-validation.sif"
+corpus="my_test_bigcorpus_validation_2-partons-validation-16384"
+export_name="partons-corpus-validation-16384"
+[[ -s "${image}" ]] || { echo "staged image is missing: ${image}" >&2; exit 66; }
+for batch in $(seq 1 32); do
     [[ -s "corpus-batch-${batch}.tar.gz" ]] || {
         echo "staged corpus batch is missing: corpus-batch-${batch}.tar.gz" >&2
         exit 66
@@ -48,7 +34,7 @@ container=(
 
 started_epoch="$(date +%s)"
 batch_names=()
-for batch in $(seq 1 "${batch_count}"); do
+for batch in $(seq 1 32); do
     mv "corpus-batch-${batch}.tar.gz" \
         "workspace/.corpus_exports/input-batch-${batch}.tar.gz"
     "${container[@]}" corpus-checkpoint-import "input-batch-${batch}" \
@@ -56,7 +42,7 @@ for batch in $(seq 1 "${batch_count}"); do
     unlink "workspace/.corpus_exports/input-batch-${batch}.tar.gz"
     batch_names+=("batch-${batch}")
 done
-"${container[@]}" corpus-merge "${consume[@]}" "${corpus}" \
+"${container[@]}" corpus-merge --consume-sources "${corpus}" \
     "${batch_names[@]}" > corpus-merge.json
 "${container[@]}" corpus-verify "${corpus}" --deep > corpus-verify.json
 "${container[@]}" corpus-export "${corpus}" "${export_name}" \
@@ -64,15 +50,15 @@ done
 finished_epoch="$(date +%s)"
 
 cp "workspace/.corpus_exports/${export_name}.tar.gz" "${export_name}.tar.gz"
-python3 - "${started_epoch}" "${finished_epoch}" "${expected_shards}" "${export_name}" <<'PY'
+python3 - "${started_epoch}" "${finished_epoch}" <<'PY'
 import json, sys
 from pathlib import Path
 
 merge = json.loads(Path("corpus-merge.json").read_text())
 verification = json.loads(Path("corpus-verify.json").read_text())
-if merge.get("shard_count") != int(sys.argv[3]) or verification.get("status") != "verified":
+if merge.get("shard_count") != 1024 or verification.get("status") != "verified":
     raise SystemExit("merged corpus did not satisfy the complete corpus contract")
-Path(f"{sys.argv[4]}-summary.json").write_text(json.dumps({
+Path("partons-corpus-validation-16384-summary.json").write_text(json.dumps({
     "status": "ok",
     "elapsed_seconds": int(sys.argv[2]) - int(sys.argv[1]),
     "merge": merge,

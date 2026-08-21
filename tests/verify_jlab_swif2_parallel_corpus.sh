@@ -11,14 +11,14 @@ python3 - "${workflow}" <<'PY'
 import json, sys
 
 workflow = json.load(open(sys.argv[1], encoding="utf-8"))
-assert workflow["name"] == "extract-dvcs-gpd-partons-validation-16384-parallel"
+assert workflow["name"] == "extract-dvcs-gpd-partons-validation-16384-parallel-v2"
 assert len(workflow["jobs"]) == 33
 workers = workflow["jobs"][:32]
 for batch, job in enumerate(workers, 1):
-    name = f"partons-validation-batch-{batch:02d}"
+    name = f"partons-validation-v2-batch-{batch:02d}"
     assert job["name"] == name
     assert job.get("antecedents", []) == []
-    assert job["command"] == [f"/bin/bash run_staged_partons_corpus_chunk.sh {batch}"]
+    assert job["command"] == [f"/bin/bash run_staged_partons_validation_chunk_v2.sh {batch}"]
     assert (job["cpu_cores"], job["ram_bytes"], job["disk_bytes"], job["time_secs"]) == (
         16, 32000000000, 32000000000, 43200
     )
@@ -32,9 +32,9 @@ for batch, job in enumerate(workers, 1):
     }
 
 merge = workflow["jobs"][32]
-assert merge["name"] == "partons-validation-merge"
+assert merge["name"] == "partons-validation-v2-merge"
 assert set(merge["antecedents"]) == {job["name"] for job in workers}
-assert merge["command"] == ["/bin/bash run_staged_partons_corpus_merge.sh"]
+assert merge["command"] == ["/bin/bash run_staged_partons_validation_merge_v2.sh"]
 assert (merge["cpu_cores"], merge["ram_bytes"], merge["disk_bytes"], merge["time_secs"]) == (
     4, 16000000000, 32000000000, 43200
 )
@@ -47,19 +47,15 @@ assert {item["local"] for item in merge["outputs"]} == {
 }
 PY
 
-worker="${root}/jobs/jlab_ifarm/run_staged_partons_corpus_chunk.sh"
-merge="${root}/jobs/jlab_ifarm/run_staged_partons_corpus_merge.sh"
+worker="${root}/jobs/jlab_ifarm/run_staged_partons_validation_chunk_v2.sh"
+merge="${root}/jobs/jlab_ifarm/run_staged_partons_validation_merge_v2.sh"
 grep -F -- '--shard-size 16' "${worker}" >/dev/null
-grep -F -- 'profile="validation"' "${worker}" >/dev/null
-grep -F -- 'profile="quick"' "${worker}" >/dev/null
+grep -F -- '--profile validation' "${worker}" >/dev/null
 grep -F -- '--shard-start "${shard_start}" --max-shards 32' "${worker}" >/dev/null
 grep -F -- 'shard_start=$(( (batch - 1) * 32 ))' "${worker}" >/dev/null
 grep -F -- 'corpus-checkpoint-export' "${worker}" >/dev/null
 grep -F -- 'corpus-checkpoint-import' "${merge}" >/dev/null
-grep -F -- 'consume=(--consume-sources)' "${merge}" >/dev/null
-grep -F -- 'expected_shards=1024' "${merge}" >/dev/null
-grep -F -- 'expected_shards=128' "${merge}" >/dev/null
-grep -F -- 'corpus-merge "${consume[@]}" "${corpus}"' "${merge}" >/dev/null
+grep -F -- 'corpus-merge --consume-sources "${corpus}"' "${merge}" >/dev/null
 grep -F -- 'corpus-verify "${corpus}" --deep' "${merge}" >/dev/null
 grep -F -- 'corpus-export "${corpus}" "${export_name}"' "${merge}" >/dev/null
 
