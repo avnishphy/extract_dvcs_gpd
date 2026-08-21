@@ -100,7 +100,7 @@ not become the only copy of scientific output.
 ## Parallel PARTONS corpus production
 
 The validation profile contains 16,384 native parameter vectors, or 1,024
-shards of 16 vectors. `swif-staged-partons-corpus-validation-16384-parallel.json`
+shards of 16 vectors. `swif-staged-partons-corpus-validation-16384-parallel-v2.json`
 defines 32 independent CPU workers. Worker N concurrently generates the
 disjoint 32-shard range beginning at `(N - 1) * 32`, for 512 vectors per
 worker. Each worker returns a deeply verified partial archive through SWIF2
@@ -115,7 +115,7 @@ training continue to reject individual partial batches. Import manually:
 ```bash
 python3 jobs/jlab_ifarm/write_swif2_validation_corpus_json.py
 swif2 import -file \
-  jobs/jlab_ifarm/swif-staged-partons-corpus-validation-16384-parallel.json
+  jobs/jlab_ifarm/swif-staged-partons-corpus-validation-16384-parallel-v2.json
 ```
 
 Each PARTONS worker requests 16 CPUs, 32 GB RAM, 32 GB scratch, and 12 hours.

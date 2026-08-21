@@ -4,32 +4,18 @@ set -euo pipefail
 : "${SWIF_JOB_WORK_DIR:?SWIF2 work directory is required}"
 : "${SLURM_JOB_ID:?Slurm job ID is required}"
 : "${SLURM_CPUS_PER_TASK:?Slurm CPU allocation is required}"
-batch="${1:?usage: run_staged_partons_corpus_chunk.sh BATCH}"
-cd "${SWIF_JOB_WORK_DIR}"
-
-if [[ -s extract-dvcs-gpd-jlab_ifarm-0.2.0-validation.sif ]]; then
-    image="extract-dvcs-gpd-jlab_ifarm-0.2.0-validation.sif"
-    project="my_test_bigcorpus_validation_1"
-    corpus_prefix="my_test_bigcorpus_validation_1-partons-validation-16384"
-    profile="validation"
-    max_batches=32
-elif [[ -s extract-dvcs-gpd-jlab_ifarm-0.2.0.sif ]]; then
-    image="extract-dvcs-gpd-jlab_ifarm-0.2.0.sif"
-    project="my_test_bigcorpus_1"
-    corpus_prefix="my_test_bigcorpus_1-partons-quick-2048"
-    profile="quick"
-    max_batches=4
-else
-    echo "staged container image is missing" >&2
-    exit 66
-fi
-[[ "${batch}" =~ ^[0-9]+$ ]] && (( batch >= 1 && batch <= max_batches )) || {
-    echo "batch must be an integer from 1 through ${max_batches}" >&2
+batch="${1:?usage: run_staged_partons_validation_chunk_v2.sh BATCH}"
+[[ "${batch}" =~ ^([1-9]|[12][0-9]|3[0-2])$ ]] || {
+    echo "batch must be an integer from 1 through 32" >&2
     exit 64
 }
+cd "${SWIF_JOB_WORK_DIR}"
+
+image="extract-dvcs-gpd-jlab_ifarm-0.2.0-validation.sif"
 database_archive="gpddatabase-v1.1.3.tar.gz"
 experiment_input="experiment.json"
-corpus="${corpus_prefix}-batch-${batch}"
+project="my_test_bigcorpus_validation_2"
+corpus="my_test_bigcorpus_validation_2-partons-validation-16384-batch-${batch}"
 export_name="corpus-batch-${batch}"
 shard_start=$(( (batch - 1) * 32 ))
 
@@ -61,7 +47,7 @@ container=(
 "${container[@]}" init "${project}" > init.json
 cp "${experiment_input}" "workspace/${project}/experiment.json"
 "${container[@]}" corpus-create "${project}" "${corpus}" \
-    --profile "${profile}" --shard-size 16 > corpus-create.json
+    --profile validation --shard-size 16 > corpus-create.json
 
 started_epoch="$(date +%s)"
 "${container[@]}" corpus-generate "${project}" "${corpus}" \
