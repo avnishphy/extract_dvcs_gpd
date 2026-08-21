@@ -10,7 +10,7 @@ curl_download() {
         --connect-timeout 20 --max-time 1800 "$@"
 }
 cd "${build_root}"
-curl_download https://ftpmirror.gnu.org/gsl/gsl-2.8.tar.gz -o gsl.tgz
+curl_download https://ftp.gnu.org/gnu/gsl/gsl-2.8.tar.gz -o gsl.tgz
 echo '6a99eeed15632c6354895b1dd542ed5a855c0f15d9ad1326c6fe2b2c9e423190  gsl.tgz' | sha256sum -c -
 tar -xzf gsl.tgz; cd gsl-2.8; ./configure --prefix="${prefix}"; make -j"${jobs}"; make install; cd ..
 curl_download 'https://lhapdf.hepforge.org/downloads/?f=LHAPDF-6.5.6.tar.gz' -o lhapdf.tgz
