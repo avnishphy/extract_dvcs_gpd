@@ -151,6 +151,35 @@ missing ranges and any change in corpus identity, configuration, backend,
 truth arrays, or observables. Only its complete, deeply verified result can be
 used by selection and training.
 
+## Using another user's corpus
+
+Reuse requires the portable corpus archive, its source `experiment.json`, and
+the exact native bridge identity that generated it. Preserve SHA-256 values for
+the archive and SIF. Deep archive verification does not make a corpus
+compatible with a different experiment or bridge.
+
+```bash
+./dvcs init PROJECT
+cp /path/to/source-experiment.json workspace/PROJECT/experiment.json
+./dvcs show PROJECT
+mkdir -p workspace/.corpus_exports
+cp --reflink=auto /path/to/corpus.tar.gz workspace/.corpus_exports/
+./dvcs corpus-import corpus CORPUS
+./dvcs corpus-plan PROJECT CORPUS
+./dvcs corpus-verify CORPUS --deep
+./dvcs selection-create PROJECT CORPUS baseline --profile validation
+./dvcs farm-submit --project PROJECT --corpus CORPUS --selection baseline \
+  --profile validation --corpus-archive /path/to/corpus.tar.gz \
+  --from train --through plot --dry-run
+```
+
+`experiment.name` must equal `PROJECT`. Proceed only when `corpus-plan` reports
+full compatibility and no missing native work; never edit an imported manifest
+to bypass a mismatch. Remove `--dry-run` after reviewing the SWIF2 workflow.
+If an external corpus needs a wider experimental kinematic envelope, keep that
+policy on an explicitly reviewed branch and treat its results as exploratory
+until scientifically approved.
+
 ## Safely adding an observable
 
 Edit a **new project's** `synthetic_dataset.observables` list while keeping
