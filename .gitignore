@@ -15,7 +15,6 @@ sbi-logs/
 jobs/jlab_ifarm/resources.env
 jobs/jlab_ifarm/logs/
 jobs/jlab_ifarm/swif-*.json
-/experiment.json
 /logs/
 user/workspaces/
 user/corpora/

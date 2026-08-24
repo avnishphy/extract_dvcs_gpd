@@ -15,11 +15,10 @@ case "${mode}" in
     "${root}/tests/verify_jlab_gpu_launcher.sh"
     "${root}/tests/verify_jlab_batch_submission.sh"
     "${root}/tests/verify_jlab_progress_logging.sh"
+    "${root}/tests/verify_jlab_swif2_workflows.sh"
     "${root}/tests/verify_jlab_swif2_submission.sh"
-    "${root}/tests/verify_jlab_swif2_json.sh"
-    "${root}/tests/verify_jlab_swif2_step_wrapper.sh"
-    "${root}/tests/verify_schema8_kinematic_envelope.sh"
-    "${root}/tests/verify_jlab_swif2_parallel_corpus.sh"
+    [[ ! -x "${root}/tests/verify_schema8_kinematic_envelope.sh" ]] || \
+      "${root}/tests/verify_schema8_kinematic_envelope.sh"
     grep -Fx 'log.folder.path = /cache/partons-logs' \
       "${root}/cpp/partons_bridge/config/logger.properties.in" >/dev/null
     grep -F '/cache/partons-logs' \

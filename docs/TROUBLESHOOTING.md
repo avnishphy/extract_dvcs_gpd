@@ -219,7 +219,7 @@ problem. Examine credible widths, correlations, repeated coverage, predictive
 agreement, and conventional comparison. A falsely narrow wrong posterior is
 more concerning than a broad posterior containing truth.
 
-## JLab/Slurm failures
+## JLab/SWIF2 failures
 
 ### Invalid account or account/partition combination
 
@@ -228,18 +228,15 @@ Set `JLAB_ACCOUNT` in untracked `resources.env`; verify associations with
 
 ### Dependent jobs never run
 
-Inspect `squeue` dependency reason and `sacct` for the prerequisite. The
-workflow uses `afterok`; a failed generation/train/evaluation/comparison
-correctly blocks downstream jobs. Resubmit from the failed step after fixing
-the cause.
+Run `swif2 status WORKFLOW -display json` and `swif2 diagnose WORKFLOW`.
+Antecedents correctly prevent downstream work after a failed prerequisite.
+Fix the cause, then use `swif2 retry-jobs WORKFLOW -problems`.
 
 ### Batch job cannot find `resources.env`
 
-Slurm executes a spool copy of each script, so `BASH_SOURCE[0]` does not point
-to the repository. Submit with `jobs/jlab_ifarm/submit_workflow.sh`, which
-exports the original job directory and absolute log paths. Updated templates
-also fall back to `SLURM_SUBMIT_DIR/jobs/jlab_ifarm` for direct submissions
-made from the repository root.
+Normal campaigns should use `./dvcs farm-submit`, which content-addresses and
+stages its wrapper instead of sourcing `resources.env` on a compute node. This
+error belongs to the retained direct-Slurm diagnostic path.
 
 ### PARTONS cannot open `/tmp/..._partons.log`
 

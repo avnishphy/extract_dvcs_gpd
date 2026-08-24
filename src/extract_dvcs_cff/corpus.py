@@ -1113,15 +1113,24 @@ def create_selection(*, corpus: Path, selection_path: Path, profile: str,
 
 
 def _load_exact_arrays(corpus: Path, manifest: Mapping[str, Any],
-                       observable_names: Sequence[str]) -> tuple[
+                       observable_names: Sequence[str],
+                       show_progress: bool | None = None) -> tuple[
                            np.ndarray, np.ndarray, np.ndarray
                        ]:
+    from extract_dvcs_cff.progress import progress_iter
+
     parameters: list[np.ndarray] = []
     cffs: list[np.ndarray] = []
     observable_blocks: dict[str, list[np.ndarray]] = {
         name: [] for name in observable_names
     }
-    for shard_index, core_record in enumerate(manifest["core_shards"]):
+    core_shards = manifest["core_shards"]
+    shard_iterator = progress_iter(
+        core_shards, total=len(core_shards),
+        description="Loading corpus shards", enabled=show_progress,
+        unit="shard", leave=True,
+    )
+    for shard_index, core_record in enumerate(shard_iterator):
         with np.load(corpus / core_record["path"], allow_pickle=False) as core:
             parameters.append(core["native_parameters"])
             cffs.append(core["native_cffs"])
@@ -1153,7 +1162,8 @@ def _load_exact_arrays(corpus: Path, manifest: Mapping[str, Any],
 
 def materialize_selection(*, corpus: Path, selection_path: Path,
                           configuration_path: Path, workspace: Path,
-                          profile: str, bridge: Path) -> dict[str, Any]:
+                          profile: str, bridge: Path,
+                          show_progress: bool | None = None) -> dict[str, Any]:
     """Serialize realization publication and reuse an identical result.
 
     Multi-GPU Optuna starts one CLI process per device.  Every process names
@@ -1178,17 +1188,20 @@ def materialize_selection(*, corpus: Path, selection_path: Path,
             workspace=workspace,
             profile=profile,
             bridge=bridge,
+            show_progress=show_progress,
         )
 
 
 def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
                                   configuration_path: Path, workspace: Path,
-                                  profile: str, bridge: Path) -> dict[str, Any]:
+                                  profile: str, bridge: Path,
+                                  show_progress: bool | None = None) -> dict[str, Any]:
     """Build deterministic neural tensors from clean exact corpus groups."""
 
     from extract_dvcs_cff.inference.stage10 import (
         build_stage10_context, stage10_physical_to_latent,
     )
+    from extract_dvcs_cff.progress import progress_iter
     import torch
 
     verification = verify_corpus(corpus=corpus, deep=False)
@@ -1303,6 +1316,13 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
             and complete_files
             and not any(output.glob("*.partial"))
         ):
+            _atomic_json(workspace / "materialization_progress.json", {
+                "schema_version": 1,
+                "phase": "complete",
+                "completed": 1,
+                "total": 1,
+                "status": "reused",
+            })
             return {
                 "status": "reused",
                 "native_called": False,
@@ -1313,7 +1333,7 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
                 ),
             }
     parameters, native_predictions, native_cffs = _load_exact_arrays(
-        corpus, manifest, observable_names
+        corpus, manifest, observable_names, show_progress
     )
     with np.load(corpus / manifest["truth"]["core"]["path"], allow_pickle=False) as truth:
         truth_parameters = truth["parameters"][0]
@@ -1341,49 +1361,82 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
         ("test", selection["outer_test_group_indices"]),
     )
     replicates = int(config["profiles"][profile]["noise_replicates_per_parameter"])
-    theta_rows: list[np.ndarray] = []
-    observations: list[np.ndarray] = []
-    contexts: list[np.ndarray] = []
-    parameter_indices: list[int] = []
-    row_roles: list[str] = []
+    group_count = sum(len(group_indices) for _, group_indices in roles)
+    context_count = group_count * replicates
+    theta_physical = np.empty(
+        (context_count, parameters.shape[1] + 2), dtype=np.float64
+    )
+    observations_normalized = np.empty(
+        (context_count, len(point_table)), dtype=np.float64
+    )
+    contexts: np.ndarray | None = None
+    parameter_indices = np.empty(context_count, dtype=np.int64)
+    role_codes = np.empty(context_count, dtype=np.uint8)
+    role_code = {"train": 0, "validation": 1, "test": 2}
+    progress_path = workspace / "materialization_progress.json"
+    _atomic_json(progress_path, {
+        "schema_version": 1, "phase": "contexts",
+        "completed": 0, "total": group_count, "status": "running",
+    })
     noise_seed = int(config["seeds"]["training_noise"])
-    for role, group_indices in roles:
-        for group_index in group_indices:
-            for replica in range(replicates):
-                rng = np.random.Generator(np.random.PCG64(
-                    np.random.SeedSequence([
-                        noise_seed, int(group_index), replica,
-                        REALIZATION_SCHEMA_VERSION,
-                    ])
-                ))
-                eta_global, eta_lu = rng.standard_normal(2)
-                theta = np.concatenate((
-                    parameters[group_index], [eta_global, eta_lu]
-                ))
-                mean = _effective_prediction(
-                    native_predictions[group_index], eta_global, eta_lu,
-                    global_response, lu_response,
+    group_iterator = progress_iter(
+        (
+            (role, int(group_index))
+            for role, group_indices in roles
+            for group_index in group_indices
+        ),
+        total=group_count, description="Materializing training contexts",
+        enabled=show_progress, unit="parameter", leave=True,
+    )
+    row_index = 0
+    update_interval = max(1, group_count // 100)
+    for group_position, (role, group_index) in enumerate(group_iterator, 1):
+        for replica in range(replicates):
+            rng = np.random.Generator(np.random.PCG64(
+                np.random.SeedSequence([
+                    noise_seed, int(group_index), replica,
+                    REALIZATION_SCHEMA_VERSION,
+                ])
+            ))
+            eta_global, eta_lu = rng.standard_normal(2)
+            theta = np.concatenate((
+                parameters[group_index], [eta_global, eta_lu]
+            ))
+            mean = _effective_prediction(
+                native_predictions[group_index], eta_global, eta_lu,
+                global_response, lu_response,
+            )
+            observed = mean + cholesky @ rng.standard_normal(len(point_table))
+            context = build_stage10_context(
+                points=point_table, observed=observed,
+                covariance=covariance,
+                global_normalization_response=global_response,
+                lu_normalization_response=lu_response,
+            )
+            if contexts is None:
+                contexts = np.empty(
+                    (context_count, len(context)), dtype=np.float32
                 )
-                observed = mean + cholesky @ rng.standard_normal(len(point_table))
-                context = build_stage10_context(
-                    points=point_table, observed=observed,
-                    covariance=covariance,
-                    global_normalization_response=global_response,
-                    lu_normalization_response=lu_response,
-                )
-                theta_rows.append(theta)
-                observations.append(observed)
-                contexts.append(context)
-                parameter_indices.append(int(group_index))
-                row_roles.append(role)
-    theta_physical = np.asarray(theta_rows, dtype=np.float64)
+            theta_physical[row_index] = theta
+            observations_normalized[row_index] = observed
+            contexts[row_index] = context
+            parameter_indices[row_index] = group_index
+            role_codes[row_index] = role_code[role]
+            row_index += 1
+        if group_position % update_interval == 0 or group_position == group_count:
+            _atomic_json(progress_path, {
+                "schema_version": 1, "phase": "contexts",
+                "completed": group_position, "total": group_count,
+                "status": "running",
+            })
+    if contexts is None or row_index != context_count:
+        raise RuntimeError("materialized context count differs from selection")
     theta_latent = stage10_physical_to_latent(
         torch.from_numpy(theta_physical)
     ).numpy()
-    role_array = np.asarray(row_roles)
-    train_indices = np.flatnonzero(role_array == "train")
-    validation_indices = np.flatnonzero(role_array == "validation")
-    test_indices = np.flatnonzero(role_array == "test")
+    train_indices = np.flatnonzero(role_codes == role_code["train"])
+    validation_indices = np.flatnonzero(role_codes == role_code["validation"])
+    test_indices = np.flatnonzero(role_codes == role_code["test"])
     pseudo_rng = np.random.Generator(np.random.PCG64(
         int(config["seeds"]["pseudodata"])
     ))
@@ -1412,12 +1465,12 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
         "native_cffs": native_cffs,
         "theta_physical": theta_physical,
         "theta_latent": theta_latent,
-        "observations_normalized": np.asarray(observations),
-        "contexts": np.asarray(contexts, dtype=np.float32),
+        "observations_normalized": observations_normalized,
+        "contexts": contexts,
         "covariance_normalized": covariance,
         "global_normalization_response": global_response,
         "lu_normalization_response": lu_response,
-        "parameter_indices": np.asarray(parameter_indices, dtype=np.int64),
+        "parameter_indices": parameter_indices,
         "train_indices": train_indices,
         "validation_indices": validation_indices,
         "test_indices": test_indices,
@@ -1428,7 +1481,16 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
         "truth_native_predictions_normalized": truth_predictions,
     }
     array_records: dict[str, Any] = {}
-    for name, value in arrays.items():
+    _atomic_json(progress_path, {
+        "schema_version": 1, "phase": "arrays",
+        "completed": 0, "total": len(arrays), "status": "running",
+    })
+    array_iterator = progress_iter(
+        arrays.items(), total=len(arrays),
+        description="Writing training arrays", enabled=show_progress,
+        unit="array", leave=True,
+    )
+    for array_index, (name, value) in enumerate(array_iterator, 1):
         path = output / f"{name}.npy"
         with tempfile.NamedTemporaryFile(dir=output, delete=False) as stream:
             temporary = Path(stream.name)
@@ -1440,6 +1502,11 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
             "path": path.name, "sha256": sha256(path),
             "shape": list(value.shape), "dtype": str(value.dtype),
         }
+        _atomic_json(progress_path, {
+            "schema_version": 1, "phase": "arrays",
+            "completed": array_index, "total": len(arrays),
+            "status": "running",
+        })
     _atomic_json(output / "array_manifest.json", {
         "schema_version": 2,
         "arrays": array_records,
@@ -1513,6 +1580,10 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
         "realization_manifest_sha256": sha256(array_manifest_path),
     }
     _atomic_json(contract_path, expected_contract)
+    _atomic_json(progress_path, {
+        "schema_version": 1, "phase": "complete",
+        "completed": 1, "total": 1, "status": "materialized",
+    })
     return {
         "status": "materialized",
         "native_called": False,

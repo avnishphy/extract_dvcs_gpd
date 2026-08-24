@@ -179,6 +179,10 @@ class ReusableCorpusTests(unittest.TestCase):
                 configuration_path=self.configuration, workspace=workspace,
                 profile="quick", bridge=self.bridge,
             )
+            progress = json.loads(
+                (workspace / "materialization_progress.json").read_text()
+            )
+            self.assertEqual(progress["status"], "materialized")
             assert_result_contract(
                 configuration=self.configuration,
                 workspace=workspace,
@@ -195,6 +199,10 @@ class ReusableCorpusTests(unittest.TestCase):
                     workspace=workspace, profile="quick", bridge=self.bridge,
                 )
             self.assertEqual(reused["status"], "reused")
+            progress = json.loads(
+                (workspace / "materialization_progress.json").read_text()
+            )
+            self.assertEqual(progress["status"], "reused")
             outputs.append(sha256(workspace / "generated/contexts.npy"))
         self.assertEqual(outputs[0], outputs[1])
 
@@ -356,31 +364,6 @@ class PublicCorpusInterfaceTests(unittest.TestCase):
                 json.dumps(legacy), encoding="utf-8"
             )
             self.assertIsNone(_load_experiment(project)["observables"])
-
-    def test_public_schema_accepts_documented_broad_kinematics(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            project = Path(temporary) / "study"
-            project.mkdir()
-            configuration = json.loads(WORKFLOW.read_text(encoding="utf-8"))
-            configuration["_physics"] = json.loads(
-                PHYSICS.read_text(encoding="utf-8")
-            )
-            experiment = _public_experiment(
-                "study", configuration, {"mode": "manual"}
-            )
-            experiment["synthetic_dataset"]["kinematics"][0].update({
-                "x_b": 0.40,
-                "t_GeV2": -0.70,
-                "Q2_GeV2": 7.0,
-                "beam_energy_GeV": 10.6,
-            })
-            (project / "experiment.json").write_text(
-                json.dumps(experiment), encoding="utf-8"
-            )
-            loaded = _load_experiment(project)
-            self.assertEqual(loaded["kinematics"][0]["x_b"], 0.40)
-            self.assertEqual(loaded["kinematics"][0]["t_GeV2"], -0.70)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -196,10 +196,9 @@ On multiple visible GPUs the container entrypoint launches one process per
 GPU. Independent ensemble members are deterministically sharded. Asking for
 more ranks than ensemble seeds fails.
 
-On a JLab ifarm login host, interactive `train` asks whether to rerun through
-a Slurm GPU allocation using the supplied training-template defaults: one GPU,
-8 CPUs, 64 GiB, and 12 hours. Set `DVCS_IFARM_GPU_TRAIN=yes` or `no` for
-noninteractive control. The allocation ends when training exits.
+On a JLab ifarm login host, sustained interactive training is rejected. Use
+`./dvcs farm-submit`; the managed SWIF2 train job requests one GPU, stages
+inputs to node-local storage, emits progress heartbeats, and reaps its output.
 
 ### `optimize`
 
@@ -229,11 +228,33 @@ GPD diagnostics. Native phases use the same isolated affinity-bounded worker
 pool as generation. The command writes `evaluation/evaluation_metrics.json`
 and associated non-pickled arrays.
 
-On an ifarm login host, `evaluate` reports whether training used CPU or GPU and
-recommends the same device. Accepting the default reruns GPU-trained projects
-in a matching Slurm GPU allocation; declining cancels because changing device
-violates the saved result contract. For automation, set
-`DVCS_IFARM_EVALUATE_MATCH_TRAINING=yes`.
+On a JLab ifarm login host, sustained interactive evaluation is rejected. A
+managed SWIF2 workflow runs evaluate on a GPU after successful GPU training,
+preserving the saved result contract and explicit dependency chain.
+
+### `farm-submit` (JLab ifarm)
+
+```bash
+./dvcs farm-submit --project PROJECT --corpus CORPUS --selection baseline \
+  --profile validation --corpus-archive /absolute/corpus.tar.gz \
+  --from train --through plot [--dry-run]
+```
+
+Packages content-addressed SIF/database/project/corpus inputs, writes a SWIF2
+workflow, and either validates it (`--dry-run`) or imports and starts it. Use
+`--only STAGE`, `--include-optimize`, or `--import-only` as needed. See
+[JLab SWIF2 workflows](JLAB_SWIF2.md).
+
+### `farm-corpus-submit` (JLab ifarm)
+
+```bash
+./dvcs farm-corpus-submit --project PROJECT --corpus CORPUS \
+  --profile validation --shard-size 16 --shards-per-worker 32 [--dry-run]
+```
+
+Creates independent SWIF2 shard-range workers plus a verified merge job.
+Workers run PARTONS from node-local storage and return immutable partial
+archives; only the complete deep-verified merge is published.
 
 ### `compare`
 

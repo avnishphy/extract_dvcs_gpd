@@ -1751,6 +1751,7 @@ def main() -> int:
                             workspace=workspace,
                             profile=profile,
                             bridge=bridge,
+                            show_progress=common["show_progress"],
                         )
                     if args.command in {
                         "train",

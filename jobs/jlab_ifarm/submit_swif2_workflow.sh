@@ -1,65 +1,73 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-job_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-# shellcheck disable=SC1091
-source "${job_dir}/resources.env"
-
-workflow=""
-max_concurrent="${SWIF_MAX_CONCURRENT:-1}"
+workflow_json=
+dry_run=false
+import_only=false
+max_concurrent=64
 while (($#)); do
     case "$1" in
-        --workflow) workflow="${2:?missing workflow name}"; shift 2 ;;
-        --max-concurrent) max_concurrent="${2:?missing job limit}"; shift 2 ;;
+        --file) workflow_json="${2:?missing JSON path}"; shift 2 ;;
+        --dry-run) dry_run=true; shift ;;
+        --import-only) import_only=true; shift ;;
+        --max-concurrent) max_concurrent="${2:?missing limit}"; shift 2 ;;
         -h|--help)
-            echo "usage: $0 [--workflow NAME] [--max-concurrent N]"
+            echo "usage: $0 --file WORKFLOW.json [--dry-run|--import-only] [--max-concurrent N]"
             exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 64 ;;
     esac
 done
-
-[[ "${JLAB_ACCOUNT}" != REQUIRED_* ]] || { echo "set JLAB_ACCOUNT in resources.env" >&2; exit 64; }
-[[ -n "${DVCS_PROJECT:-}" && -n "${DVCS_CORPUS:-}" && -n "${DVCS_SELECTION:-}" ]] || {
-    echo "set DVCS_PROJECT, DVCS_CORPUS, and DVCS_SELECTION in resources.env" >&2
-    exit 64
+[[ -n "${workflow_json}" && -f "${workflow_json}" && ! -L "${workflow_json}" ]] || {
+    echo "--file must name a real workflow JSON" >&2
+    exit 66
 }
-[[ "${max_concurrent}" =~ ^[1-9][0-9]*$ ]] || { echo "max-concurrent must be positive" >&2; exit 64; }
+[[ "${max_concurrent}" =~ ^[1-9][0-9]*$ ]] || exit 64
+
+workflow="$(python3 - "${workflow_json}" <<'PY'
+import json, re, sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+if set(payload) - {"name", "site_name", "max_problems", "max_dispatched", "jobs"}:
+    raise SystemExit("workflow JSON contains unsupported top-level fields")
+name = payload.get("name")
+jobs = payload.get("jobs")
+if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name):
+    raise SystemExit("workflow name is invalid")
+if not isinstance(jobs, list) or not jobs:
+    raise SystemExit("workflow has no jobs")
+names = [job.get("name") for job in jobs if isinstance(job, dict)]
+if len(names) != len(jobs) or len(names) != len(set(names)):
+    raise SystemExit("workflow job names are missing or duplicated")
+known = set(names)
+for job in jobs:
+    if not set(job.get("antecedents", [])) <= known:
+        raise SystemExit(f"job {job['name']} has an unknown antecedent")
+    for record in job.get("inputs", []):
+        remote = Path(str(record.get("remote", "")))
+        if not remote.is_file():
+            producers = {
+                item["remote"]
+                for candidate in jobs
+                for item in candidate.get("outputs", [])
+            }
+            if str(remote) not in producers:
+                raise SystemExit(f"missing input with no workflow producer: {remote}")
+print(name)
+PY
+)"
+
+if [[ "${dry_run}" == true ]]; then
+    echo "SWIF2 workflow validated: ${workflow} (${workflow_json})"
+    exit 0
+fi
 command -v swif2 >/dev/null 2>&1 || { echo "swif2 is not available" >&2; exit 69; }
-
-workflow="${workflow:-dvcs-${DVCS_PROJECT}-$(date -u +%Y%m%dT%H%M%SZ)}"
-site_name="${SWIF_SITE_NAME:-jlab/enp}"
-scratch="${SWIF_DISK_SCRATCH:-10G}"
-
-resource() {
-    local step="$1" field="$2" fallback="$3" key
-    key="SWIF_${step^^}_${field}"
-    printf '%s\n' "${!key:-${fallback}}"
-}
-
-add_step() {
-    local step="$1" phase="$2" partition="$3" gpu="$4" cores ram time
-    shift 4
-    cores="$(resource "${step}" CORES "$1")"; shift
-    ram="$(resource "${step}" RAM "$1")"; shift
-    time="$(resource "${step}" TIME "$1")"; shift
-    local -a antecedents=() command=("${job_dir}/run_swif2_step.sh" "${step}") sbatch_flags=(--nodes=1 --ntasks=1 "--cpus-per-task=${cores}")
-    while [[ "$1" != -- ]]; do antecedents+=(-antecedent "dvcs-$1"); shift; done
-    shift
-    [[ "${gpu}" == yes ]] && sbatch_flags+=(--gres=gpu:1)
-    swif2 add-job "${workflow}" -name "dvcs-${step}" -account "${JLAB_ACCOUNT}" \
-        -partition "${partition}" -phase "${phase}" -cores "${cores}" -ram "${ram}" \
-        -time "${time}" -disk-scratch "${scratch}" "${antecedents[@]}" \
-        -sbatch "${sbatch_flags[@]}" :: "${command[@]}"
-}
-
-swif2 create "${workflow}" -site-name "${site_name}" -max-concurrent "${max_concurrent}" -max-problems 1
-add_step generate 10 "${JLAB_CPU_PARTITION}" no 16 64G 24h -- corpus-generate "${DVCS_PROJECT}" "${DVCS_CORPUS}" --no-progress
-add_step selection 20 "${JLAB_CPU_PARTITION}" no 1 4G 30min generate -- selection-create "${DVCS_PROJECT}" "${DVCS_CORPUS}" "${DVCS_SELECTION}" --profile validation
-add_step optimize 30 "${JLAB_GPU_PARTITION}" yes 8 64G 12h selection -- optimize "${DVCS_PROJECT}" --profile validation --corpus "${DVCS_CORPUS}" --selection "${DVCS_SELECTION}"
-add_step train 40 "${JLAB_GPU_PARTITION}" yes 8 64G 12h optimize -- train "${DVCS_PROJECT}" --profile validation --corpus "${DVCS_CORPUS}" --selection "${DVCS_SELECTION}"
-add_step evaluate 50 "${JLAB_GPU_PARTITION}" yes 8 64G 12h train -- evaluate "${DVCS_PROJECT}" --profile validation
-add_step compare 60 "${JLAB_CPU_PARTITION}" no 4 32G 4h evaluate -- compare "${DVCS_PROJECT}" --profile validation
-add_step holdout 70 "${JLAB_CPU_PARTITION}" no 16 64G 12h compare -- holdout "${DVCS_PROJECT}" --profile validation
-add_step plot 80 "${JLAB_CPU_PARTITION}" no 2 8G 1h compare holdout -- plot "${DVCS_PROJECT}" --profile validation
-swif2 run "${workflow}" -maxconcurrent "${max_concurrent}" -errorlimit 1
-printf 'SWIF2 workflow started: %s\n' "${workflow}"
+swif2 list -display json >/dev/null
+swif2 import -file "${workflow_json}"
+if [[ "${import_only}" == true ]]; then
+    echo "SWIF2 workflow imported but not started: ${workflow}"
+    exit 0
+fi
+swif2 run "${workflow}" -maxconcurrent "${max_concurrent}"
+echo "SWIF2 workflow started: ${workflow}"
+echo "monitor: swif2 status ${workflow} -display json"

@@ -9,6 +9,7 @@ them.
 
 from __future__ import annotations
 
+import os
 import sys
 from typing import Iterable, TypeVar
 
@@ -21,7 +22,12 @@ T = TypeVar("T")
 def progress_enabled(requested: bool | None) -> bool:
     """Resolve ``None`` to interactive stderr and preserve explicit choices."""
 
-    return sys.stderr.isatty() if requested is None else bool(requested)
+    if requested is not None:
+        return bool(requested)
+    forced = os.environ.get("DVCS_PROGRESS", "").strip().lower()
+    if forced in {"1", "true", "yes", "on"}:
+        return True
+    return sys.stderr.isatty()
 
 
 def progress_bar(

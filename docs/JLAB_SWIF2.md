@@ -1,133 +1,127 @@
-# JLab SWIF2 workflow submission
+# JLab SWIF2 workflows
 
-SWIF2 is a workflow manager layered over JLab's Slurm farm. It does not remove
-the Slurm runtime contract: each task still receives `SLURM_*` allocation
-variables and runs the same Apptainer launcher as the direct `sbatch` templates.
-It is preferable when workflow-level queueing, retries, dependencies, and data
-handling are more useful than manually managing Slurm job IDs.
+SWIF2 is the supported interface for sustained ifarm/farm work. It manages the
+underlying Slurm jobs, dependencies, retries, and file movement. Direct
+`.sbatch` scripts remain low-level diagnostics; do not use them for a normal
+analysis campaign.
 
-The adapter is intentionally separate from `submit_workflow.sh`; direct Slurm
-submission remains supported for debugging and small controlled campaigns.
+## One-time setup
 
-## Prerequisites
-
-Complete the normal ifarm installation and project/corpus setup in
-[JLab ifarm](JLAB_IFARM.md). SWIF2 also requires a valid JLab Scientific
-Computing certificate. Check it before building a workflow:
+Install on ifarm, create the project and corpus selection, then copy and edit
+the ignored resource file:
 
 ```bash
+cp jobs/jlab_ifarm/resources.env.example jobs/jlab_ifarm/resources.env
 swif2 list -display json
 ```
 
-An expired certificate must be renewed through JLab SciComp; no local script
-can substitute for it.
+Set at least `JLAB_ACCOUNT`, `DVCS_PROJECT`, `DVCS_CORPUS`, the DVCS paths, and
+`SWIF_CORPUS_ARCHIVE`. `swif2 list` checks that the JLab SciComp certificate is
+usable.
 
-## Create and import a smoke workflow
+## Submit analysis stages
 
-For the first submission, use an importable JSON file containing exactly one
-CPU `doctor` job. It validates SWIF2 dispatch, Apptainer, persistent mounts,
-and the PARTONS bridge without generating a corpus or reserving a GPU.
-
-Initialize the project, then set its name, account, and paths in
-`jobs/jlab_ifarm/resources.env`:
+First create and validate everything without contacting SWIF2:
 
 ```bash
-./dvcs init swif-smoke
-# Set DVCS_PROJECT=swif-smoke and JLAB_ACCOUNT in resources.env.
-jobs/jlab_ifarm/write_swif2_smoke_json.sh swif-smoke.json dvcs-swif-smoke
-swif2 import -file swif-smoke.json
+./dvcs farm-submit --project PROJECT --corpus CORPUS --selection baseline --profile validation --corpus-archive /absolute/corpus.tar.gz --from train --through plot --dry-run
 ```
 
-The JSON declares one core, 4 GiB RAM, 2 GiB of job-local scratch, and a
-30-minute limit. It intentionally writes application provenance to the
-persistent `DVCS_RESULTS` path rather than relying on disposable SWIF staging.
-
-## Full managed workflow
-
-After the smoke job passes, `submit_swif2_workflow.sh` remains available to
-create and start the eight-step workflow through the SWIF2 CLI. Its dependency
-chain uses antecedents and phases:
+Remove `--dry-run` to import and start the workflow. A unique workflow name is
+generated, or set one with `--workflow NAME`. Useful controls are:
 
 ```text
-generate -> selection -> optimize -> train -> evaluate -> compare -> holdout -> plot
+--from STAGE --through STAGE   contiguous portion of the analysis
+--only STAGE                   one stage only
+--include-optimize             add optimize before train
+--import-only                  import without starting
 ```
 
-`plot` waits for both `compare` and `holdout`. A failure leaves downstream work
-unreleased. Inspect or retry it through SWIF2 rather than creating an unrelated
-Slurm dependency chain.
+Analysis stage order is `selection`, optional `optimize`, `train`, `evaluate`,
+`compare`, `holdout`, `plot`. GPU requests and Apptainer `--nv` passthrough are
+automatic for optimize, train, and evaluate. The remaining stages are CPU
+jobs. Each job is tagged with the workflow and stage names.
 
-For a manually authored workflow JSON, each normal job command should be the
-absolute path to `jobs/jlab_ifarm/run_swif2_step.sh` followed by one of these
-step names: `generate`, `selection`, `optimize`, `train`, `evaluate`,
-`compare`, `holdout`, or `plot`. The wrapper reads the persistent paths and
-project/corpus/selection names from `resources.env`, sets the same CPU/CUDA
-environment as the corresponding `.sbatch` template, and delegates to
-`run_step.sh`. That keeps the actual `./dvcs` launch and Apptainer mount
-contract unchanged.
+On an ifarm login node, direct `optimize`, `train`, and `evaluate` commands are
+rejected with a pointer to `farm-submit`. `doctor` may still request a short
+interactive GPU allocation because it is a bounded environment check.
 
-```bash
-swif2 status dvcs-my-study-001 -display json
-swif2 diagnose dvcs-my-study-001
-swif2 retry-jobs dvcs-my-study-001 -problems
-```
+## Data movement and outputs
 
-## Resource requests
+Submission packages these immutable inputs under `.dvcs/swif2_inputs/`:
 
-The wrapper preserves the measured-starting values from the direct Slurm
-templates: 16 CPU cores/64 GiB for native generation and holdout; one GPU,
-8 CPU cores, and 64 GiB for optimize/train/evaluate. SWIF2 improves workflow
-management, but cannot make an oversized resource request schedulable faster.
+- installed SIF;
+- GPD database archive;
+- project-state archive;
+- portable corpus archive.
 
-Tune one step only after inspecting prior job accounting. Add an override to
+Names include content hashes so SWIF2 cannot reuse stale content under an old
+logical name. Each job receives them through SWIF2, runs from disposable
+`$SWIF_JOB_WORK_DIR`, and performs active PARTONS/Torch I/O on node-local
+storage. A successful stage returns:
+
+- the next project-state archive below `SWIF_OUTPUT_ROOT/WORKFLOW/state/`;
+- a stage summary JSON below `SWIF_OUTPUT_ROOT/WORKFLOW/summaries/`;
+- stdout/stderr under `SWIF_LOG_ROOT/WORKFLOW/` (normally `/farm_out`).
+
+The output archive of one stage is the declared input of its successor. Failed
+or missing output therefore cannot silently release downstream analysis.
+
+## Resources
+
+Defaults live in `jobs/jlab_ifarm/resources.env.example`. Override a stage in
 the ignored `resources.env`, for example:
 
 ```bash
-SWIF_TRAIN_RAM=48G
-SWIF_TRAIN_TIME=8h
-SWIF_COMPARE_CORES=2
+SWIF_TRAIN_CORES=8
+SWIF_TRAIN_RAM=24G
+SWIF_TRAIN_TIME=12h
+SWIF_TRAIN_GPUS=1
 ```
 
-Supported step names are `GENERATE`, `SELECTION`, `OPTIMIZE`, `TRAIN`,
-`EVALUATE`, `COMPARE`, `HOLDOUT`, and `PLOT`; each accepts `_CORES`, `_RAM`,
-or `_TIME`. Do not reduce GPU, memory, or wall time blindly: compare observed
-peak memory and elapsed time first. `SWIF_MAX_CONCURRENT` defaults to one to
-avoid advancing dependent scientific stages concurrently.
+The 24G initial training request accompanies the streaming materializer, which
+eliminates the previous duplicate 5.4G context allocation that caused a 16G
+OOM. After one successful representative job, tune RAM and wall time from
+measured peak use. CPU count controls Torch threads inside the allocation;
+requesting unused CPUs only delays dispatch.
 
-All computational outputs and provenance remain in the persistent paths from
-`resources.env`. The per-attempt SWIF staging directory is disposable and must
-not become the only copy of scientific output.
+`SWIF_MAX_CONCURRENT` limits running jobs and `SWIF_MAX_DISPATCHED` limits
+dispatch pressure. Scientific dependencies still prevent incompatible stages
+from running together.
 
-## Parallel PARTONS corpus production
+## Parallel corpus generation
 
-The validation profile contains 16,384 native parameter vectors, or 1,024
-shards of 16 vectors. `swif-staged-partons-corpus-validation-16384-parallel-v2.json`
-defines 32 independent CPU workers. Worker N concurrently generates the
-disjoint 32-shard range beginning at `(N - 1) * 32`, for 512 vectors per
-worker. Each worker returns a deeply verified partial archive through SWIF2
-file movement.
-
-The merge job has all 32 workers as antecedents. It imports their archives
-into node-local scratch, rejects identity mismatches, overlaps, or incomplete
-coverage, sorts the 1,024 shard records, deep-verifies all 16,384 group
-indices, and returns the normal portable corpus archive. Selection and
-training continue to reject individual partial batches. Import manually:
+The corpus submitter can split any project parameter list into non-overlapping
+workers and a verified merge job. Validate before import:
 
 ```bash
-python3 jobs/jlab_ifarm/write_swif2_validation_corpus_json.py
-swif2 import -file \
-  jobs/jlab_ifarm/swif-staged-partons-corpus-validation-16384-parallel-v2.json
+./dvcs farm-corpus-submit --project PROJECT --corpus CORPUS --profile validation --shard-size 16 --shards-per-worker 32 --dry-run
 ```
 
-Each PARTONS worker requests 16 CPUs, 32 GB RAM, 32 GB scratch, and 12 hours.
-The non-PARTONS merge requests 4 CPUs, 16 GB RAM, 32 GB scratch, and 12 hours.
-These scratch requests include the 6.5 GB staged SIF with ample headroom: the
-measured 64-vector checkpoint is 2.96 MB compressed and 4.12 MB unpacked, so
-the 16,384-vector final checkpoint is expected to be about 0.8 GB compressed.
-The merge consumes its node-local source corpora to avoid duplicate shard
-trees. The workers have no antecedents and may run simultaneously.
+Remove `--dry-run` to start. The lower-level JSON interface is
+`python3 jobs/jlab_ifarm/write_swif2_workflow.py corpus --help`.
 
-## References
+Each worker receives a deterministic shard range, an isolated node-local
+native-work directory, and writes an immutable partial archive. The merge job
+rejects identity mismatches, overlaps, missing shards, or wrong parameter
+indices before exporting a normal portable corpus. Choose `--shard-size` and
+`--shards-per-worker` from a measured PARTONS benchmark; do not request one
+oversized multi-node job.
 
-- [JLab SWIF2 workflow documentation](https://scicomp.jlab.org/docs/swif2)
-- [JLab SWIF2 command reference](https://scicomp.jlab.org/cli/swif.html)
-- [JLab Slurm batch system guidance](https://scicomp.jlab.org/docs/farm_slurm_batch)
+## Monitor and recover
+
+```bash
+swif2 status WORKFLOW -display json
+swif2 diagnose WORKFLOW
+swif2 retry-jobs WORKFLOW -problems
+```
+
+The wrappers emit periodic `[dvcs-swif]` heartbeats. Training materialization
+also records counts in `materialization_progress.json`, and training metrics
+are reported when available. Because every completed stage is reaped as an
+archive, a later workflow can resume with `--from STAGE` from the appropriate
+project archive instead of recomputing the corpus.
+
+See the [JLab SWIF2 guide](https://scicomp.jlab.org/docs/swif2),
+[SWIF command reference](https://scicomp.jlab.org/cli/swif.html), and
+[data-movement reference](https://scicomp.jlab.org/cli/data.html).
