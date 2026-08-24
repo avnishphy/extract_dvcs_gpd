@@ -49,6 +49,7 @@ from extract_dvcs_cff.corpus import (
     generate_corpus,
     import_corpus,
     materialize_selection,
+    merge_corpora,
     plan_corpus,
     verify_corpus,
 )
@@ -1432,6 +1433,14 @@ def _parser() -> argparse.ArgumentParser:
     corpus_generate.add_argument("corpus")
     corpus_generate.add_argument("--no-progress", action="store_true")
     corpus_generate.add_argument("--force-native", action="store_true")
+    corpus_generate.add_argument(
+        "--max-shards", type=int, default=None,
+        help="generate at most this many missing core shards",
+    )
+    corpus_generate.add_argument(
+        "--shard-start", type=int, default=None,
+        help="start a disjoint core-shard range at this zero-based index",
+    )
     corpus_verify = commands.add_parser(
         "corpus-verify", help="verify reusable corpus manifests and shards"
     )
@@ -1447,6 +1456,28 @@ def _parser() -> argparse.ArgumentParser:
     )
     corpus_import.add_argument("archive")
     corpus_import.add_argument("corpus")
+    checkpoint_export = commands.add_parser(
+        "corpus-checkpoint-export",
+        help="deep-verify and export an incomplete corpus checkpoint",
+    )
+    checkpoint_export.add_argument("corpus")
+    checkpoint_export.add_argument("archive")
+    checkpoint_import = commands.add_parser(
+        "corpus-checkpoint-import",
+        help="import a verified incomplete corpus checkpoint",
+    )
+    checkpoint_import.add_argument("archive")
+    checkpoint_import.add_argument("corpus")
+    corpus_merge = commands.add_parser(
+        "corpus-merge",
+        help="merge complete disjoint shard batches into one corpus",
+    )
+    corpus_merge.add_argument("corpus")
+    corpus_merge.add_argument("sources", nargs="+")
+    corpus_merge.add_argument(
+        "--consume-sources", action="store_true",
+        help="move batch files into the merged corpus to reduce scratch use",
+    )
     selection_create = commands.add_parser(
         "selection-create", help="freeze a group-aware neural data selection"
     )
@@ -1556,6 +1587,33 @@ def main() -> int:
                 ),
                 corpus=_corpus_path(repository, args.corpus, existing=False),
             )
+        elif args.command == "corpus-checkpoint-export":
+            result = export_corpus(
+                corpus=_corpus_path(repository, args.corpus, existing=True),
+                archive_path=_corpus_archive_path(
+                    repository, args.archive, existing=False
+                ),
+                allow_partial=True,
+            )
+        elif args.command == "corpus-checkpoint-import":
+            result = import_corpus(
+                archive_path=_corpus_archive_path(
+                    repository, args.archive, existing=True
+                ),
+                corpus=_corpus_path(repository, args.corpus, existing=False),
+                allow_partial=True,
+            )
+        elif args.command == "corpus-merge":
+            result = merge_corpora(
+                corpora=[
+                    _corpus_path(repository, source, existing=True)
+                    for source in args.sources
+                ],
+                destination=_corpus_path(
+                    repository, args.corpus, existing=False
+                ),
+                consume_sources=args.consume_sources,
+            )
         elif args.command in {
             "corpus-create", "corpus-plan", "corpus-generate",
             "selection-create",
@@ -1607,6 +1665,8 @@ def main() -> int:
                         requested_observables=observable_names,
                         show_progress=False if args.no_progress else None,
                         force_native=args.force_native,
+                        max_shards=args.max_shards,
+                        shard_start=args.shard_start,
                     )
                 else:
                     selected = create_selection(
@@ -1691,6 +1751,7 @@ def main() -> int:
                             workspace=workspace,
                             profile=profile,
                             bridge=bridge,
+                            show_progress=common["show_progress"],
                         )
                     if args.command in {
                         "train",

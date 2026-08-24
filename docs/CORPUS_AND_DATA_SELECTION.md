@@ -144,6 +144,13 @@ requires deep verification and rejects symlinks. Import rejects absolute,
 parent-traversing, linked, or special members, records the archive hash,
 rebinds only the corpus name/location, and deep-verifies before success.
 
+Large corpora may be generated concurrently with disjoint zero-based shard
+ranges. Export each range with `corpus-checkpoint-export`, import the batches
+on one merge node, and run `corpus-merge`. The merge rejects overlapping or
+missing ranges and any change in corpus identity, configuration, backend,
+truth arrays, or observables. Only its complete, deeply verified result can be
+used by selection and training.
+
 ## Safely adding an observable
 
 Edit a **new project's** `synthetic_dataset.observables` list while keeping

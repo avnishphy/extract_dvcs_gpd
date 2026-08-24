@@ -28,6 +28,8 @@ use the reference pages while running a study.
   execution, tags, digests, and offline operation.
 - [JLab ifarm](JLAB_IFARM.md) explains Apptainer, Slurm templates, job
   dependencies, storage, monitoring, and acceptance.
+- [JLab SWIF2](JLAB_SWIF2.md) explains the SWIF2 wrapper for managed JLab
+  workflow dispatch, resource overrides, and monitoring.
 - [Troubleshooting](TROUBLESHOOTING.md) maps common failures to checks and
   recovery procedures.
 

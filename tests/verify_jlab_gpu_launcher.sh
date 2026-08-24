@@ -33,22 +33,6 @@ printf '%s\n' "$@" > "${DVCS_TEST_SRUN_ARGS}"
 EOF
 chmod +x "${temp}/bin/apptainer"
 chmod +x "${temp}/bin/hostname" "${temp}/bin/srun"
-mkdir -p "${temp}/workspace/gpu-test/results/quick/training"
-cat > "${temp}/workspace/gpu-test/results/quick/training/training_summary.json" <<'EOF'
-{
-  "neural_device": {"resolved": "cuda", "cuda_device_name": "Test GPU"},
-  "members": {}
-}
-EOF
-mkdir -p "${temp}/workspace/cpu-test/results/quick/training"
-cat > "${temp}/workspace/cpu-test/results/quick/training/training_summary.json" <<'EOF'
-{
-  "neural_device": {"resolved": "cpu", "cuda_device_name": null},
-  "training_runtime": {"accelerator": "cpu", "cpu_threads": 32},
-  "members": {}
-}
-EOF
-
 args="${temp}/args"
 PATH="${temp}/bin:${PATH}" DVCS_TEST_ARGS="${args}" \
   DVCS_ACCELERATOR=auto CUDA_VISIBLE_DEVICES=2 SLURM_JOB_ID=123 \
@@ -72,46 +56,21 @@ grep -Fx -- 'DVCS_IFARM_GPU_DOCTOR=no' "${srun_args}" >/dev/null
 grep -Fx -- 'doctor' "${srun_args}" >/dev/null
 grep -Fx -- 'test' "${srun_args}" >/dev/null
 
-PATH="${temp}/bin:${PATH}" DVCS_TEST_SRUN_ARGS="${srun_args}" \
-  DVCS_IFARM_GPU_TRAIN=yes JLAB_ACCOUNT=hallc \
-  "${temp}/checkout/dvcs" train test --profile quick
-grep -Fx -- '--cpus-per-task=8' "${srun_args}" >/dev/null
-grep -Fx -- '--mem=64G' "${srun_args}" >/dev/null
-grep -Fx -- '--time=12:00:00' "${srun_args}" >/dev/null
-grep -Fx -- '--gres=gpu:1' "${srun_args}" >/dev/null
-grep -Fx -- 'DVCS_ACCELERATOR=cuda' "${srun_args}" >/dev/null
-grep -Fx -- 'DVCS_IFARM_GPU_TRAIN=no' "${srun_args}" >/dev/null
-grep -Fx -- 'train' "${srun_args}" >/dev/null
-grep -Fx -- 'test' "${srun_args}" >/dev/null
-
-evaluate_output="${temp}/evaluate-output"
-PATH="${temp}/bin:${PATH}" DVCS_TEST_SRUN_ARGS="${srun_args}" \
-  DVCS_IFARM_EVALUATE_MATCH_TRAINING=yes JLAB_ACCOUNT=hallc \
-  "${temp}/checkout/dvcs" evaluate gpu-test --profile quick \
-  2>"${evaluate_output}"
-grep -F -- 'training used GPU (Test GPU) with 8 configured CPU threads' \
-  "${evaluate_output}" >/dev/null
-grep -Fx -- '--cpus-per-task=8' "${srun_args}" >/dev/null
-grep -Fx -- '--gres=gpu:1' "${srun_args}" >/dev/null
-grep -Fx -- 'DVCS_ACCELERATOR=cuda' "${srun_args}" >/dev/null
-grep -Fx -- 'DVCS_IFARM_EVALUATE_MATCH_TRAINING=no' "${srun_args}" >/dev/null
-grep -Fx -- 'evaluate' "${srun_args}" >/dev/null
-grep -Fx -- 'gpu-test' "${srun_args}" >/dev/null
-
-rm -f "${srun_args}"
-PATH="${temp}/bin:${PATH}" DVCS_TEST_ARGS="${args}" \
-  DVCS_TEST_SRUN_ARGS="${srun_args}" \
-  DVCS_IFARM_EVALUATE_MATCH_TRAINING=yes \
-  "${temp}/checkout/dvcs" evaluate cpu-test --profile quick \
-  2>"${evaluate_output}"
-grep -F -- 'training used CPU with 32 configured CPU threads' \
-  "${evaluate_output}" >/dev/null
-grep -Fx -- 'DVCS_ACCELERATOR=cpu' "${args}" >/dev/null
-grep -Fx -- 'DVCS_CPU_THREADS=32' "${args}" >/dev/null
-[[ ! -e "${srun_args}" ]] || {
-    echo "CPU-trained evaluation unexpectedly requested a GPU" >&2
-    exit 1
-}
+for stage in optimize train evaluate; do
+    rm -f "${srun_args}"
+    stage_output="${temp}/${stage}-output"
+    if PATH="${temp}/bin:${PATH}" DVCS_TEST_SRUN_ARGS="${srun_args}" \
+       "${temp}/checkout/dvcs" "${stage}" test --profile quick \
+       2>"${stage_output}"; then
+        echo "interactive ${stage} unexpectedly succeeded" >&2
+        exit 1
+    fi
+    grep -F -- 'use ./dvcs farm-submit' "${stage_output}" >/dev/null
+    [[ ! -e "${srun_args}" ]] || {
+        echo "interactive ${stage} unexpectedly invoked srun" >&2
+        exit 1
+    }
+done
 
 rm -f "${srun_args}"
 PATH="${temp}/bin:${PATH}" DVCS_TEST_ARGS="${args}" \

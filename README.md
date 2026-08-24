@@ -43,16 +43,18 @@ vi jobs/jlab_ifarm/resources.env
 ./dvcs init first-study
 ./dvcs corpus-create first-study first-corpus --profile validation
 ./dvcs corpus-plan first-study first-corpus
-jobs/jlab_ifarm/submit_workflow.sh
+./dvcs farm-submit --project first-study --corpus first-corpus \
+  --selection baseline --profile validation \
+  --corpus-archive /absolute/first-corpus.tar.gz --dry-run
 ```
 
-The wrapper sizes PARTONS generation for common 128-CPU nodes, caps training
-GPUs by ensemble size, and keeps optional Optuna outside the production chain.
-See [JLab ifarm and farm guide](docs/JLAB_IFARM.md).
+Remove `--dry-run` after checking the generated workflow. SWIF2 is the
+authoritative ifarm submission layer; it stages active I/O node-locally,
+requests GPUs for neural stages, and reaps explicit outputs. See
+[JLab ifarm and farm guide](docs/JLAB_IFARM.md).
 
-Use `--from`, `--through`, or `--only` to submit selected workflow stages and
-`--tag LABEL` to make the campaign searchable in Slurm's Comment field.
-Scheduler stdout/stderr go to `/farm_out/$USER`; five-minute heartbeat lines
+Use `--from`, `--through`, or `--only` to submit selected stages. Scheduler
+stdout/stderr go to `/farm_out/$USER` by default; five-minute heartbeat lines
 make long quiet stages observable without flooding the log.
 
 `quick` is a real 82-dimensional workflow with 2,048 accepted native prior

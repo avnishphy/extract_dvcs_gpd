@@ -52,24 +52,20 @@ apptainer inspect .dvcs/*.sif
 ./dvcs corpus-create ifarm-acceptance ifarm-acceptance-corpus --profile validation
 ./dvcs corpus-plan ifarm-acceptance ifarm-acceptance-corpus
 sinfo -o '%P %G %c %m %l %f'
-sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/generate.sbatch
-sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/selection.sbatch
-sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/train_gpu.sbatch
-sbatch --test-only --account="$JLAB_ACCOUNT" jobs/jlab_ifarm/compare.sbatch
-jobs/jlab_ifarm/submit_workflow.sh
-squeue -u "$USER"
+swif2 list -display json
+./dvcs farm-corpus-submit --project ifarm-acceptance --corpus ifarm-acceptance-corpus --profile validation --dry-run
+./dvcs farm-submit --project ifarm-acceptance --corpus ifarm-acceptance-corpus --selection baseline --profile validation --corpus-archive /absolute/corpus.tar.gz --dry-run
 ```
 
-The production wrapper excludes optional Optuna optimization. When needed,
-validate its separate submission with
-`jobs/jlab_ifarm/submit_workflow.sh --optimization-only`.
+Remove `--dry-run` only after reviewing the generated requests and paths. Add
+`--include-optimize` only when an Optuna campaign is intended.
 
 Answer yes when the ifarm GPU-doctor prompt appears. In noninteractive
 acceptance, run
 `DVCS_IFARM_GPU_DOCTOR=yes ./dvcs doctor ifarm-acceptance` instead.
 
 Before submitting the full workflow, run the allocated GPU smoke test in
-[JLab ifarm and farm guide](JLAB_IFARM.md#gpu-resource-propagation). It follows
+[JLab ifarm and farm guide](JLAB_IFARM.md#interactive-setup-and-checks). It follows
 JLab's [GPU access instructions](https://scicomp.jlab.org/docs/Access_GPUs)
 and verifies `nvidia-smi`, the scheduler's `CUDA_VISIBLE_DEVICES`, Apptainer
 `--nv` passthrough, and PyTorch CUDA detection inside the SIF.

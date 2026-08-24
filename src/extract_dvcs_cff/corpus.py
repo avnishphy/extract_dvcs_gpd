@@ -341,8 +341,23 @@ def _generate_truth(*, corpus: Path, client: NativeCache,
 def generate_corpus(*, corpus: Path, bridge: Path,
                     requested_observables: Sequence[str] | None = None,
                     show_progress: bool | None = None,
-                    force_native: bool = False) -> dict[str, Any]:
+                    force_native: bool = False,
+                    max_shards: int | None = None,
+                    shard_start: int | None = None) -> dict[str, Any]:
     """Generate missing core shards or append missing observable extensions."""
+
+    if max_shards is not None and (
+        isinstance(max_shards, bool)
+        or not isinstance(max_shards, int)
+        or max_shards < 1
+    ):
+        raise ValueError("max_shards must be a positive integer")
+    if shard_start is not None and (
+        isinstance(shard_start, bool)
+        or not isinstance(shard_start, int)
+        or shard_start < 0
+    ):
+        raise ValueError("shard_start must be a nonnegative integer")
 
     manifest_path = corpus / "corpus.json"
     manifest = _load_manifest(manifest_path)
@@ -362,7 +377,16 @@ def generate_corpus(*, corpus: Path, bridge: Path,
         raise ValueError("requested observables are not the declared ordered subset")
     missing = [name for name in names
                if name not in manifest["available_observables"]]
-    core_complete = len(manifest["core_shards"]) == manifest["shard_count"]
+    shard_count = int(manifest["shard_count"])
+    existing_indices = [
+        int(record["shard_index"]) for record in manifest["core_shards"]
+    ]
+    if (
+        len(existing_indices) != len(set(existing_indices))
+        or any(index < 0 or index >= shard_count for index in existing_indices)
+    ):
+        raise RuntimeError("corpus manifest contains invalid core shard indices")
+    core_complete = len(existing_indices) == shard_count
     if core_complete and not missing:
         return {
             "status": "complete_cache_hit",
@@ -385,16 +409,30 @@ def generate_corpus(*, corpus: Path, bridge: Path,
         manifest = _write_manifest(manifest_path, manifest)
 
     if not core_complete:
-        if manifest["core_shards"]:
-            start_shard = len(manifest["core_shards"])
-        else:
-            start_shard = 0
         count = int(manifest["core_identity"]["parameter_count"])
         shard_size = int(manifest["shard_size"])
         combined_config = _configuration_for_observables(
             config, metadata, names
         )
-        for shard_index in range(start_shard, manifest["shard_count"]):
+        existing_index_set = set(existing_indices)
+        if shard_start is None:
+            selected_indices = [
+                index for index in range(shard_count)
+                if index not in existing_index_set
+            ]
+            if max_shards is not None:
+                selected_indices = selected_indices[:max_shards]
+        else:
+            if shard_start >= shard_count:
+                raise ValueError("shard_start must be smaller than shard_count")
+            stop_shard = shard_count if max_shards is None else min(
+                shard_count, shard_start + max_shards
+            )
+            selected_indices = [
+                index for index in range(shard_start, stop_shard)
+                if index not in existing_index_set
+            ]
+        for shard_index in selected_indices:
             target = min(shard_size, count - shard_index * shard_size)
             rng = np.random.Generator(np.random.PCG64(
                 np.random.SeedSequence([
@@ -476,6 +514,7 @@ def generate_corpus(*, corpus: Path, bridge: Path,
                 observable_record["path"] = _shard_relative(
                     observable_path, corpus
                 )
+                observable_record["shard_index"] = shard_index
                 extension = manifest["available_observables"].setdefault(
                     name, {"metadata": metadata[name], "shards": []}
                 )
@@ -493,7 +532,24 @@ def generate_corpus(*, corpus: Path, bridge: Path,
             manifest["rejected_candidate_count"] += len(rejected)
             manifest["status"] = "partial"
             manifest = _write_manifest(manifest_path, manifest)
-        core_complete = True
+        manifest["core_shards"].sort(key=lambda record: int(record["shard_index"]))
+        for extension in manifest["available_observables"].values():
+            extension["shards"].sort(
+                key=lambda record: int(record.get(
+                    "shard_index", Path(record["path"]).stem.split("-")[-1]
+                ))
+            )
+        manifest = _write_manifest(manifest_path, manifest)
+        core_complete = len(manifest["core_shards"]) == shard_count
+        if not core_complete:
+            return {
+                "status": "partial",
+                "corpus": manifest["corpus_name"],
+                "completed_shards": len(manifest["core_shards"]),
+                "generated_shard_indices": selected_indices,
+                "shard_count": shard_count,
+                "manifest_sha256": manifest["manifest_sha256"],
+            }
         missing = []
 
     # Appending an observable replays only that native observable for the
@@ -561,6 +617,7 @@ def generate_corpus(*, corpus: Path, bridge: Path,
                 values=native.predictions,
             )
             record["path"] = _shard_relative(path, corpus)
+            record["shard_index"] = shard_index
             evidence = _archive_native_cache(
                 client.cache_root,
                 corpus / "evidence" / "observables" / name /
@@ -638,19 +695,41 @@ def assert_corpus_compatible(*, corpus: Path, configuration_path: Path,
     return manifest
 
 
-def verify_corpus(*, corpus: Path, deep: bool = False) -> dict[str, Any]:
+def verify_corpus(*, corpus: Path, deep: bool = False,
+                  allow_partial: bool = False) -> dict[str, Any]:
     """Verify manifest structure and optionally every shard byte and array."""
 
     manifest = _load_manifest(corpus / "corpus.json")
     expected_shards = int(manifest["shard_count"])
-    if len(manifest["core_shards"]) != expected_shards:
+    completed_shards = len(manifest["core_shards"])
+    core_indices = [
+        int(record["shard_index"]) for record in manifest["core_shards"]
+    ]
+    if completed_shards > expected_shards:
+        raise RuntimeError("corpus contains more core shards than declared")
+    if (
+        core_indices != sorted(core_indices)
+        or len(core_indices) != len(set(core_indices))
+        or any(index < 0 or index >= expected_shards for index in core_indices)
+    ):
+        raise RuntimeError("core shard indices are invalid, duplicated, or unordered")
+    if completed_shards != expected_shards and not allow_partial:
         raise RuntimeError("corpus core is incomplete")
     seen: list[int] = []
     verified_files = 0
     records = list(manifest["core_shards"])
     for extension in manifest["available_observables"].values():
-        if len(extension["shards"]) != expected_shards:
+        required_shards = completed_shards if allow_partial else expected_shards
+        if len(extension["shards"]) != required_shards:
             raise RuntimeError("observable extension is incomplete")
+        extension_indices = [
+            int(record.get(
+                "shard_index", Path(record["path"]).stem.split("-")[-1]
+            ))
+            for record in extension["shards"]
+        ]
+        if extension_indices != core_indices:
+            raise RuntimeError("observable extension shard indices differ from core")
         records.extend(extension["shards"])
     if manifest["truth"] is not None:
         records.append(manifest["truth"]["core"])
@@ -689,27 +768,39 @@ def verify_corpus(*, corpus: Path, deep: bool = False) -> dict[str, Any]:
                     raise RuntimeError(f"empty native evidence archive: {path}")
         verified_files += 1
     if deep:
-        expected = list(range(int(manifest["core_identity"]["parameter_count"])))
+        shard_size = int(manifest["shard_size"])
+        parameter_count = int(manifest["core_identity"]["parameter_count"])
+        expected = [
+            group_index
+            for shard_index in core_indices
+            for group_index in range(
+                shard_index * shard_size,
+                min(parameter_count, (shard_index + 1) * shard_size),
+            )
+        ]
         if seen != expected:
-            raise RuntimeError("core group indices are not unique and contiguous")
+            raise RuntimeError("core group indices do not match declared shards")
     partials = list(corpus.rglob("*.partial"))
     if partials:
         raise RuntimeError(f"unfinished atomic shard files remain: {partials}")
     return {
-        "status": "verified",
+        "status": "partial_verified" if completed_shards != expected_shards else "verified",
         "deep": bool(deep),
         "corpus": manifest["corpus_name"],
         "manifest_sha256": manifest["manifest_sha256"],
         "verified_file_count": verified_files,
+        "completed_shards": completed_shards,
+        "shard_count": expected_shards,
         "parameter_count": manifest["core_identity"]["parameter_count"],
         "observable_count": len(manifest["available_observables"]),
     }
 
 
-def export_corpus(*, corpus: Path, archive_path: Path) -> dict[str, Any]:
+def export_corpus(*, corpus: Path, archive_path: Path,
+                  allow_partial: bool = False) -> dict[str, Any]:
     """Write one portable, verified archive without altering the corpus."""
 
-    verification = verify_corpus(corpus=corpus, deep=True)
+    verification = verify_corpus(corpus=corpus, deep=True, allow_partial=allow_partial)
     if archive_path.exists():
         raise FileExistsError(f"corpus archive already exists: {archive_path}")
     symlinks = [path for path in corpus.rglob("*") if path.is_symlink()]
@@ -725,7 +816,7 @@ def export_corpus(*, corpus: Path, archive_path: Path) -> dict[str, Any]:
             raise RuntimeError("corpus export archive is empty")
     os.replace(temporary, archive_path)
     return {
-        "status": "exported",
+        "status": "checkpoint_exported" if allow_partial else "exported",
         "corpus": corpus.name,
         "archive": str(archive_path),
         "archive_sha256": sha256(archive_path),
@@ -734,7 +825,8 @@ def export_corpus(*, corpus: Path, archive_path: Path) -> dict[str, Any]:
     }
 
 
-def import_corpus(*, archive_path: Path, corpus: Path) -> dict[str, Any]:
+def import_corpus(*, archive_path: Path, corpus: Path,
+                  allow_partial: bool = False) -> dict[str, Any]:
     """Safely import, rebind, and deeply verify one portable corpus archive."""
 
     if corpus.exists():
@@ -766,15 +858,205 @@ def import_corpus(*, archive_path: Path, corpus: Path) -> dict[str, Any]:
             "archive_sha256": sha256(source),
         }
         manifest = _write_manifest(manifest_path, manifest)
-        verification = verify_corpus(corpus=corpus, deep=True)
+        verification = verify_corpus(corpus=corpus, deep=True, allow_partial=allow_partial)
     except Exception:
         shutil.rmtree(corpus)
         raise
     return {
-        "status": "imported",
+        "status": "checkpoint_imported" if allow_partial else "imported",
         "corpus": corpus.name,
         "path": str(corpus),
         "manifest_sha256": manifest["manifest_sha256"],
+        "verification": verification,
+    }
+
+
+def _records_have_equal_arrays(
+    left_corpus: Path, left: Mapping[str, Any],
+    right_corpus: Path, right: Mapping[str, Any],
+) -> bool:
+    with np.load(left_corpus / left["path"], allow_pickle=False) as left_arrays, \
+            np.load(right_corpus / right["path"], allow_pickle=False) as right_arrays:
+        if set(left_arrays.files) != set(right_arrays.files):
+            return False
+        return all(
+            np.array_equal(left_arrays[name], right_arrays[name])
+            for name in left_arrays.files
+        )
+
+
+def merge_corpora(*, corpora: Sequence[Path], destination: Path,
+                  consume_sources: bool = False) -> dict[str, Any]:
+    """Merge disjoint, deeply verified shard batches into one complete corpus."""
+
+    if len(corpora) < 2:
+        raise ValueError("at least two corpus shard batches are required")
+    if destination.exists() or destination.is_symlink():
+        raise FileExistsError(f"corpus already exists: {destination}")
+    sources = [path.resolve(strict=True) for path in corpora]
+    if len(sources) != len(set(sources)):
+        raise ValueError("corpus shard batch paths must be distinct")
+
+    manifests: list[dict[str, Any]] = []
+    for source in sources:
+        if not source.is_dir() or source.is_symlink():
+            raise RuntimeError(f"corpus shard batch must be a real directory: {source}")
+        symlinks = [path for path in source.rglob("*") if path.is_symlink()]
+        if symlinks:
+            raise RuntimeError(f"corpus merge refuses symlinks: {symlinks}")
+        verify_corpus(corpus=source, deep=True, allow_partial=True)
+        manifests.append(_load_manifest(source / "corpus.json"))
+
+    reference = manifests[0]
+    identity_fields = (
+        "schema_version", "core_identity_sha256", "shard_size", "shard_count",
+        "profile_source", "requested_observables", "observable_metadata",
+    )
+    reference_identity = {field: reference[field] for field in identity_fields}
+    reference_configuration = json.loads(
+        (sources[0] / reference["configuration"]).read_text(encoding="utf-8")
+    )
+    reference_physics = json.loads(
+        (sources[0] / reference["physics_configuration"]).read_text(encoding="utf-8")
+    )
+    reference_backend = json.loads(
+        (sources[0] / reference["native_backend_provenance"]).read_text(
+            encoding="utf-8"
+        )
+    )
+    reference_observables = list(reference["available_observables"])
+    if reference["truth"] is None:
+        raise RuntimeError("corpus shard batch is missing truth data")
+
+    combined_core: dict[int, dict[str, Any]] = {}
+    combined_observables: dict[str, dict[int, dict[str, Any]]] = {
+        name: {} for name in reference_observables
+    }
+    shard_sources: dict[int, int] = {}
+    for source_index, (source, manifest) in enumerate(zip(sources, manifests)):
+        observed_identity = {field: manifest[field] for field in identity_fields}
+        if observed_identity != reference_identity:
+            raise RuntimeError("corpus shard batch identity mismatch")
+        if list(manifest["available_observables"]) != reference_observables:
+            raise RuntimeError("corpus shard batch observable mismatch")
+        if json.loads((source / manifest["configuration"]).read_text()) != reference_configuration:
+            raise RuntimeError("corpus shard batch workflow configuration mismatch")
+        if json.loads((source / manifest["physics_configuration"]).read_text()) != reference_physics:
+            raise RuntimeError("corpus shard batch physics configuration mismatch")
+        if json.loads((source / manifest["native_backend_provenance"]).read_text()) != reference_backend:
+            raise RuntimeError("corpus shard batch backend provenance mismatch")
+        if manifest["truth"] is None or not _records_have_equal_arrays(
+            sources[0], reference["truth"]["core"], source, manifest["truth"]["core"]
+        ):
+            raise RuntimeError("corpus shard batch truth core mismatch")
+        for name in reference_observables:
+            if not _records_have_equal_arrays(
+                sources[0], reference["truth"]["observables"][name],
+                source, manifest["truth"]["observables"][name],
+            ):
+                raise RuntimeError("corpus shard batch truth observable mismatch")
+        for position, core_record in enumerate(manifest["core_shards"]):
+            shard_index = int(core_record["shard_index"])
+            if shard_index in combined_core:
+                raise RuntimeError(f"duplicate corpus shard index: {shard_index}")
+            combined_core[shard_index] = deepcopy(core_record)
+            shard_sources[shard_index] = source_index
+            for name in reference_observables:
+                combined_observables[name][shard_index] = deepcopy(
+                    manifest["available_observables"][name]["shards"][position]
+                )
+
+    shard_count = int(reference["shard_count"])
+    if sorted(combined_core) != list(range(shard_count)):
+        raise RuntimeError("corpus shard batches do not provide complete disjoint coverage")
+
+    def copy_record(source: Path, record: Mapping[str, Any]) -> None:
+        paths = [record["path"]]
+        if record.get("native_evidence") is not None:
+            paths.append(record["native_evidence"]["path"])
+        for relative in paths:
+            target = destination / relative
+            if target.exists() or target.is_symlink():
+                raise RuntimeError(f"merged corpus path collision: {relative}")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if consume_sources:
+                shutil.move(source / relative, target)
+            else:
+                shutil.copy2(source / relative, target)
+
+    if consume_sources:
+        shutil.move(sources[0], destination)
+    else:
+        shutil.copytree(sources[0], destination)
+    try:
+        first_indices = {
+            int(record["shard_index"]) for record in manifests[0]["core_shards"]
+        }
+        for shard_index in range(shard_count):
+            if shard_index in first_indices:
+                continue
+            source_index = shard_sources[shard_index]
+            source = sources[source_index]
+            copy_record(source, combined_core[shard_index])
+            for name in reference_observables:
+                copy_record(source, combined_observables[name][shard_index])
+            rejection = Path("rejections") / f"shard-{shard_index:06d}.json"
+            rejection_target = destination / rejection
+            if rejection_target.exists() or rejection_target.is_symlink():
+                raise RuntimeError(f"merged corpus path collision: {rejection}")
+            rejection_target.parent.mkdir(parents=True, exist_ok=True)
+            if consume_sources:
+                shutil.move(source / rejection, rejection_target)
+            else:
+                shutil.copy2(source / rejection, rejection_target)
+
+        merged = deepcopy(reference)
+        merged.pop("import_provenance", None)
+        merged["corpus_name"] = destination.name
+        merged["corpus_root"] = str(destination.resolve())
+        merged["status"] = "complete"
+        merged["core_shards"] = [combined_core[index] for index in range(shard_count)]
+        merged["available_observables"] = {
+            name: {
+                "metadata": deepcopy(reference["available_observables"][name]["metadata"]),
+                "shards": [
+                    combined_observables[name][index] for index in range(shard_count)
+                ],
+            }
+            for name in reference_observables
+        }
+        merged["rejected_candidate_count"] = sum(
+            int(manifest["rejected_candidate_count"]) for manifest in manifests
+        )
+        merged["merge_provenance"] = {
+            "source_count": len(sources),
+            "sources": [
+                {
+                    "corpus": manifest["corpus_name"],
+                    "manifest_sha256": manifest["manifest_sha256"],
+                    "shard_indices": [
+                        int(record["shard_index"])
+                        for record in manifest["core_shards"]
+                    ],
+                }
+                for manifest in manifests
+            ],
+        }
+        merged = _write_manifest(destination / "corpus.json", merged)
+        verification = verify_corpus(corpus=destination, deep=True)
+        if consume_sources:
+            for source in sources[1:]:
+                shutil.rmtree(source)
+    except Exception:
+        shutil.rmtree(destination)
+        raise
+    return {
+        "status": "merged",
+        "corpus": destination.name,
+        "source_count": len(sources),
+        "sources_consumed": bool(consume_sources),
+        "shard_count": shard_count,
+        "manifest_sha256": merged["manifest_sha256"],
         "verification": verification,
     }
 
@@ -831,15 +1113,24 @@ def create_selection(*, corpus: Path, selection_path: Path, profile: str,
 
 
 def _load_exact_arrays(corpus: Path, manifest: Mapping[str, Any],
-                       observable_names: Sequence[str]) -> tuple[
+                       observable_names: Sequence[str],
+                       show_progress: bool | None = None) -> tuple[
                            np.ndarray, np.ndarray, np.ndarray
                        ]:
+    from extract_dvcs_cff.progress import progress_iter
+
     parameters: list[np.ndarray] = []
     cffs: list[np.ndarray] = []
     observable_blocks: dict[str, list[np.ndarray]] = {
         name: [] for name in observable_names
     }
-    for shard_index, core_record in enumerate(manifest["core_shards"]):
+    core_shards = manifest["core_shards"]
+    shard_iterator = progress_iter(
+        core_shards, total=len(core_shards),
+        description="Loading corpus shards", enabled=show_progress,
+        unit="shard", leave=True,
+    )
+    for shard_index, core_record in enumerate(shard_iterator):
         with np.load(corpus / core_record["path"], allow_pickle=False) as core:
             parameters.append(core["native_parameters"])
             cffs.append(core["native_cffs"])
@@ -871,7 +1162,8 @@ def _load_exact_arrays(corpus: Path, manifest: Mapping[str, Any],
 
 def materialize_selection(*, corpus: Path, selection_path: Path,
                           configuration_path: Path, workspace: Path,
-                          profile: str, bridge: Path) -> dict[str, Any]:
+                          profile: str, bridge: Path,
+                          show_progress: bool | None = None) -> dict[str, Any]:
     """Serialize realization publication and reuse an identical result.
 
     Multi-GPU Optuna starts one CLI process per device.  Every process names
@@ -896,17 +1188,20 @@ def materialize_selection(*, corpus: Path, selection_path: Path,
             workspace=workspace,
             profile=profile,
             bridge=bridge,
+            show_progress=show_progress,
         )
 
 
 def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
                                   configuration_path: Path, workspace: Path,
-                                  profile: str, bridge: Path) -> dict[str, Any]:
+                                  profile: str, bridge: Path,
+                                  show_progress: bool | None = None) -> dict[str, Any]:
     """Build deterministic neural tensors from clean exact corpus groups."""
 
     from extract_dvcs_cff.inference.stage10 import (
         build_stage10_context, stage10_physical_to_latent,
     )
+    from extract_dvcs_cff.progress import progress_iter
     import torch
 
     verification = verify_corpus(corpus=corpus, deep=False)
@@ -1021,6 +1316,13 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
             and complete_files
             and not any(output.glob("*.partial"))
         ):
+            _atomic_json(workspace / "materialization_progress.json", {
+                "schema_version": 1,
+                "phase": "complete",
+                "completed": 1,
+                "total": 1,
+                "status": "reused",
+            })
             return {
                 "status": "reused",
                 "native_called": False,
@@ -1031,7 +1333,7 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
                 ),
             }
     parameters, native_predictions, native_cffs = _load_exact_arrays(
-        corpus, manifest, observable_names
+        corpus, manifest, observable_names, show_progress
     )
     with np.load(corpus / manifest["truth"]["core"]["path"], allow_pickle=False) as truth:
         truth_parameters = truth["parameters"][0]
@@ -1059,49 +1361,82 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
         ("test", selection["outer_test_group_indices"]),
     )
     replicates = int(config["profiles"][profile]["noise_replicates_per_parameter"])
-    theta_rows: list[np.ndarray] = []
-    observations: list[np.ndarray] = []
-    contexts: list[np.ndarray] = []
-    parameter_indices: list[int] = []
-    row_roles: list[str] = []
+    group_count = sum(len(group_indices) for _, group_indices in roles)
+    context_count = group_count * replicates
+    theta_physical = np.empty(
+        (context_count, parameters.shape[1] + 2), dtype=np.float64
+    )
+    observations_normalized = np.empty(
+        (context_count, len(point_table)), dtype=np.float64
+    )
+    contexts: np.ndarray | None = None
+    parameter_indices = np.empty(context_count, dtype=np.int64)
+    role_codes = np.empty(context_count, dtype=np.uint8)
+    role_code = {"train": 0, "validation": 1, "test": 2}
+    progress_path = workspace / "materialization_progress.json"
+    _atomic_json(progress_path, {
+        "schema_version": 1, "phase": "contexts",
+        "completed": 0, "total": group_count, "status": "running",
+    })
     noise_seed = int(config["seeds"]["training_noise"])
-    for role, group_indices in roles:
-        for group_index in group_indices:
-            for replica in range(replicates):
-                rng = np.random.Generator(np.random.PCG64(
-                    np.random.SeedSequence([
-                        noise_seed, int(group_index), replica,
-                        REALIZATION_SCHEMA_VERSION,
-                    ])
-                ))
-                eta_global, eta_lu = rng.standard_normal(2)
-                theta = np.concatenate((
-                    parameters[group_index], [eta_global, eta_lu]
-                ))
-                mean = _effective_prediction(
-                    native_predictions[group_index], eta_global, eta_lu,
-                    global_response, lu_response,
+    group_iterator = progress_iter(
+        (
+            (role, int(group_index))
+            for role, group_indices in roles
+            for group_index in group_indices
+        ),
+        total=group_count, description="Materializing training contexts",
+        enabled=show_progress, unit="parameter", leave=True,
+    )
+    row_index = 0
+    update_interval = max(1, group_count // 100)
+    for group_position, (role, group_index) in enumerate(group_iterator, 1):
+        for replica in range(replicates):
+            rng = np.random.Generator(np.random.PCG64(
+                np.random.SeedSequence([
+                    noise_seed, int(group_index), replica,
+                    REALIZATION_SCHEMA_VERSION,
+                ])
+            ))
+            eta_global, eta_lu = rng.standard_normal(2)
+            theta = np.concatenate((
+                parameters[group_index], [eta_global, eta_lu]
+            ))
+            mean = _effective_prediction(
+                native_predictions[group_index], eta_global, eta_lu,
+                global_response, lu_response,
+            )
+            observed = mean + cholesky @ rng.standard_normal(len(point_table))
+            context = build_stage10_context(
+                points=point_table, observed=observed,
+                covariance=covariance,
+                global_normalization_response=global_response,
+                lu_normalization_response=lu_response,
+            )
+            if contexts is None:
+                contexts = np.empty(
+                    (context_count, len(context)), dtype=np.float32
                 )
-                observed = mean + cholesky @ rng.standard_normal(len(point_table))
-                context = build_stage10_context(
-                    points=point_table, observed=observed,
-                    covariance=covariance,
-                    global_normalization_response=global_response,
-                    lu_normalization_response=lu_response,
-                )
-                theta_rows.append(theta)
-                observations.append(observed)
-                contexts.append(context)
-                parameter_indices.append(int(group_index))
-                row_roles.append(role)
-    theta_physical = np.asarray(theta_rows, dtype=np.float64)
+            theta_physical[row_index] = theta
+            observations_normalized[row_index] = observed
+            contexts[row_index] = context
+            parameter_indices[row_index] = group_index
+            role_codes[row_index] = role_code[role]
+            row_index += 1
+        if group_position % update_interval == 0 or group_position == group_count:
+            _atomic_json(progress_path, {
+                "schema_version": 1, "phase": "contexts",
+                "completed": group_position, "total": group_count,
+                "status": "running",
+            })
+    if contexts is None or row_index != context_count:
+        raise RuntimeError("materialized context count differs from selection")
     theta_latent = stage10_physical_to_latent(
         torch.from_numpy(theta_physical)
     ).numpy()
-    role_array = np.asarray(row_roles)
-    train_indices = np.flatnonzero(role_array == "train")
-    validation_indices = np.flatnonzero(role_array == "validation")
-    test_indices = np.flatnonzero(role_array == "test")
+    train_indices = np.flatnonzero(role_codes == role_code["train"])
+    validation_indices = np.flatnonzero(role_codes == role_code["validation"])
+    test_indices = np.flatnonzero(role_codes == role_code["test"])
     pseudo_rng = np.random.Generator(np.random.PCG64(
         int(config["seeds"]["pseudodata"])
     ))
@@ -1130,12 +1465,12 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
         "native_cffs": native_cffs,
         "theta_physical": theta_physical,
         "theta_latent": theta_latent,
-        "observations_normalized": np.asarray(observations),
-        "contexts": np.asarray(contexts, dtype=np.float32),
+        "observations_normalized": observations_normalized,
+        "contexts": contexts,
         "covariance_normalized": covariance,
         "global_normalization_response": global_response,
         "lu_normalization_response": lu_response,
-        "parameter_indices": np.asarray(parameter_indices, dtype=np.int64),
+        "parameter_indices": parameter_indices,
         "train_indices": train_indices,
         "validation_indices": validation_indices,
         "test_indices": test_indices,
@@ -1146,7 +1481,16 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
         "truth_native_predictions_normalized": truth_predictions,
     }
     array_records: dict[str, Any] = {}
-    for name, value in arrays.items():
+    _atomic_json(progress_path, {
+        "schema_version": 1, "phase": "arrays",
+        "completed": 0, "total": len(arrays), "status": "running",
+    })
+    array_iterator = progress_iter(
+        arrays.items(), total=len(arrays),
+        description="Writing training arrays", enabled=show_progress,
+        unit="array", leave=True,
+    )
+    for array_index, (name, value) in enumerate(array_iterator, 1):
         path = output / f"{name}.npy"
         with tempfile.NamedTemporaryFile(dir=output, delete=False) as stream:
             temporary = Path(stream.name)
@@ -1158,6 +1502,11 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
             "path": path.name, "sha256": sha256(path),
             "shape": list(value.shape), "dtype": str(value.dtype),
         }
+        _atomic_json(progress_path, {
+            "schema_version": 1, "phase": "arrays",
+            "completed": array_index, "total": len(arrays),
+            "status": "running",
+        })
     _atomic_json(output / "array_manifest.json", {
         "schema_version": 2,
         "arrays": array_records,
@@ -1231,6 +1580,10 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
         "realization_manifest_sha256": sha256(array_manifest_path),
     }
     _atomic_json(contract_path, expected_contract)
+    _atomic_json(progress_path, {
+        "schema_version": 1, "phase": "complete",
+        "completed": 1, "total": 1, "status": "materialized",
+    })
     return {
         "status": "materialized",
         "native_called": False,
