@@ -11,6 +11,8 @@ database_archive="${7:?database archive}" corpus_archive="${8:?corpus archive or
 state_input="${9:?project input}" state_output="${10:?project output}"
 summary_output="${11:?summary output}" accelerator="${12:?accelerator}"
 heartbeat_seconds="${13:?heartbeat seconds}"
+collector="${14:?performance collector}" performance_summary="${15:?performance summary}"
+performance_samples="${16:?performance samples}" performance_interval="${17:?performance interval}"
 
 [[ "${stage}" =~ ^(selection|optimize|train|evaluate|compare|holdout|plot)$ ]] || {
     echo "unsupported analysis stage: ${stage}" >&2
@@ -18,9 +20,10 @@ heartbeat_seconds="${13:?heartbeat seconds}"
 }
 [[ "${accelerator}" == cpu || "${accelerator}" == cuda ]] || exit 64
 [[ "${heartbeat_seconds}" =~ ^[0-9]+$ ]] || exit 64
+[[ "${performance_interval}" =~ ^[1-9][0-9]*$ ]] || exit 64
 cd "${SWIF_JOB_WORK_DIR}"
 
-for path in "${image}" "${database_archive}" "${state_input}"; do
+for path in "${image}" "${database_archive}" "${state_input}" "${collector}"; do
     [[ -s "${path}" && ! -L "${path}" ]] || {
         echo "staged input is missing or unsafe: ${path}" >&2
         exit 66
@@ -90,6 +93,22 @@ if [[ "${accelerator}" == cuda ]]; then
 fi
 container+=("${image}")
 
+started_epoch="$(date +%s)"
+performance_pid=
+stop_performance() {
+    if [[ -n "${performance_pid}" ]]; then
+        kill -TERM "${performance_pid}" 2>/dev/null || true
+        wait "${performance_pid}" 2>/dev/null || true
+        performance_pid=
+    fi
+}
+trap stop_performance EXIT
+/usr/bin/python3 "${collector}" --stage "${stage}" --accelerator "${accelerator}" \
+    --interval "${performance_interval}" --samples "${performance_samples}" \
+    --summary "${performance_summary}" &
+performance_pid=$!
+echo "[dvcs-swif2] start stage=${stage} job=${SLURM_JOB_ID} host=$(hostname) cpus=${SLURM_CPUS_PER_TASK} gpus=${CUDA_VISIBLE_DEVICES:-none}"
+
 if [[ "${corpus_archive}" != none ]]; then
     cp --reflink=auto "${corpus_archive}" workspace/.corpus_exports/staged-corpus.tar.gz
     "${container[@]}" corpus-import staged-corpus "${corpus}" > corpus-import.json
@@ -113,11 +132,12 @@ case "${stage}" in
 esac
 
 progress_snapshot() {
-    python3 - "${stage}" "workspace/${project}/results/${profile}" <<'PY' 2>/dev/null || true
+    python3 - "${stage}" "workspace/${project}/results/${profile}" \
+      "${performance_summary}" <<'PY' 2>/dev/null || true
 import json, sys
 from pathlib import Path
 
-stage, root = sys.argv[1], Path(sys.argv[2])
+stage, root, performance = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
 materialization = root / "materialization_progress.json"
 if materialization.is_file():
     record = json.loads(materialization.read_text())
@@ -126,11 +146,22 @@ if stage == "train":
     print(f"models={len(list((root / 'training').glob('seed_*/training_metrics.json')))}", end="")
 elif stage == "optimize":
     print(f"trials={len(list((root / 'optimization/trials').glob('trial_*')))}", end="")
+if performance.is_file():
+    metrics = json.loads(performance.read_text())
+    efficiency = metrics.get("cpu", {}).get("efficiency_percent")
+    memory = metrics.get("memory", {}).get("max_current_bytes")
+    if efficiency is not None:
+        print(f" cpu_efficiency={efficiency:.1f}%", end="")
+    if memory is not None:
+        print(f" memory_gib={memory / 2**30:.2f}", end="")
+    devices = metrics.get("gpu", {}).get("devices", [])
+    if devices and devices[0].get("mean_gpu_utilization_percent") is not None:
+        print(f" gpu_mean={devices[0]['mean_gpu_utilization_percent']:.1f}%", end="")
+    if devices and devices[0].get("max_memory_used_mib") is not None:
+        print(f" gpu_memory_mib={devices[0]['max_memory_used_mib']:.0f}", end="")
 PY
 }
 
-started_epoch="$(date +%s)"
-echo "[dvcs-swif2] start stage=${stage} job=${SWIF_JOB_ID} host=$(hostname) cpus=${SLURM_CPUS_PER_TASK} gpus=${CUDA_VISIBLE_DEVICES:-none}"
 set +e
 "${container[@]}" "${payload[@]}" > payload.json 2> >(tee payload.err >&2) &
 payload_pid=$!
@@ -151,12 +182,26 @@ if [[ -n "${heartbeat_pid}" ]]; then
     wait "${heartbeat_pid}" 2>/dev/null
 fi
 set -e
+if (( status == 0 )); then
+    if find "workspace/${project}" -type l -print -quit | grep -q .; then
+        echo "project output contains a symlink" >&2
+        exit 65
+    fi
+    tar -cf "${state_output}.partial" -C workspace "${project}"
+    mv "${state_output}.partial" "${state_output}"
+fi
+stop_performance
+trap - EXIT
 
-python3 - "${summary_output}" "${stage}" "${status}" "${started_epoch}" <<'PY'
+python3 - "${summary_output}" "${stage}" "${status}" "${started_epoch}" \
+  "${performance_summary}" <<'PY'
 import json, os, platform, sys, time
 from pathlib import Path
 
-output, stage, status, started = sys.argv[1:]
+output, stage, status, started, performance = sys.argv[1:]
+performance_record = json.loads(Path(performance).read_text())
+if performance_record.get("status") != "complete":
+    raise SystemExit("performance collection did not complete")
 record = {
     "schema_version": 1,
     "status": "ok" if int(status) == 0 else "failed",
@@ -167,6 +212,7 @@ record = {
     "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
     "swif_job_id": os.environ.get("SWIF_JOB_ID"),
     "swif_job_attempt_id": os.environ.get("SWIF_JOB_ATTEMPT_ID"),
+    "performance": performance_record,
 }
 runtime = Path("results/provenance/runtime.json")
 if runtime.is_file():
@@ -174,11 +220,4 @@ if runtime.is_file():
 Path(output).write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
 PY
 (( status == 0 )) || exit "${status}"
-
-if find "workspace/${project}" -type l -print -quit | grep -q .; then
-    echo "project output contains a symlink" >&2
-    exit 65
-fi
-tar -cf "${state_output}.partial" -C workspace "${project}"
-mv "${state_output}.partial" "${state_output}"
 echo "[dvcs-swif2] finish stage=${stage} elapsed_seconds=$(($(date +%s) - started_epoch))"

@@ -173,6 +173,7 @@ def analysis_workflow(args: argparse.Namespace) -> dict[str, Any]:
     corpus_archive = checked_file(args.corpus_archive, "corpus archive")
     initial_project = checked_file(args.project_archive, "project archive")
     runner = checked_file(args.runner, "analysis runner")
+    collector = checked_file(args.collector, "performance collector")
     result_root = Path(args.result_root).expanduser().resolve()
     log_root = Path(args.log_root).expanduser().resolve()
     stages = select_stages(args)
@@ -181,6 +182,7 @@ def analysis_workflow(args: argparse.Namespace) -> dict[str, Any]:
     database_name, database_input = staged(database, "gpddatabase")
     corpus_name, corpus_input = staged(corpus_archive, "corpus")
     runner_name, runner_input = staged(runner, "analysis-runner")
+    collector_name, collector_input = staged(collector, "performance-collector")
     project_name, project_input = staged(initial_project, "project-state")
     prior_job: str | None = None
     jobs: list[dict[str, Any]] = []
@@ -192,6 +194,8 @@ def analysis_workflow(args: argparse.Namespace) -> dict[str, Any]:
         resources = resource(stage)
         output_local = f"project-after-{stage}.tar"
         summary_local = f"summary-{stage}.json"
+        performance_local = f"performance-{stage}.json"
+        samples_local = f"performance-{stage}.jsonl"
         output_remote = result_root / "state" / f"{workflow}-{output_local}"
         summary_remote = result_root / "summaries" / f"{workflow}-{summary_local}"
         job = job_base(
@@ -200,7 +204,7 @@ def analysis_workflow(args: argparse.Namespace) -> dict[str, Any]:
         )
         if prior_job:
             job["antecedents"] = [prior_job]
-        inputs = [image_input, database_input, runner_input]
+        inputs = [image_input, database_input, runner_input, collector_input]
         if index == 1:
             inputs.append(project_input)
         else:
@@ -211,6 +215,14 @@ def analysis_workflow(args: argparse.Namespace) -> dict[str, Any]:
         job["outputs"] = [
             transfer(output_local, output_remote),
             transfer(summary_local, summary_remote),
+            transfer(
+                performance_local,
+                result_root / "performance" / f"{workflow}-{performance_local}",
+            ),
+            transfer(
+                samples_local,
+                result_root / "performance" / f"{workflow}-{samples_local}",
+            ),
         ]
         accelerator = "cuda" if stage in GPU_STAGES else "cpu"
         job["command"] = command(
@@ -219,6 +231,8 @@ def analysis_workflow(args: argparse.Namespace) -> dict[str, Any]:
             corpus_name if stage in CORPUS_STAGES else "none",
             state_local, output_local, summary_local, accelerator,
             str(args.heartbeat_seconds),
+            collector_name, performance_local, samples_local,
+            str(args.performance_interval_seconds),
         )
         jobs.append(job)
         prior_job = name
@@ -244,6 +258,7 @@ def corpus_workflow(args: argparse.Namespace) -> dict[str, Any]:
     experiment = checked_file(args.experiment, "experiment")
     worker = checked_file(args.worker, "corpus worker")
     merger = checked_file(args.merger, "corpus merger")
+    collector = checked_file(args.collector, "performance collector")
     config = json.loads(experiment.read_text(encoding="utf-8"))
     try:
         parameter_count = int(config["inference"]["profiles"][profile]["native_parameter_count"])
@@ -263,6 +278,7 @@ def corpus_workflow(args: argparse.Namespace) -> dict[str, Any]:
     experiment_name, experiment_input = staged(experiment, "experiment")
     worker_name, worker_input = staged(worker, "corpus-worker")
     merger_name, merger_input = staged(merger, "corpus-merger")
+    collector_name, collector_input = staged(collector, "performance-collector")
     worker_resources = {
         "cpu_cores": int(env_resource("corpus_worker", "CORES", 16)),
         "ram_bytes": size_bytes(str(env_resource("corpus_worker", "RAM", "32G"))),
@@ -289,6 +305,8 @@ def corpus_workflow(args: argparse.Namespace) -> dict[str, Any]:
         name = f"dvcs-corpus-{batch:03d}"
         archive_local = f"corpus-batch-{batch:03d}.tar.gz"
         summary_local = f"corpus-batch-{batch:03d}.json"
+        performance_local = f"performance-corpus-{batch:03d}.json"
+        samples_local = f"performance-corpus-{batch:03d}.jsonl"
         archive_remote = result_root / "batches" / archive_local
         summary_remote = result_root / "summaries" / summary_local
         job = job_base(
@@ -296,16 +314,23 @@ def corpus_workflow(args: argparse.Namespace) -> dict[str, Any]:
             resources=worker_resources, log_root=log_root,
             workflow=workflow, stage="corpus-worker",
         )
-        job["inputs"] = [image_input, database_input, experiment_input, worker_input]
+        job["inputs"] = [
+            image_input, database_input, experiment_input, worker_input,
+            collector_input,
+        ]
         job["outputs"] = [
             transfer(archive_local, archive_remote),
             transfer(summary_local, summary_remote),
+            transfer(performance_local, result_root / "performance" / performance_local),
+            transfer(samples_local, result_root / "performance" / samples_local),
         ]
         job["command"] = command(
             "/bin/bash", worker_name, project, profile, corpus, image_name,
             database_name, experiment_name, str(shard_size), str(start),
             str(count), archive_local, summary_local,
             str(args.heartbeat_seconds),
+            collector_name, performance_local, samples_local,
+            str(args.performance_interval_seconds),
         )
         jobs.append(job)
         batch_outputs.append((archive_local, archive_remote))
@@ -313,22 +338,28 @@ def corpus_workflow(args: argparse.Namespace) -> dict[str, Any]:
     final_local = f"{corpus}.tar.gz"
     final_remote = result_root / "final" / final_local
     final_summary = f"{corpus}-summary.json"
+    merge_performance = "performance-corpus-merge.json"
+    merge_samples = "performance-corpus-merge.jsonl"
     merge = job_base(
         name="dvcs-corpus-merge", account=args.account,
         constraint=args.constraint, resources=merge_resources,
         log_root=log_root, workflow=workflow, stage="corpus-merge",
     )
     merge["antecedents"] = [str(job["name"]) for job in jobs]
-    merge["inputs"] = [image_input, merger_input] + [
+    merge["inputs"] = [image_input, merger_input, collector_input] + [
         transfer(local, remote) for local, remote in batch_outputs
     ]
     merge["outputs"] = [
         transfer(final_local, final_remote),
         transfer(final_summary, result_root / "summaries" / final_summary),
+        transfer(merge_performance, result_root / "performance" / merge_performance),
+        transfer(merge_samples, result_root / "performance" / merge_samples),
     ]
     merge["command"] = command(
         "/bin/bash", merger_name, corpus, image_name, final_local,
         final_summary, str(args.heartbeat_seconds),
+        collector_name, merge_performance, merge_samples,
+        str(args.performance_interval_seconds),
         *[local for local, _ in batch_outputs],
     )
     jobs.append(merge)
@@ -354,6 +385,11 @@ def parser() -> argparse.ArgumentParser:
     common.add_argument("--database", required=True)
     common.add_argument("--output", required=True)
     common.add_argument("--max-dispatched", type=int, default=64)
+    common.add_argument(
+        "--collector",
+        default=str(Path(__file__).with_name("collect_performance_metrics.py")),
+    )
+    common.add_argument("--performance-interval-seconds", type=int, default=30)
     commands = result.add_subparsers(dest="mode", required=True)
 
     analysis = commands.add_parser("analysis", parents=[common])
@@ -395,6 +431,8 @@ def main() -> int:
         fail("set a valid JLab account")
     if getattr(args, "heartbeat_seconds", 0) < 0:
         fail("heartbeat seconds must be nonnegative")
+    if args.performance_interval_seconds < 1:
+        fail("performance interval seconds must be positive")
     payload = analysis_workflow(args) if args.mode == "analysis" else corpus_workflow(args)
     output = Path(args.output).expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)

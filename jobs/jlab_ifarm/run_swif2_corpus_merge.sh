@@ -4,12 +4,17 @@ set -euo pipefail
 : "${SWIF_JOB_WORK_DIR:?SWIF2 work directory is required}"
 : "${SLURM_JOB_ID:?Slurm job ID is required}"
 corpus="${1:?corpus}" image="${2:?image}" archive_output="${3:?output archive}"
-summary_output="${4:?summary output}" heartbeat_seconds="${5:-300}"; shift 5
+summary_output="${4:?summary output}" heartbeat_seconds="${5:-300}"
+collector="${6:?performance collector}" performance_summary="${7:?performance summary}"
+performance_samples="${8:?performance samples}" performance_interval="${9:?performance interval}"
+shift 9
 [[ "${heartbeat_seconds}" =~ ^[0-9]+$ ]] || exit 64
+[[ "${performance_interval}" =~ ^[1-9][0-9]*$ ]] || exit 64
 (($# >= 2)) || { echo "at least two batch archives are required" >&2; exit 64; }
 batch_archives=("$@")
 cd "${SWIF_JOB_WORK_DIR}"
 [[ -s "${image}" && ! -L "${image}" ]] || exit 66
+[[ -s "${collector}" && ! -L "${collector}" ]] || exit 66
 for archive in "${batch_archives[@]}"; do
     [[ -s "${archive}" && ! -L "${archive}" ]] || {
         echo "staged batch archive is missing or unsafe: ${archive}" >&2
@@ -32,6 +37,34 @@ container=(
     --bind "${SWIF_JOB_WORK_DIR}/database:/database:ro"
     "${image}"
 )
+started_epoch="$(date +%s)"
+performance_pid=
+stop_performance() {
+    if [[ -n "${performance_pid}" ]]; then
+        kill -TERM "${performance_pid}" 2>/dev/null || true
+        wait "${performance_pid}" 2>/dev/null || true
+        performance_pid=
+    fi
+}
+trap stop_performance EXIT
+/usr/bin/python3 "${collector}" --stage corpus-merge --accelerator cpu \
+    --interval "${performance_interval}" --samples "${performance_samples}" \
+    --summary "${performance_summary}" &
+performance_pid=$!
+echo "[dvcs-swif2] start stage=corpus-merge job=${SLURM_JOB_ID} host=$(hostname) batches=${#batch_archives[@]}"
+performance_snapshot() {
+    python3 - "${performance_summary}" <<'PY' 2>/dev/null || true
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1])
+if path.is_file():
+    record = json.loads(path.read_text())
+    cpu = record.get("cpu", {}).get("efficiency_percent")
+    memory = record.get("memory", {}).get("max_current_bytes")
+    if cpu is not None: print(f"cpu_efficiency={cpu:.1f}%", end=" ")
+    if memory is not None: print(f"memory_gib={memory / 2**30:.2f}", end="")
+PY
+}
 batch_names=()
 index=0
 for archive in "${batch_archives[@]}"; do
@@ -42,8 +75,6 @@ for archive in "${batch_archives[@]}"; do
     batch_names+=("${name}")
     index=$((index + 1))
 done
-started_epoch="$(date +%s)"
-echo "[dvcs-swif2] start stage=corpus-merge job=${SLURM_JOB_ID} host=$(hostname) batches=${#batch_archives[@]}"
 set +e
 "${container[@]}" corpus-merge --consume-sources "${corpus}" \
     "${batch_names[@]}" > corpus-merge.json 2> >(tee corpus-merge.err >&2) &
@@ -53,7 +84,7 @@ if (( heartbeat_seconds > 0 )); then
     (
         while sleep "${heartbeat_seconds}"; do
             kill -0 "${payload_pid}" 2>/dev/null || exit 0
-            echo "[dvcs-swif2] heartbeat stage=corpus-merge elapsed_seconds=$(($(date +%s) - started_epoch)) batches=${#batch_archives[@]}"
+            echo "[dvcs-swif2] heartbeat stage=corpus-merge elapsed_seconds=$(($(date +%s) - started_epoch)) batches=${#batch_archives[@]} $(performance_snapshot)"
         done
     ) &
     heartbeat_pid=$!
@@ -69,19 +100,25 @@ set -e
 "${container[@]}" corpus-verify "${corpus}" --deep > corpus-verify.json
 "${container[@]}" corpus-export "${corpus}" staged-final > corpus-export.json
 cp workspace/.corpus_exports/staged-final.tar.gz "${archive_output}"
-python3 - "${summary_output}" "${started_epoch}" <<'PY'
+stop_performance
+trap - EXIT
+python3 - "${summary_output}" "${started_epoch}" "${performance_summary}" <<'PY'
 import json, os, sys, time
 from pathlib import Path
 
 verification = json.loads(Path("corpus-verify.json").read_text())
 if verification.get("status") != "verified":
     raise SystemExit("merged corpus failed deep verification")
+performance = json.loads(Path(sys.argv[3]).read_text())
+if performance.get("status") != "complete":
+    raise SystemExit("performance collection did not complete")
 Path(sys.argv[1]).write_text(json.dumps({
     "schema_version": 1,
     "status": "ok",
     "elapsed_seconds": int(time.time()) - int(sys.argv[2]),
     "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
     "swif_job_id": os.environ.get("SWIF_JOB_ID"),
+    "performance": performance,
     "merge": json.loads(Path("corpus-merge.json").read_text()),
     "verification": verification,
 }, indent=2, sort_keys=True) + "\n")

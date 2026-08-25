@@ -62,6 +62,8 @@ storage. A successful stage returns:
 
 - the next project-state archive below `SWIF_OUTPUT_ROOT/WORKFLOW/state/`;
 - a stage summary JSON below `SWIF_OUTPUT_ROOT/WORKFLOW/summaries/`;
+- aggregate performance JSON and raw JSONL samples below
+  `SWIF_OUTPUT_ROOT/WORKFLOW/performance/`;
 - stdout/stderr under `SWIF_LOG_ROOT/WORKFLOW/` (normally `/farm_out`).
 
 The output archive of one stage is the declared input of its successor. Failed
@@ -77,6 +79,7 @@ SWIF_TRAIN_CORES=8
 SWIF_TRAIN_RAM=24G
 SWIF_TRAIN_TIME=12h
 SWIF_TRAIN_GPUS=1
+SWIF_METRICS_INTERVAL_SECONDS=30
 ```
 
 The 24G initial training request accompanies the streaming materializer, which
@@ -84,6 +87,25 @@ eliminates the previous duplicate 5.4G context allocation that caused a 16G
 OOM. After one successful representative job, tune RAM and wall time from
 measured peak use. CPU count controls Torch threads inside the allocation;
 requesting unused CPUs only delays dispatch.
+
+Performance collection is required for every stage. The host-side sampler
+reads the job's Slurm cgroup for CPU time, current/peak memory, and block I/O.
+GPU jobs also query `nvidia-smi` for utilization, VRAM, and power. It writes an
+atomic rolling summary used by heartbeats plus the complete time series. The
+30-second default is small relative to PARTONS/training work; increase it only
+for unusually short or overhead-sensitive tests.
+
+Use several successful representative jobs before changing requests:
+
+- CPU efficiency is cgroup CPU seconds divided by allocated core-walltime;
+  reduce cores when sustained efficiency is low and elapsed time does not
+  improve.
+- Set RAM above the largest observed cgroup peak, retaining a measured safety
+  margin for workload variation.
+- Compare GPU mean utilization, maximum VRAM, and training throughput before
+  changing GPU count or CPU feeder resources.
+- Set walltime above the slowest comparable successful attempt, not merely the
+  mean.
 
 `SWIF_MAX_CONCURRENT` limits running jobs and `SWIF_MAX_DISPATCHED` limits
 dispatch pressure. Scientific dependencies still prevent incompatible stages
@@ -111,16 +133,17 @@ oversized multi-node job.
 ## Monitor and recover
 
 ```bash
-swif2 status WORKFLOW -display json
+swif2 status WORKFLOW -jobs -transfers -storage -display json
 swif2 diagnose WORKFLOW
 swif2 retry-jobs WORKFLOW -problems
 ```
 
-The wrappers emit periodic `[dvcs-swif]` heartbeats. Training materialization
-also records counts in `materialization_progress.json`, and training metrics
-are reported when available. Because every completed stage is reaped as an
-archive, a later workflow can resume with `--from STAGE` from the appropriate
-project archive instead of recomputing the corpus.
+The wrappers emit periodic `[dvcs-swif2]` heartbeats with cumulative CPU
+efficiency, memory, and—on GPU stages—GPU utilization/VRAM. Training also
+reports materialization/model progress. Corroborate the final JSON with
+`seff SLURM_JOB_ID` or `sacct`; the stage summary records that ID. Because
+every completed stage is reaped as an archive, a later workflow can resume
+with `--from STAGE` from the appropriate project archive.
 
 See the [JLab SWIF2 guide](https://scicomp.jlab.org/docs/swif2),
 [SWIF command reference](https://scicomp.jlab.org/cli/swif.html), and

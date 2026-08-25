@@ -114,15 +114,16 @@ is disposable. SWIF2 must reap every required scientific output before a job
 is considered usable.
 
 Scheduler logs normally go below `/farm_out/$USER/dvcs/WORKFLOW/`. Scientific
-stage archives and summary JSON files go below
-`SWIF_OUTPUT_ROOT/WORKFLOW/STAGE/`. The wrappers emit five-minute heartbeats by
-default. Training heartbeats include materialization progress or current
-metrics when available.
+state archives, summaries, and performance telemetry go below the `state/`,
+`summaries/`, and `performance/` directories under
+`SWIF_OUTPUT_ROOT/WORKFLOW/`. The wrappers emit five-minute heartbeats by
+default. They include cumulative CPU/memory metrics; GPU stages also report
+utilization and VRAM when `nvidia-smi` is available.
 
 Monitor with:
 
 ```bash
-swif2 status WORKFLOW -display json
+swif2 status WORKFLOW -jobs -transfers -storage -display json
 swif2 diagnose WORKFLOW
 swif2 retry-jobs WORKFLOW -problems
 ```

@@ -21,7 +21,7 @@ python3 "${root}/jobs/jlab_ifarm/write_swif2_workflow.py" analysis \
   --project-archive "${temp}/project.tar" --output "${analysis}" >/dev/null
 
 python3 - "${analysis}" <<'PY'
-import json, sys
+import json, shlex, sys
 
 workflow = json.load(open(sys.argv[1], encoding="utf-8"))
 assert workflow["name"] == "test-analysis"
@@ -35,7 +35,8 @@ assert [job["name"] for job in jobs] == [
 for index, job in enumerate(jobs):
     assert job.get("antecedents", []) == ([] if index == 0 else [jobs[index - 1]["name"]])
     assert {tag["name"] for tag in job["tags"]} == {"dvcs-workflow", "dvcs-stage"}
-    assert all("-" in item["local"] for item in job["inputs"][:3])
+    assert all("-" in item["local"] for item in job["inputs"][:4])
+    assert len(job["outputs"]) == 4
 train = jobs[1]
 assert train["partition"] == "gpu"
 assert "--gres=gpu:1" in train["batch_flags"]
@@ -43,9 +44,18 @@ assert train["ram_bytes"] == 24_000_000_000
 assert train["disk_bytes"] == 48_000_000_000
 assert "run_swif2_analysis_stage" not in train["command"][0]
 assert "analysis-runner-" in train["command"][0]
+assert "performance-collector-" in train["command"][0]
+train_command = shlex.split(train["command"][0])
+assert train_command[-4].startswith("performance-collector-")
+assert train_command[-3:] == [
+    "performance-train.json", "performance-train.jsonl", "30",
+]
+assert {item["local"] for item in train["outputs"][2:]} == {
+    "performance-train.json", "performance-train.jsonl",
+}
 for left, right in zip(jobs, jobs[1:]):
     produced = left["outputs"][0]
-    consumed = right["inputs"][3]
+    consumed = right["inputs"][4]
     assert produced == consumed
 PY
 
@@ -66,7 +76,7 @@ python3 "${root}/jobs/jlab_ifarm/write_swif2_workflow.py" corpus \
   --experiment "${experiment}" --shard-size 16 --shards-per-worker 2 \
   --output "${corpus_workflow}" >/dev/null
 python3 - "${corpus_workflow}" <<'PY'
-import json, sys
+import json, shlex, sys
 workflow = json.load(open(sys.argv[1], encoding="utf-8"))
 assert len(workflow["jobs"]) == 3
 workers, merge = workflow["jobs"][:2], workflow["jobs"][2]
@@ -76,7 +86,50 @@ assert set(merge["antecedents"]) == {job["name"] for job in workers}
 assert "--shard" not in workers[0]["command"][0]
 assert " 0 2 " in workers[0]["command"][0]
 assert " 2 2 " in workers[1]["command"][0]
-assert len(merge["inputs"]) == 4
+worker_command = shlex.split(workers[0]["command"][0])
+assert worker_command[-4].startswith("performance-collector-")
+assert worker_command[-3:] == [
+    "performance-corpus-000.json", "performance-corpus-000.jsonl", "30",
+]
+assert len(merge["inputs"]) == 5
+assert all(len(job["outputs"]) == 4 for job in workflow["jobs"])
+PY
+
+metrics_dir="${temp}/metrics"
+mkdir -p "${metrics_dir}"
+"${root}/jobs/jlab_ifarm/collect_performance_metrics.py" \
+  --samples "${metrics_dir}/samples.jsonl" \
+  --summary "${metrics_dir}/summary.json" \
+  --stage test --accelerator cpu --once
+python3 - "${metrics_dir}/summary.json" "${metrics_dir}/samples.jsonl" <<'PY'
+import json, sys
+summary = json.load(open(sys.argv[1], encoding="utf-8"))
+assert summary["schema_version"] == 1
+assert summary["sample_count"] == 1
+assert summary["allocation"]["cpus"] >= 1
+assert summary["gpu"]["devices"] == []
+assert len(open(sys.argv[2], encoding="utf-8").readlines()) == 1
+PY
+
+continuous="${metrics_dir}/continuous"
+mkdir -p "${continuous}"
+SLURM_CPUS_PER_TASK=2 SLURM_MEM_PER_NODE=1024 \
+  "${root}/jobs/jlab_ifarm/collect_performance_metrics.py" \
+  --samples "${continuous}/samples.jsonl" \
+  --summary "${continuous}/summary.json" \
+  --stage test --accelerator cpu --interval 1 &
+collector_pid=$!
+sleep 1
+kill -TERM "${collector_pid}"
+wait "${collector_pid}"
+python3 - "${continuous}/summary.json" <<'PY'
+import json, sys
+summary = json.load(open(sys.argv[1], encoding="utf-8"))
+assert summary["sample_count"] >= 2
+assert summary["allocation"]["cpus"] == 2
+assert summary["memory"]["requested_bytes"] == 1024**3
+assert summary["wall_seconds_sampled"] > 0
+assert summary["cpu"]["efficiency_percent"] is not None
 PY
 
 grep -F -- 'corpus-generate "${project}" "${corpus}"' \
