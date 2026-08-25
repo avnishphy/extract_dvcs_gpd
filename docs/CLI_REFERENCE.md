@@ -243,7 +243,8 @@ preserving the saved result contract and explicit dependency chain.
 Packages content-addressed SIF/database/project/corpus inputs, writes a SWIF2
 workflow, and either validates it (`--dry-run`) or imports and starts it. Use
 `--only STAGE`, `--include-optimize`, or `--import-only` as needed. See
-[JLab SWIF2 workflows](JLAB_SWIF2.md).
+[JLab SWIF2 workflows](JLAB_SWIF2.md). Every stage requires and reaps aggregate
+CPU/memory/I/O/GPU metrics plus raw time-series samples.
 
 ### `farm-corpus-submit` (JLab ifarm)
 

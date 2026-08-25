@@ -82,6 +82,7 @@ arguments=(
     --project-archive "${SWIF_PROJECT_ARCHIVE}"
     --from "${from_stage}" --through "${through_stage}"
     --heartbeat-seconds "${SWIF_HEARTBEAT_SECONDS:-300}"
+    --performance-interval-seconds "${SWIF_METRICS_INTERVAL_SECONDS:-30}"
     --max-dispatched "${SWIF_MAX_DISPATCHED:-64}"
     --output "${workflow_json}"
 )

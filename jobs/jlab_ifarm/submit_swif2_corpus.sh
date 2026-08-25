@@ -47,6 +47,7 @@ python3 "${job_dir}/write_swif2_workflow.py" corpus \
     --experiment "${SWIF_EXPERIMENT}" --shard-size "${shard_size}" \
     --shards-per-worker "${shards_per_worker}" \
     --heartbeat-seconds "${SWIF_HEARTBEAT_SECONDS:-300}" \
+    --performance-interval-seconds "${SWIF_METRICS_INTERVAL_SECONDS:-30}" \
     --max-dispatched "${SWIF_MAX_DISPATCHED:-64}" --output "${workflow_json}" >/dev/null
 submit_arguments=(--file "${workflow_json}" --max-concurrent "${SWIF_MAX_CONCURRENT:-64}")
 [[ "${dry_run}" == false ]] || submit_arguments+=(--dry-run)

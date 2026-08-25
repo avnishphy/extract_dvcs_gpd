@@ -10,9 +10,12 @@ experiment="${6:?experiment}" shard_size="${7:?shard size}"
 shard_start="${8:?shard start}" shard_count="${9:?shard count}"
 archive_output="${10:?archive output}" summary_output="${11:?summary output}"
 heartbeat_seconds="${12:-300}"
+collector="${13:?performance collector}" performance_summary="${14:?performance summary}"
+performance_samples="${15:?performance samples}" performance_interval="${16:?performance interval}"
 [[ "${heartbeat_seconds}" =~ ^[0-9]+$ ]] || exit 64
+[[ "${performance_interval}" =~ ^[1-9][0-9]*$ ]] || exit 64
 cd "${SWIF_JOB_WORK_DIR}"
-for path in "${image}" "${database_archive}" "${experiment}"; do
+for path in "${image}" "${database_archive}" "${experiment}" "${collector}"; do
     [[ -s "${path}" && ! -L "${path}" ]] || exit 66
 done
 python3 - "${database_archive}" <<'PY'
@@ -49,12 +52,38 @@ container=(
     --bind "${SWIF_JOB_WORK_DIR}/database:/database:ro"
     "${image}"
 )
+started_epoch="$(date +%s)"
+performance_pid=
+stop_performance() {
+    if [[ -n "${performance_pid}" ]]; then
+        kill -TERM "${performance_pid}" 2>/dev/null || true
+        wait "${performance_pid}" 2>/dev/null || true
+        performance_pid=
+    fi
+}
+trap stop_performance EXIT
+/usr/bin/python3 "${collector}" --stage corpus-worker --accelerator cpu \
+    --interval "${performance_interval}" --samples "${performance_samples}" \
+    --summary "${performance_summary}" &
+performance_pid=$!
+echo "[dvcs-swif2] start stage=corpus-worker job=${SLURM_JOB_ID} host=$(hostname) cpus=${SLURM_CPUS_PER_TASK} shards=${shard_start}+$((shard_count))"
+performance_snapshot() {
+    python3 - "${performance_summary}" <<'PY' 2>/dev/null || true
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1])
+if path.is_file():
+    record = json.loads(path.read_text())
+    cpu = record.get("cpu", {}).get("efficiency_percent")
+    memory = record.get("memory", {}).get("max_current_bytes")
+    if cpu is not None: print(f"cpu_efficiency={cpu:.1f}%", end=" ")
+    if memory is not None: print(f"memory_gib={memory / 2**30:.2f}", end="")
+PY
+}
 "${container[@]}" init "${project}" > init.json
 cp "${experiment}" "workspace/${project}/experiment.json"
 "${container[@]}" corpus-create "${project}" "${corpus}" \
     --profile "${profile}" --shard-size "${shard_size}" > corpus-create.json
-started_epoch="$(date +%s)"
-echo "[dvcs-swif2] start stage=corpus-worker job=${SLURM_JOB_ID} host=$(hostname) cpus=${SLURM_CPUS_PER_TASK} shards=${shard_start}+$((shard_count))"
 set +e
 "${container[@]}" corpus-generate "${project}" "${corpus}" \
     --shard-start "${shard_start}" --max-shards "${shard_count}" \
@@ -65,7 +94,7 @@ if (( heartbeat_seconds > 0 )); then
     (
         while sleep "${heartbeat_seconds}"; do
             kill -0 "${payload_pid}" 2>/dev/null || exit 0
-            echo "[dvcs-swif2] heartbeat stage=corpus-worker elapsed_seconds=$(($(date +%s) - started_epoch)) shards=${shard_start}+$((shard_count))"
+            echo "[dvcs-swif2] heartbeat stage=corpus-worker elapsed_seconds=$(($(date +%s) - started_epoch)) shards=${shard_start}+$((shard_count)) $(performance_snapshot)"
         done
     ) &
     heartbeat_pid=$!
@@ -81,12 +110,17 @@ set -e
 "${container[@]}" corpus-checkpoint-export "${corpus}" staged-batch \
     > corpus-export.json
 cp workspace/.corpus_exports/staged-batch.tar.gz "${archive_output}"
+stop_performance
+trap - EXIT
 python3 - "${summary_output}" "${shard_start}" "${shard_count}" \
-  "${started_epoch}" <<'PY'
+  "${started_epoch}" "${performance_summary}" <<'PY'
 import json, os, sys, time
 from pathlib import Path
 
-output, start, count, started = sys.argv[1:]
+output, start, count, started, performance = sys.argv[1:]
+performance_record = json.loads(Path(performance).read_text())
+if performance_record.get("status") != "complete":
+    raise SystemExit("performance collection did not complete")
 generation = json.loads(Path("corpus-generate.json").read_text())
 expected = list(range(int(start), int(start) + int(count)))
 if generation.get("generated_shard_indices") != expected:
@@ -98,6 +132,7 @@ Path(output).write_text(json.dumps({
     "elapsed_seconds": int(time.time()) - int(started),
     "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
     "swif_job_id": os.environ.get("SWIF_JOB_ID"),
+    "performance": performance_record,
     "generation": generation,
 }, indent=2, sort_keys=True) + "\n")
 PY

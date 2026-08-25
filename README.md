@@ -55,7 +55,9 @@ requests GPUs for neural stages, and reaps explicit outputs. See
 
 Use `--from`, `--through`, or `--only` to submit selected stages. Scheduler
 stdout/stderr go to `/farm_out/$USER` by default; five-minute heartbeat lines
-make long quiet stages observable without flooding the log.
+make long quiet stages observable without flooding the log. Each stage also
+reaps cgroup CPU/memory/I/O and GPU utilization/VRAM time series for measured
+resource tuning of later submissions.
 
 `quick` is a real 82-dimensional workflow with 2,048 accepted native prior
 vectors by default; it is not a seconds-long mock. Use it to establish the
