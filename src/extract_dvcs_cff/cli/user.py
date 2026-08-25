@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import argparse
 from copy import deepcopy
-import hashlib
 import json
 import math
 import os
@@ -35,6 +34,7 @@ from extract_dvcs_cff.workflows.pseudodata import (
     load_configuration,
     plot_saved_results,
     pretty_json,
+    scientific_configuration_sha256,
     sha256,
     train_model,
     write_json,
@@ -1172,7 +1172,9 @@ def assert_result_contract(
     expected = {
         "schema_version": 1,
         "configuration": str(configuration.resolve(strict=True)),
-        "configuration_sha256": sha256(configuration.resolve(strict=True)),
+        "configuration_sha256": scientific_configuration_sha256(
+            configuration
+        ),
         "profile": profile,
         "bridge_sha256": sha256(bridge.resolve(strict=True)),
         "real_data": False,
@@ -1192,71 +1194,10 @@ def assert_result_contract(
     }
     if observed == expected:
         return
-    non_runtime_match = (
-        set(observed) == set(expected)
-        and all(
-            observed.get(key) == value
-            for key, value in expected.items()
-            if key != "configuration_sha256"
-        )
+    raise RuntimeError(
+        "result contract mismatch; create a new project after changing "
+        "experiment.json, profile, corpus/selection, or native bridge"
     )
-    training_summary_path = workspace / "training" / "training_summary.json"
-    training_configuration_sha256 = None
-    if non_runtime_match and training_summary_path.is_file():
-        summary = json.loads(training_summary_path.read_text(encoding="utf-8"))
-        if isinstance(summary, dict):
-            runtime_record = summary.get("training_runtime")
-            device_record = summary.get("neural_device")
-            if not isinstance(runtime_record, dict):
-                runtime_record = {}
-            if not isinstance(device_record, dict):
-                device_record = {}
-            accelerator = runtime_record.get("accelerator")
-            if accelerator not in {"cpu", "cuda"}:
-                accelerator = str(device_record.get("resolved", "")).split(
-                    ":", 1
-                )[0]
-            cpu_threads = runtime_record.get("cpu_threads")
-            if not isinstance(cpu_threads, int):
-                members = summary.get("members")
-                thread_counts = (
-                    {
-                        item.get("torch_num_threads")
-                        for item in members.values()
-                        if isinstance(item, dict)
-                        and isinstance(item.get("torch_num_threads"), int)
-                    }
-                    if isinstance(members, dict)
-                    else set()
-                )
-                if accelerator == "cpu" and len(thread_counts) == 1:
-                    cpu_threads = thread_counts.pop()
-                elif accelerator == "cuda":
-                    cpu_threads = 8
-            if accelerator in {"cpu", "cuda"} and isinstance(
-                cpu_threads, int
-            ):
-                training_configuration = json.loads(
-                    configuration.read_text(encoding="utf-8")
-                )
-                runtime = training_configuration.get("runtime")
-                if isinstance(runtime, dict):
-                    runtime["accelerator"] = accelerator
-                    runtime["cpu_threads"] = cpu_threads
-                    native_workers = runtime_record.get("native_workers")
-                    if native_workers is not None:
-                        runtime["native_workers"] = native_workers
-                    encoded = (pretty_json(training_configuration) + "\n").encode(
-                        "utf-8"
-                    )
-                    training_configuration_sha256 = hashlib.sha256(
-                        encoded
-                    ).hexdigest()
-    if observed.get("configuration_sha256") != training_configuration_sha256:
-        raise RuntimeError(
-            "result contract mismatch; create a new project after changing "
-            "experiment.json, profile, corpus/selection, or native bridge"
-        )
 
 
 def _public_result(
@@ -1302,6 +1243,11 @@ def _public_result(
         public["maximum_cuda_peak_allocated_bytes"] = result[
             "maximum_cuda_peak_allocated_bytes"
         ]
+    elif command == "materialize":
+        public["context_count"] = result["context_count"]
+        public["materialization_workers"] = result.get(
+            "materialization_workers", "reused"
+        )
     elif command == "optimize":
         public["best_validation_negative_log_density"] = result[
             "best_objective"
@@ -1487,6 +1433,10 @@ def _parser() -> argparse.ArgumentParser:
     selection_create.add_argument("--profile", choices=("quick", "validation"), default="quick")
     for command, help_text in (
         ("doctor", "verify the exact-native and neural runtime"),
+        (
+            "materialize",
+            "build deterministic training arrays from a corpus selection",
+        ),
         ("train", "train or resume the neural posterior ensemble"),
         ("optimize", "tune neural hyperparameters on validation NLL"),
         ("evaluate", "run coverage and exact-predictive checks"),
@@ -1525,14 +1475,26 @@ def _parser() -> argparse.ArgumentParser:
                 default=None,
                 help="new trials to add (default from experiment.json)",
             )
-        if command in {"train", "optimize"}:
+        if command in {"materialize", "train", "optimize"}:
+            required = command == "materialize"
             subparser.add_argument(
-                "--corpus", required=True,
-                help="named verified corpus from the configured corpus store",
+                "--corpus", required=required,
+                help=(
+                    "named verified corpus; optional for train/optimize after "
+                    "a separate materialize step"
+                ),
             )
             subparser.add_argument(
-                "--selection", required=True,
-                help="named immutable group-aware project selection",
+                "--selection", required=required,
+                help=(
+                    "named immutable selection; optional for train/optimize "
+                    "after a separate materialize step"
+                ),
+            )
+        if command == "materialize":
+            subparser.add_argument(
+                "--workers", default="all_available",
+                help="CPU workers: positive integer or all_available",
             )
         if command == "compare-real":
             subparser.add_argument(
@@ -1731,29 +1693,48 @@ def main() -> int:
                             else None
                         ),
                     }
-                    if args.command in {"train", "optimize"}:
+                    materialization = None
+                    if args.command in {"materialize", "train", "optimize"}:
                         corpus_name = args.corpus
                         selection_name = args.selection
-                        corpus = _corpus_path(
-                            repository, corpus_name, existing=True
-                        )
-                        assert_corpus_compatible(
-                            corpus=corpus,
-                            configuration_path=configuration,
-                            bridge=bridge,
-                        )
-                        materialize_selection(
-                            corpus=corpus,
-                            selection_path=_selection_path(
-                                project, selection_name, existing=True
-                            ),
-                            configuration_path=configuration,
-                            workspace=workspace,
-                            profile=profile,
-                            bridge=bridge,
-                            show_progress=common["show_progress"],
-                        )
+                        if (corpus_name is None) != (selection_name is None):
+                            raise ValueError(
+                                "--corpus and --selection must be supplied together"
+                            )
+                        if corpus_name is not None:
+                            corpus = _corpus_path(
+                                repository, corpus_name, existing=True
+                            )
+                            assert_corpus_compatible(
+                                corpus=corpus,
+                                configuration_path=configuration,
+                                bridge=bridge,
+                            )
+                            worker_request: int | str = getattr(
+                                args, "workers", "all_available"
+                            )
+                            if worker_request != "all_available":
+                                try:
+                                    worker_request = int(worker_request)
+                                except ValueError as exc:
+                                    raise ValueError(
+                                        "--workers must be a positive integer or "
+                                        "all_available"
+                                    ) from exc
+                            materialization = materialize_selection(
+                                corpus=corpus,
+                                selection_path=_selection_path(
+                                    project, selection_name, existing=True
+                                ),
+                                configuration_path=configuration,
+                                workspace=workspace,
+                                profile=profile,
+                                bridge=bridge,
+                                workers=worker_request,
+                                show_progress=common["show_progress"],
+                            )
                     if args.command in {
+                        "materialize",
                         "train",
                         "optimize",
                         "evaluate",
@@ -1768,7 +1749,13 @@ def main() -> int:
                             profile=profile,
                             bridge=bridge,
                         )
-                    if args.command == "train":
+                    if args.command == "materialize":
+                        if materialization is None:
+                            raise RuntimeError(
+                                "materialize requires a corpus and selection"
+                            )
+                        internal = materialization
+                    elif args.command == "train":
                         internal = train_model(**common)
                     elif args.command == "optimize":
                         internal = optimize_hyperparameters(

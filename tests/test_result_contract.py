@@ -4,7 +4,11 @@ from pathlib import Path
 import unittest
 
 from extract_dvcs_cff.cli.user import assert_result_contract
-from extract_dvcs_cff.workflows.pseudodata import sha256, write_json
+from extract_dvcs_cff.workflows.pseudodata import (
+    scientific_configuration_sha256,
+    sha256,
+    write_json,
+)
 
 
 class ResultContractTest(unittest.TestCase):
@@ -13,28 +17,24 @@ class ResultContractTest(unittest.TestCase):
             root = Path(temporary)
             workspace = root / "workspace"
             generated = workspace / "generated"
-            training = workspace / "training"
             generated.mkdir(parents=True)
-            training.mkdir()
             configuration = root / "workflow.json"
             bridge = root / "bridge"
             bridge.write_bytes(b"bridge")
 
-            training_configuration = {
+            materialization_configuration = {
                 "physics": {"model": "fixed"},
                 "runtime": {
-                    "accelerator": "cuda",
-                    "cpu_threads": 8,
+                    "accelerator": "cpu",
+                    "cpu_threads": 2,
                     "deterministic_algorithms": True,
                     "native_workers": "all_available",
                 },
             }
-            write_json(configuration, training_configuration)
-            training_hash = sha256(configuration)
-            downstream_configuration = deepcopy(training_configuration)
-            downstream_configuration["runtime"]["accelerator"] = "cpu"
-            downstream_configuration["runtime"]["cpu_threads"] = 256
-            write_json(configuration, downstream_configuration)
+            write_json(configuration, materialization_configuration)
+            materialization_hash = scientific_configuration_sha256(
+                configuration
+            )
 
             realization = {
                 "schema_version": 2,
@@ -45,23 +45,11 @@ class ResultContractTest(unittest.TestCase):
             realization_path = generated / "array_manifest.json"
             write_json(realization_path, realization)
             write_json(
-                training / "training_summary.json",
-                {
-                    "neural_device": {"resolved": "cuda"},
-                    "training_runtime": {
-                        "accelerator": "cuda",
-                        "cpu_threads": 8,
-                        "native_workers": "all_available",
-                    },
-                    "members": {},
-                },
-            )
-            write_json(
                 workspace / "workspace_contract.json",
                 {
                     "schema_version": 1,
                     "configuration": str(configuration.resolve()),
-                    "configuration_sha256": training_hash,
+                    "configuration_sha256": materialization_hash,
                     "profile": "quick",
                     "bridge_sha256": sha256(bridge),
                     "real_data": False,
@@ -75,12 +63,28 @@ class ResultContractTest(unittest.TestCase):
                 },
             )
 
-            assert_result_contract(
-                configuration=configuration,
-                workspace=workspace,
-                profile="quick",
-                bridge=bridge,
-            )
+            for accelerator, cpu_threads in (
+                ("cuda", 4),   # train
+                ("cuda", 8),   # evaluate
+                ("cpu", 2),    # compare / plot
+                ("cpu", 16),   # holdout
+            ):
+                downstream_configuration = deepcopy(
+                    materialization_configuration
+                )
+                downstream_configuration["runtime"]["accelerator"] = (
+                    accelerator
+                )
+                downstream_configuration["runtime"]["cpu_threads"] = (
+                    cpu_threads
+                )
+                write_json(configuration, downstream_configuration)
+                assert_result_contract(
+                    configuration=configuration,
+                    workspace=workspace,
+                    profile="quick",
+                    bridge=bridge,
+                )
 
             downstream_configuration["physics"]["model"] = "changed"
             write_json(configuration, downstream_configuration)

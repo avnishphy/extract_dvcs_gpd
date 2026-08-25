@@ -24,11 +24,16 @@
   distributed native simulation is implemented.
 - Native parallelism uses isolated subprocesses because PARTONS thread safety
   is not established. Initialization/memory overhead may limit scaling.
-- Corpus generation is atomically sharded and resumable, but the public
-  command currently advances shards within one allocation; multi-node Slurm
-  array generation is not implemented.
-- The current sbi path materializes all selected nuisance/noise tensors before
-  training. It does not yet stream a very large corpus lazily by minibatch.
+- Corpus generation is atomically sharded and resumable. The JLab SWIF2 layer
+  distributes disjoint shard ranges across independent jobs and deep-verifies
+  their merge; practical PARTONS scaling, dispatch latency, and filesystem
+  throughput remain campaign-dependent. This is not one multi-node PARTONS
+  process.
+- The current sbi path materializes selected nuisance/noise tensors into named
+  array files before training. CPU workers share full in-memory output arrays
+  and write disjoint rows; model minibatches consume completed files rather
+  than generating noise lazily. Peak host RAM and state-transfer cost therefore
+  remain telemetry targets.
 - Native evidence is consolidated per shard, reducing inode pressure, but
   storage quota, purge policy, throughput, and practical shard size still need
   measurement on the target iFarm filesystem.

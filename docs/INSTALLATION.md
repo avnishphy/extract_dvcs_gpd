@@ -68,7 +68,16 @@ usable. Explicit `cuda` is an assertion and fails rather than falling back.
 
 ## JLab installation
 
-On an ifarm login node:
+On an ifarm login node, first confirm the required site tools and your Slurm
+association:
+
+```bash
+hostname
+command -v git apptainer swif2
+sacctmgr show user "$USER" withassoc
+```
+
+Then install:
 
 ```bash
 ./install.sh --profile jlab_ifarm --accelerator auto
@@ -85,6 +94,10 @@ When no published digest exists, the installer runs an unprivileged/fakeroot
 Apptainer source build. Site policy must permit that operation. If it does not,
 a maintainer must build/publish the approved OCI image elsewhere or provide an
 approved SIF; the installer never escalates privilege itself.
+
+SWIF2 additionally requires a valid JLab SciComp certificate. `swif2 list
+-display json` is a harmless authentication check. Installation does not
+submit a job or leave an Apptainer service running.
 
 ## Select persistent storage
 
@@ -144,6 +157,12 @@ SHA-256, the `.info` and central-member hashes, and the 41-member inventory,
 then atomically moves the extracted set into `DVCS_CACHE/lhapdf/`.
 This set is required only for the VGG99 native-model holdout. The explicit
 container `LHAPDF_DATA_PATH` points at that directory.
+
+Additional LHAPDF sets may be placed beneath the configured
+`DVCS_CACHE/lhapdf/` and will be visible in the container. That does not make a
+new set part of an audited workflow automatically: the consuming PARTONS model,
+set/member identity, checksums, and validation must also be implemented and
+reviewed.
 
 If an incomplete target directory already exists, installation stops instead
 of merging files. Preserve it for diagnosis, then select a fresh cache path or
@@ -228,3 +247,40 @@ Git commit when retaining old results.
 
 Do not hand-edit `.dvcs/install.env` except for diagnosis. Prefer environment
 overrides or rerun installation so state remains auditable.
+
+For a normal source update with a clean worktree:
+
+```bash
+git pull --ff-only
+./install.sh --profile jlab_ifarm --accelerator auto
+./dvcs doctor PROJECT
+```
+
+If Git reports diverged history, inspect `git log --oneline --left-right
+HEAD...origin/main` and integrate deliberately; do not force-push or reset a
+scientific worktree merely to make installation proceed.
+
+## Clean reinstall and removal
+
+The runtime and user data are separate. Removing `.dvcs/` removes installer
+state and the repository-local SIF reference, but not projects, corpora,
+results, cache data, or an external database. Before deleting anything, resolve
+the configured paths and inspect their sizes:
+
+```bash
+sed -n '1,200p' .dvcs/install.env
+du -sh .dvcs workspace results cache 2>/dev/null
+```
+
+There must be no space in `2>/dev/null`. To test as a completely new user,
+move or remove only paths you have verified are disposable, then rerun
+`install.sh`. Preserve every corpus archive, project state, SIF digest, and
+result needed for reproducibility. SWIF2 outputs under `SWIF_OUTPUT_ROOT` and
+logs under `/farm_out` are independent of `.dvcs/` and are not removed by a
+local reinstall.
+
+## Next step
+
+Local users continue with the [user guide](USER_GUIDE.md). JLab users should
+copy and validate `jobs/jlab_ifarm/resources.env` using the [ifarm
+guide](JLAB_IFARM.md) before submitting sustained work.

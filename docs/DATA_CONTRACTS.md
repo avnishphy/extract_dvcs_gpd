@@ -49,14 +49,14 @@ making its internal configuration another public edit surface.
 
 ## Workspace contract
 
-Corpus-backed training or optimization materialization creates
+Corpus-backed `materialize` (or a compatible combined local invocation) creates
 `results/PROFILE/workspace_contract.json` with:
 
 | Field | Role |
 |---|---|
 | `schema_version` | Contract format. |
 | `configuration` | Canonical private configuration path. |
-| `configuration_sha256` | Exact materialization-time configuration identity. Downstream resource-only overrides are checked against the saved training runtime; scientific controls remain immutable. |
+| `configuration_sha256` | Scientific configuration identity. Allocation-dependent `accelerator`, `cpu_threads`, and `native_workers` are excluded; determinism policy remains included. |
 | `profile` | `quick` or `validation`. |
 | `bridge_sha256` | Exact native executable identity. |
 | `real_data` | Must remain `false` for the synthetic corpus. |
@@ -72,10 +72,10 @@ instructs the user to create a new project; the runtime never combines old
 arrays with a changed experiment, corpus, or selection.
 
 Execution-resource overrides (`accelerator`, `cpu_threads`, and
-`native_workers`) may differ for downstream stages such as comparison or
-plotting. Compatibility is accepted only when reconstructing the saved
-training configuration reproduces the contract hash; changes to all other
-configuration fields still fail closed.
+`native_workers`) may differ across CPU materialization, GPU training and
+evaluation, and CPU diagnostics. Each stage records those values in runtime
+provenance and telemetry; they are not physics identity. Changes to every
+other configuration field, including determinism policy, still fail closed.
 
 ## Reusable native corpus contract
 
@@ -256,9 +256,24 @@ manifest does not imply that scientific gates passed.
 human-readable starting point and links the major results. Consumers should
 retain and parse the JSON for automation rather than scrape Markdown.
 
-## Slurm/runtime provenance
+## Farm/runtime provenance
 
-JLab jobs write outside the project tree under
+Authoritative JLab SWIF2 analysis outputs live under
+`SWIF_OUTPUT_ROOT/WORKFLOW/`:
+
+```text
+state/         project-state archive after each successful stage
+summaries/     status, elapsed time, IDs, provenance, performance summary
+performance/   aggregate JSON and raw JSONL CPU/memory/I/O/GPU samples
+```
+
+Scheduler stdout/stderr lives under `SWIF_LOG_ROOT/WORKFLOW/`. Each declared
+output must be reaped before the stage is usable. Active
+`$SWIF_JOB_WORK_DIR` content is disposable and is not a result contract. The
+project archive returned by one stage is the input of the next, so a missing or
+failed transfer cannot silently release downstream work.
+
+The retained direct-Slurm diagnostic jobs write outside the project tree under
 `DVCS_RESULTS/slurm/JOB_ID/STEP/`:
 
 ```text

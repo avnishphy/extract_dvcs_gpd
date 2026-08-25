@@ -9,9 +9,15 @@ use the reference pages while running a study.
 1. [Project overview](../README.md) — purpose, scope, and first commands.
 2. [Installation](INSTALLATION.md) — local Linux and JLab setup.
 3. [User guide](USER_GUIDE.md) — create and run an isolated project.
-4. [Workflow and physics](WORKFLOW_AND_PHYSICS.md) — what is computed and why.
-5. [Results and interpretation](RESULTS_AND_INTERPRETATION.md) — how to read
+4. JLab users: [ifarm guide](JLAB_IFARM.md), then [SWIF2
+   workflows](JLAB_SWIF2.md).
+5. [Workflow and physics](WORKFLOW_AND_PHYSICS.md) — what is computed and why.
+6. [Results and interpretation](RESULTS_AND_INTERPRETATION.md) — how to read
    posterior, coverage, observable, CFF, and GPD outputs.
+
+Do not read every page before the first run. The installation and user guides
+provide the happy path; the command, experiment, and data-contract pages are
+references for editing or interpreting a stage.
 
 ## Running and operating the software
 
@@ -26,8 +32,8 @@ use the reference pages while running a study.
   isolated PARTONS workers, CUDA selection, and multi-GPU behavior.
 - [Containers](CONTAINERS.md) explains image construction, mounts, non-root
   execution, tags, digests, and offline operation.
-- [JLab ifarm](JLAB_IFARM.md) explains Apptainer, Slurm templates, job
-  dependencies, storage, monitoring, and acceptance.
+- [JLab ifarm](JLAB_IFARM.md) explains Apptainer, interactive checks, SWIF2,
+  storage, monitoring, and the retained direct-Slurm diagnostics.
 - [JLab SWIF2](JLAB_SWIF2.md) explains the SWIF2 wrapper for managed JLab
   workflow dispatch, resource overrides, and monitoring.
 - [Troubleshooting](TROUBLESHOOTING.md) maps common failures to checks and
@@ -81,3 +87,6 @@ use the reference pages while running a study.
 | outer test | Grouped DD simulations withheld from training and model selection. |
 | native holdout | Frozen-NPE predictive evaluation against named PARTONS models. |
 | real comparison | Read-only diagnostic overlay; never a likelihood or posterior update. |
+| workflow | A named SWIF2 dependency graph; it is orchestration, not a scientific project identity. |
+| project-state archive | The immutable handoff returned by one SWIF2 analysis stage and consumed by the next. |
+| reaping | SWIF2 transfer of declared outputs from disposable farm scratch to persistent storage. |

@@ -20,6 +20,7 @@ cd extract_dvcs_gpd
 ./install.sh --profile jlab_ifarm --accelerator auto
 cp jobs/jlab_ifarm/resources.env.example jobs/jlab_ifarm/resources.env
 vi jobs/jlab_ifarm/resources.env
+set -a; source jobs/jlab_ifarm/resources.env; set +a
 ```
 
 No Docker daemon is used on farm nodes. One CUDA-capable SIF serves CPU and GPU
@@ -44,13 +45,30 @@ Set the project/account/path variables and `SWIF_CORPUS_ARCHIVE` in the ignored
 The older `JLAB_*` resource values serve only the retained direct-Slurm
 diagnostic scripts.
 
+For a first campaign, set every placeholder path to an absolute user-owned
+location, set `JLAB_ACCOUNT` to an account shown by `sacctmgr show user
+"$USER" withassoc`, and set `SWIF_LOG_ROOT` to
+`/farm_out/$USER/dvcs`. `DVCS_PROJECT`, `DVCS_CORPUS`, and `DVCS_SELECTION`
+are defaults only; explicit `farm-*` command arguments take precedence.
+`resources.env` is shell syntax: write `NAME=value`, with no spaces around
+`=`. Validate it without submitting:
+
+```bash
+bash -n jobs/jlab_ifarm/resources.env
+test -d "$DVCS_WORKSPACE" && test -d "$DVCS_RESULTS"
+swif2 list -display json
+```
+
+Do not commit `resources.env`; it contains user/site paths and campaign
+settings.
+
 ## Interactive setup and checks
 
 ```bash
 ./dvcs init PROJECT
 ./dvcs show PROJECT
 ./dvcs doctor PROJECT
-./dvcs corpus-create PROJECT CORPUS --profile validation --shard-size 256
+./dvcs corpus-create PROJECT CORPUS --profile validation --shard-size 16
 ./dvcs corpus-plan PROJECT CORPUS
 ```
 
@@ -69,15 +87,26 @@ retries, logs, node-local I/O, and reaped outputs.
 
 ## Submit the managed workflow
 
-Validate locally first:
+For a new corpus, first validate and then submit the parallel corpus workflow:
 
 ```bash
-./dvcs farm-submit --project PROJECT --corpus CORPUS --selection baseline --profile validation --corpus-archive /absolute/corpus.tar.gz --from train --through plot --dry-run
+./dvcs farm-corpus-submit --project PROJECT --corpus CORPUS --profile validation --shard-size 16 --shards-per-worker 32 --workflow PROJECT-corpus-v1 --dry-run
+./dvcs farm-corpus-submit --project PROJECT --corpus CORPUS --profile validation --shard-size 16 --shards-per-worker 32 --workflow PROJECT-corpus-v1
 ```
 
-Remove `--dry-run` to import and start. Use `--only STAGE`, or `--from` and
-`--through`, to control the analysis range. Add `--include-optimize` only when
-an Optuna study is actually required. Full details, monitoring, recovery,
+Wait until the merge and output transfer finish. The analysis input is then
+`$SWIF_OUTPUT_ROOT/PROJECT-corpus-v1/final/CORPUS.tar.gz`. Validate analysis:
+
+```bash
+./dvcs farm-submit --project PROJECT --corpus CORPUS --selection baseline --profile validation --corpus-archive "$SWIF_OUTPUT_ROOT/PROJECT-corpus-v1/final/CORPUS.tar.gz" --from selection --through plot --workflow PROJECT-analysis-v1 --dry-run
+./dvcs farm-submit --project PROJECT --corpus CORPUS --selection baseline --profile validation --corpus-archive "$SWIF_OUTPUT_ROOT/PROJECT-corpus-v1/final/CORPUS.tar.gz" --from selection --through plot --workflow PROJECT-analysis-v1
+```
+
+If selection already exists, start at `materialize`; start at `train` only when
+materialized arrays already exist. Otherwise start at `selection`. Use
+`--only STAGE`, or `--from` and `--through`,
+to control the analysis range. Add `--include-optimize` only when an Optuna
+study is required. Full details, monitoring, recovery, external-corpus reuse,
 parallel corpus generation, and file movement are in
 [JLab SWIF2 workflows](JLAB_SWIF2.md).
 
@@ -88,9 +117,12 @@ parallel corpus generation, and file movement are in
   serial PARTONS regions.
 - GPU stages request a GPU explicitly. Slurm restricts visibility and
   Apptainer exposes only the allocated devices.
-- Train initially requests 8 CPUs, 1 GPU, and 24G RAM. The streaming
-  materializer removes the previous duplicate 5.4G context array; measure one
-  representative job before reducing RAM further.
+- Materialize requests 2 CPUs, no GPU, and 20G RAM. V6 telemetry showed an
+  8-CPU request was only 17.8% efficient because constant covariance work is
+  precomputed and 6+ GB state serialization is mostly memory/I/O-bound.
+- Train initially requests 4 CPUs, 1 GPU, and 32G RAM. Complete generated
+  arrays remain memory-mapped on CPU; only minibatches enter GPU memory. Measure
+  representative jobs before tuning RAM or batch size.
 - Evaluate uses 1 GPU plus CPUs for exact PARTONS work. CPU-only stages should
   not request GPU resources.
 - Large corpus production must use independent shard-range workers plus a
@@ -125,8 +157,19 @@ Monitor with:
 ```bash
 swif2 status WORKFLOW -jobs -transfers -storage -display json
 swif2 diagnose WORKFLOW
-swif2 retry-jobs WORKFLOW -problems
+swif2 retry-jobs WORKFLOW -problems PROBLEM_CLASS
 ```
+
+`RUNNING` means the payload is executing; `UNDISPATCHED`/pending work has not
+started its walltime. A stage may finish in Slurm before SWIF2 finishes reaping
+its declared outputs, so wait for transfer completion before consuming files.
+The batch launcher intentionally uses `--no-progress`; terminal-style bars are
+replaced by `[dvcs-swif2]` heartbeat lines in stdout.
+
+Cancel all running and pending work with `swif2 cancel WORKFLOW`. Add `-delete`
+only when the workflow record may also be removed and its name reused. Cancel
+does not delete already reaped scientific outputs. Never cancel underlying
+Slurm jobs alone for a managed campaign, because SWIF2 owns their state.
 
 ## Direct Slurm diagnostics
 

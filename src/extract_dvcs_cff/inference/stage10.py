@@ -272,6 +272,129 @@ def _finite(
     return result
 
 
+class Stage10ContextBuilder:
+    """Immutable encoder for many observations sharing one experiment."""
+
+    def __init__(
+        self,
+        *,
+        points: Sequence[Mapping[str, Any]],
+        covariance: npt.ArrayLike,
+        global_normalization_response: npt.ArrayLike,
+        lu_normalization_response: npt.ArrayLike,
+    ) -> None:
+        count = len(points)
+        if count == 0:
+            raise ValueError("points must not be empty")
+        matrix = _finite(covariance, (count, count), "covariance")
+        global_response = _finite(
+            global_normalization_response, (count,), "global response"
+        )
+        lu_response = _finite(
+            lu_normalization_response, (count,), "LU response"
+        )
+        if not np.array_equal(matrix, matrix.T):
+            raise ValueError("covariance must be exactly symmetric")
+        eigenvalues, eigenvectors = np.linalg.eigh(matrix)
+        if np.any(eigenvalues <= 0.0):
+            raise ValueError("covariance must be positive definite")
+        self._inverse_sqrt = (
+            eigenvectors * eigenvalues**-0.5
+        ) @ eigenvectors.T
+        marginal_sigma = np.sqrt(np.diag(matrix))
+        tokens = np.empty(
+            (count, len(STAGE10_POINT_FEATURE_NAMES)), dtype=np.float64
+        )
+        observable_ids = (
+            "DVCSCrossSectionUUMinus",
+            "DVCSCrossSectionDifferenceLUMinus",
+            "DVCSAc",
+            "DVCSAluMinus",
+            "DVCSAulMinus",
+            "DVCSAllMinus",
+        )
+        for index, point in enumerate(points):
+            required = {
+                "x_b", "t_GeV2", "Q2_GeV2", "beam_energy_GeV",
+                "phi_rad", "observable_id",
+            }
+            if set(point) != required:
+                raise ValueError(
+                    f"points[{index}] must contain exactly {sorted(required)}"
+                )
+            observable = str(point["observable_id"])
+            if observable not in observable_ids:
+                raise ValueError(f"points[{index}] has unknown observable")
+            x_b = float(point["x_b"])
+            t = float(point["t_GeV2"])
+            q2 = float(point["Q2_GeV2"])
+            energy = float(point["beam_energy_GeV"])
+            phi = float(point["phi_rad"])
+            if (
+                not all(np.isfinite((x_b, t, q2, energy, phi)))
+                or not 0.0 < x_b < 1.0
+                or t > 0.0
+                or q2 <= 0.0
+                or energy <= 0.0
+            ):
+                raise ValueError(f"points[{index}] has invalid kinematics")
+            one_hot = tuple(float(observable == item) for item in observable_ids)
+            tokens[index] = (
+                x_b / 0.3,
+                -t / 0.2,
+                q2,
+                energy / 12.0,
+                np.sin(phi),
+                np.cos(phi),
+                *one_hot,
+                0.0,
+                marginal_sigma[index],
+                0.0,
+                global_response[index],
+                lu_response[index],
+                1.0,
+            )
+        self._tokens = tokens
+        self._global_features = np.ones(
+            len(STAGE10_GLOBAL_FEATURE_NAMES), dtype=np.float64
+        )
+        self._count = count
+        self._inverse_sqrt.setflags(write=False)
+        self._tokens.setflags(write=False)
+        self._global_features.setflags(write=False)
+
+    @property
+    def context_width(self) -> int:
+        return self._tokens.size + len(self._global_features)
+
+    def build(self, observed: npt.ArrayLike) -> np.ndarray:
+        values = _finite(observed, (self._count,), "observed")
+        tokens = self._tokens.copy()
+        tokens[:, 12] = values
+        tokens[:, 14] = (self._inverse_sqrt @ values) / 10.0
+        context = np.concatenate((tokens.reshape(-1), self._global_features))
+        if not np.all(np.isfinite(context)):
+            raise ValueError("constructed Stage 10 context is non-finite")
+        return context.astype(np.float32)
+
+
+def prepare_stage10_context(
+    *,
+    points: Sequence[Mapping[str, Any]],
+    covariance: npt.ArrayLike,
+    global_normalization_response: npt.ArrayLike,
+    lu_normalization_response: npt.ArrayLike,
+) -> Stage10ContextBuilder:
+    """Precompute experiment-constant context terms once."""
+
+    return Stage10ContextBuilder(
+        points=points,
+        covariance=covariance,
+        global_normalization_response=global_normalization_response,
+        lu_normalization_response=lu_normalization_response,
+    )
+
+
 def build_stage10_context(
     *,
     points: Sequence[Mapping[str, Any]],
@@ -288,93 +411,12 @@ def build_stage10_context(
     permutation only permutes the resulting point tokens.
     """
 
-    count = len(points)
-    if count == 0:
-        raise ValueError("points must not be empty")
-    values = _finite(observed, (count,), "observed")
-    matrix = _finite(covariance, (count, count), "covariance")
-    global_response = _finite(
-        global_normalization_response, (count,), "global response"
-    )
-    lu_response = _finite(
-        lu_normalization_response, (count,), "LU response"
-    )
-    if not np.array_equal(matrix, matrix.T):
-        raise ValueError("covariance must be exactly symmetric")
-    eigenvalues, eigenvectors = np.linalg.eigh(matrix)
-    if np.any(eigenvalues <= 0.0):
-        raise ValueError("covariance must be positive definite")
-    inverse_sqrt = (
-        eigenvectors * eigenvalues**-0.5
-    ) @ eigenvectors.T
-    whitened = inverse_sqrt @ values
-    marginal_sigma = np.sqrt(np.diag(matrix))
-
-    tokens = np.empty(
-        (count, len(STAGE10_POINT_FEATURE_NAMES)), dtype=np.float64
-    )
-    for index, point in enumerate(points):
-        required = {
-            "x_b",
-            "t_GeV2",
-            "Q2_GeV2",
-            "beam_energy_GeV",
-            "phi_rad",
-            "observable_id",
-        }
-        if set(point) != required:
-            raise ValueError(
-                f"points[{index}] must contain exactly {sorted(required)}"
-            )
-        observable = str(point["observable_id"])
-        observable_ids = (
-            "DVCSCrossSectionUUMinus",
-            "DVCSCrossSectionDifferenceLUMinus",
-            "DVCSAc",
-            "DVCSAluMinus",
-            "DVCSAulMinus",
-            "DVCSAllMinus",
-        )
-        if observable not in observable_ids:
-            raise ValueError(f"points[{index}] has unknown observable")
-        x_b = float(point["x_b"])
-        t = float(point["t_GeV2"])
-        q2 = float(point["Q2_GeV2"])
-        energy = float(point["beam_energy_GeV"])
-        phi = float(point["phi_rad"])
-        if (
-            not all(np.isfinite((x_b, t, q2, energy, phi)))
-            or not 0.0 < x_b < 1.0
-            or t > 0.0
-            or q2 <= 0.0
-            or energy <= 0.0
-        ):
-            raise ValueError(f"points[{index}] has invalid kinematics")
-        one_hot = tuple(float(observable == item) for item in observable_ids)
-        tokens[index] = (
-            x_b / 0.3,
-            -t / 0.2,
-            q2,
-            energy / 12.0,
-            np.sin(phi),
-            np.cos(phi),
-            *one_hot,
-            values[index],
-            marginal_sigma[index],
-            whitened[index] / 10.0,
-            global_response[index],
-            lu_response[index],
-            1.0,
-        )
-
-    global_features = np.asarray(
-        (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
-        dtype=np.float64,
-    )
-    context = np.concatenate((tokens.reshape(-1), global_features))
-    if not np.all(np.isfinite(context)):
-        raise ValueError("constructed Stage 10 context is non-finite")
-    return context.astype(np.float32)
+    return prepare_stage10_context(
+        points=points,
+        covariance=covariance,
+        global_normalization_response=global_normalization_response,
+        lu_normalization_response=lu_normalization_response,
+    ).build(observed)
 
 
 def stage10_density_builder(configuration: Mapping[str, Any]):

@@ -153,11 +153,10 @@ across visible devices. Each process sees one device and runs a one-process
 trial stream. All processes coordinate through the same SQLite-backed Optuna
 study; the database timeout is configured for concurrent access.
 
-Before trials start, corpus-backed realization publication is protected by a
-project/profile process lock. The first process materializes the deterministic
-arrays; other GPU workers verify matching corpus, selection, configuration,
-bridge, and complete-file identity and reuse them. This prevents concurrent
-manifest publication and avoids rebuilding the same tensor set per GPU.
+For local one-command compatibility, corpus-backed realization publication is
+protected by a project/profile lock. Managed SWIF2 instead finishes one
+parallel CPU materialize job before any GPU optimize workers start, so GPU
+workers consume one immutable, hash-verified realization.
 
 Rank logs and a combined exit code are retained under results provenance. A
 worker failure fails the parent action. Concurrent-study behavior remains a
@@ -168,6 +167,7 @@ hardware/site acceptance item.
 | Phase | Primary resource | Notes |
 |---|---|---|
 | `corpus-generate` | CPU + memory/storage | Many isolated native workers; atomically publishes reusable shards and consolidated evidence. |
+| `materialize` | CPU + memory/storage | Affinity-limited deterministic workers; no PARTONS and no GPU. |
 | `train` | GPU preferred | CPU fallback supported; candidate members parallelize across GPUs. |
 | `optimize` | GPU preferred | Independent trials; persistent shared study. |
 | `evaluate` | mixed | Neural coverage/sampling plus CPU exact reevaluation. |
@@ -188,6 +188,14 @@ Inspect:
 - `evaluation/evaluation_metrics.json` for each exact parallel phase;
 - `training/training_summary.json` for device and peak-memory data;
 - `/results/provenance/runtime*.json` for container-level allocation;
-- `DVCS_RESULTS/slurm/...` for scheduler environment/hardware/job records.
+- `SWIF_OUTPUT_ROOT/WORKFLOW/performance/` for required aggregate JSON and raw
+  JSONL cgroup/GPU samples;
+- `SWIF_OUTPUT_ROOT/WORKFLOW/summaries/` for stage and Slurm/SWIF IDs;
+- `DVCS_RESULTS/slurm/...` only for retained direct-Slurm diagnostics.
 
 Report requested, allocated, resolved, and actually used resources separately.
+For a running SWIF2 stage, use its heartbeat rather than `seff` accounting,
+which may remain zero until the job ends. Tune future requests from several
+successful comparable attempts: CPU efficiency alone does not prove that more
+or fewer cores reduce elapsed time, and RAM should track measured peak usage
+plus a workload-specific margin rather than a fixed percentage.

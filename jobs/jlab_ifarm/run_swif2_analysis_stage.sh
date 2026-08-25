@@ -14,7 +14,7 @@ heartbeat_seconds="${13:?heartbeat seconds}"
 collector="${14:?performance collector}" performance_summary="${15:?performance summary}"
 performance_samples="${16:?performance samples}" performance_interval="${17:?performance interval}"
 
-[[ "${stage}" =~ ^(selection|optimize|train|evaluate|compare|holdout|plot)$ ]] || {
+[[ "${stage}" =~ ^(selection|materialize|optimize|train|evaluate|compare|holdout|plot)$ ]] || {
     echo "unsupported analysis stage: ${stage}" >&2
     exit 64
 }
@@ -117,10 +117,12 @@ fi
 case "${stage}" in
     selection)
         payload=(selection-create "${project}" "${corpus}" "${selection}" --profile "${profile}") ;;
+    materialize)
+        payload=(materialize "${project}" --profile "${profile}" --corpus "${corpus}" --selection "${selection}" --workers all_available --no-progress) ;;
     optimize)
-        payload=(optimize "${project}" --profile "${profile}" --corpus "${corpus}" --selection "${selection}" --no-progress) ;;
+        payload=(optimize "${project}" --profile "${profile}" --no-progress) ;;
     train)
-        payload=(train "${project}" --profile "${profile}" --corpus "${corpus}" --selection "${selection}" --no-progress) ;;
+        payload=(train "${project}" --profile "${profile}" --no-progress) ;;
     evaluate)
         payload=(evaluate "${project}" --profile "${profile}" --no-progress) ;;
     compare)
