@@ -14,6 +14,9 @@ fallback GPD/CFF/observable model.
 
 ## Five-minute orientation
 
+Choose one execution path. Ordinary Linux can run stages directly. JLab
+ifarm is the control host; sustained work runs through SWIF2 on farm nodes.
+
 Local Linux:
 
 ```bash
@@ -34,30 +37,61 @@ cd extract_dvcs_gpd
 ./dvcs plot first-study --profile quick
 ```
 
-JLab ifarm:
+JLab ifarm, for a complete new-corpus campaign:
 
 ```bash
 ./install.sh --profile jlab_ifarm --accelerator auto
 cp -n jobs/jlab_ifarm/resources.env.example jobs/jlab_ifarm/resources.env
 vi jobs/jlab_ifarm/resources.env
+set -a; source jobs/jlab_ifarm/resources.env; set +a
 ./dvcs init first-study
-./dvcs corpus-create first-study first-corpus --profile validation
+./dvcs show first-study
+./dvcs doctor first-study
+./dvcs corpus-create first-study first-corpus --profile validation --shard-size 16
 ./dvcs corpus-plan first-study first-corpus
-./dvcs farm-submit --project first-study --corpus first-corpus \
-  --selection baseline --profile validation \
-  --corpus-archive /absolute/first-corpus.tar.gz --dry-run
+./dvcs farm-corpus-submit --project first-study --corpus first-corpus \
+  --profile validation --shard-size 16 --shards-per-worker 32 \
+  --workflow first-study-corpus-v1 --dry-run
+./dvcs farm-corpus-submit --project first-study --corpus first-corpus \
+  --profile validation --shard-size 16 --shards-per-worker 32 \
+  --workflow first-study-corpus-v1
 ```
 
-Remove `--dry-run` after checking the generated workflow. SWIF2 is the
-authoritative ifarm submission layer; it stages active I/O node-locally,
-requests GPUs for neural stages, and reaps explicit outputs. See
-[JLab ifarm and farm guide](docs/JLAB_IFARM.md).
+After that workflow finishes and reaps its output, submit analysis from
+selection creation through plots:
+
+```bash
+./dvcs farm-submit --project first-study --corpus first-corpus \
+  --selection baseline --profile validation \
+  --corpus-archive "$SWIF_OUTPUT_ROOT/first-study-corpus-v1/final/first-corpus.tar.gz" \
+  --from selection --through plot --workflow first-study-analysis-v1 --dry-run
+./dvcs farm-submit --project first-study --corpus first-corpus \
+  --selection baseline --profile validation \
+  --corpus-archive "$SWIF_OUTPUT_ROOT/first-study-corpus-v1/final/first-corpus.tar.gz" \
+  --from selection --through plot --workflow first-study-analysis-v1
+```
+
+The dry run validates and packages without contacting SWIF2; the second command
+imports and starts the workflow. If a compatible verified corpus already
+exists, reuse it instead of regenerating it. See [using another user's
+corpus](docs/CORPUS_AND_DATA_SELECTION.md#using-another-users-corpus).
+
+SWIF2 is the authoritative ifarm submission layer. It stages active I/O
+node-locally, requests GPUs for neural stages, and reaps explicit outputs.
+Monitor with `swif2 status WORKFLOW -jobs -transfers -storage -display json`.
+Scientific archives and metrics go below `$SWIF_OUTPUT_ROOT/WORKFLOW/`; logs go
+below `$SWIF_LOG_ROOT/WORKFLOW/`. See the [JLab ifarm and farm
+guide](docs/JLAB_IFARM.md).
 
 Use `--from`, `--through`, or `--only` to submit selected stages. Scheduler
 stdout/stderr go to `/farm_out/$USER` by default; five-minute heartbeat lines
 make long quiet stages observable without flooding the log. Each stage also
 reaps cgroup CPU/memory/I/O and GPU utilization/VRAM time series for measured
 resource tuning of later submissions.
+
+Names are identities: `experiment.name` must equal the project directory,
+profiles must match across corpus, selection, and results, and a changed native
+bridge, physics configuration, prior, or kinematics requires a new corpus.
 
 `quick` is a real 82-dimensional workflow with 2,048 accepted native prior
 vectors by default; it is not a seconds-long mock. Use it to establish the
@@ -132,6 +166,8 @@ Start at the [documentation map](docs/INDEX.md). The primary guides are:
 - [Native bridge](docs/NATIVE_BRIDGE.md)
 - [Data contracts](docs/DATA_CONTRACTS.md)
 - [JLab ifarm](docs/JLAB_IFARM.md)
+- [JLab SWIF2](docs/JLAB_SWIF2.md)
+- [Resource management](docs/RESOURCE_MANAGEMENT.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 
 ## Verification status

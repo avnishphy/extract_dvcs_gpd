@@ -46,18 +46,23 @@ cd extract_dvcs_gpd
 ./install.sh --profile jlab_ifarm --accelerator auto
 cp -n jobs/jlab_ifarm/resources.env.example jobs/jlab_ifarm/resources.env
 vi jobs/jlab_ifarm/resources.env
+set -a; source jobs/jlab_ifarm/resources.env; set +a
 ./dvcs init ifarm-acceptance
 apptainer inspect .dvcs/*.sif
 ./dvcs doctor ifarm-acceptance
-./dvcs corpus-create ifarm-acceptance ifarm-acceptance-corpus --profile validation
+./dvcs corpus-create ifarm-acceptance ifarm-acceptance-corpus --profile validation --shard-size 16
 ./dvcs corpus-plan ifarm-acceptance ifarm-acceptance-corpus
 sinfo -o '%P %G %c %m %l %f'
 swif2 list -display json
-./dvcs farm-corpus-submit --project ifarm-acceptance --corpus ifarm-acceptance-corpus --profile validation --dry-run
-./dvcs farm-submit --project ifarm-acceptance --corpus ifarm-acceptance-corpus --selection baseline --profile validation --corpus-archive /absolute/corpus.tar.gz --dry-run
+./dvcs farm-corpus-submit --project ifarm-acceptance --corpus ifarm-acceptance-corpus --profile validation --workflow ifarm-acceptance-corpus-v1 --dry-run
+./dvcs farm-corpus-submit --project ifarm-acceptance --corpus ifarm-acceptance-corpus --profile validation --workflow ifarm-acceptance-corpus-v1
+swif2 status ifarm-acceptance-corpus-v1 -jobs -transfers -storage -display json
+./dvcs farm-submit --project ifarm-acceptance --corpus ifarm-acceptance-corpus --selection baseline --profile validation --corpus-archive "$SWIF_OUTPUT_ROOT/ifarm-acceptance-corpus-v1/final/ifarm-acceptance-corpus.tar.gz" --from selection --through plot --workflow ifarm-acceptance-analysis-v1 --dry-run
+./dvcs farm-submit --project ifarm-acceptance --corpus ifarm-acceptance-corpus --selection baseline --profile validation --corpus-archive "$SWIF_OUTPUT_ROOT/ifarm-acceptance-corpus-v1/final/ifarm-acceptance-corpus.tar.gz" --from selection --through plot --workflow ifarm-acceptance-analysis-v1
 ```
 
-Remove `--dry-run` only after reviewing the generated requests and paths. Add
+Run each non-dry command only after reviewing its generated requests and paths,
+and wait for the corpus merge/output transfer before submitting analysis. Add
 `--include-optimize` only when an Optuna campaign is intended.
 
 Answer yes when the ifarm GPU-doctor prompt appears. In noninteractive
@@ -73,12 +78,15 @@ and verifies `nvidia-smi`, the scheduler's `CUDA_VISIBLE_DEVICES`, Apptainer
 After completion:
 
 ```bash
-sacct --format=JobID%18,State,ExitCode,Partition,AllocCPUS,ReqMem,Elapsed -j <job-ids>
-find "$DVCS_RESULTS/slurm" -type f -maxdepth 4 -print
+swif2 status ifarm-acceptance-analysis-v1 -jobs -transfers -storage -display json
+find "$SWIF_OUTPUT_ROOT/ifarm-acceptance-analysis-v1" -maxdepth 2 -type f -print
 apptainer exec --cleanenv --network none \
   --bind "$DVCS_WORKSPACE:/workspace" --bind "$DVCS_RESULTS:/results" \
   --bind "$DVCS_CACHE:/cache" --bind "$DVCS_DATABASE:/database:ro" \
   .dvcs/*.sif /opt/dvcs/bin/partons_bridge --self-test
 ```
 
-Record the actual SIF checksum, OCI source digest, NVIDIA driver/GPU, CUDA runtime, job IDs, exit codes, and filesystem selected. JLab acceptance is not complete until these commands run on site.
+Confirm every expected state, summary, aggregate performance JSON, and raw
+JSONL output was reaped. Record the actual SIF checksum, OCI source digest,
+NVIDIA driver/GPU, CUDA runtime, SWIF/Slurm job IDs, exit codes, and filesystem
+selected. JLab acceptance is not complete until these commands run on site.

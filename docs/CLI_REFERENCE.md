@@ -179,18 +179,29 @@ NAME --profile quick|validation [--no-progress]
 The profile defaults to `quick`. `--no-progress` disables interactive stderr
 bars and is useful in scripts and logs.
 
+### `materialize`
+
+```bash
+./dvcs materialize PROJECT --profile quick --corpus CORPUS \
+  --selection SELECTION --workers all_available
+```
+
+Builds deterministic nuisance/noise replicas and DeepSets arrays without
+calling PARTONS or using a GPU. Workers are capped by CPU affinity or the Slurm
+allocation. Each `(parameter, replica)` has an independent fixed seed and a
+fixed output row, so worker completion order cannot change physics or hashes.
+
 ### `train`
 
 ```bash
-./dvcs train PROJECT --profile quick --corpus CORPUS --selection SELECTION
+./dvcs train PROJECT --profile quick
 ```
 
-Requires the named verified corpus and immutable selection. It first
-deterministically materializes nuisance/noise replicas and DeepSets tensors
-without calling PARTONS, then trains every candidate seeded NPE member. Active
-members are selected using grouped internal-validation NLL only. Complete
-hash-valid member checkpoints are resumed; checkpoints are also bound to the
-materialized input manifest.
+Requires a completed materialization, then trains every candidate seeded NPE
+member. Supplying `--corpus CORPUS --selection SELECTION` remains supported for
+one-command local use. Active members are selected using grouped
+internal-validation NLL only. Complete hash-valid member checkpoints are
+resumed and bound to the materialized input manifest.
 
 On multiple visible GPUs the container entrypoint launches one process per
 GPU. Independent ensemble members are deterministically sharded. Asking for
@@ -236,8 +247,8 @@ preserving the saved result contract and explicit dependency chain.
 
 ```bash
 ./dvcs farm-submit --project PROJECT --corpus CORPUS --selection baseline \
-  --profile validation --corpus-archive /absolute/corpus.tar.gz \
-  --from train --through plot [--dry-run]
+  --profile validation --corpus-archive /absolute/verified-corpus.tar.gz \
+  --from selection --through plot [--dry-run]
 ```
 
 Packages content-addressed SIF/database/project/corpus inputs, writes a SWIF2
@@ -245,6 +256,12 @@ workflow, and either validates it (`--dry-run`) or imports and starts it. Use
 `--only STAGE`, `--include-optimize`, or `--import-only` as needed. See
 [JLab SWIF2 workflows](JLAB_SWIF2.md). Every stage requires and reaps aggregate
 CPU/memory/I/O/GPU metrics plus raw time-series samples.
+
+The default range is `selection` through `plot`. Start at `materialize` when
+the selection exists; start at `train` only when its arrays already exist.
+`--import-only` does
+not run anything; start it later with `swif2 run WORKFLOW -maxconcurrent N`.
+Without `--import-only`, no separate `swif2 run` command is required.
 
 ### `farm-corpus-submit` (JLab ifarm)
 
@@ -255,7 +272,10 @@ CPU/memory/I/O/GPU metrics plus raw time-series samples.
 
 Creates independent SWIF2 shard-range workers plus a verified merge job.
 Workers run PARTONS from node-local storage and return immutable partial
-archives; only the complete deep-verified merge is published.
+archives; only the complete deep-verified merge is published below
+`SWIF_OUTPUT_ROOT/WORKFLOW/final/CORPUS.tar.gz`. `--shard-size` counts vectors
+per atomic shard; `--shards-per-worker` counts sequential shards assigned to
+one independent job.
 
 ### `compare`
 

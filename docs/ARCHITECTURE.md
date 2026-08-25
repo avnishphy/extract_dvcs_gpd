@@ -64,7 +64,7 @@ replaceable; user state is not stored in the container writable layer.
 | `configs/` | Frozen engine, physics, schema, validation, and request examples. |
 | `user/` | Imported scientific user explanations retained from the validated runtime. |
 | `docs/` | Distribution onboarding, operation, reference, and assurance documentation. |
-| `jobs/jlab_ifarm/` | Editable Slurm templates and dependency-aware submission wrapper. |
+| `jobs/jlab_ifarm/` | Authoritative SWIF2 workflow generation, node-local execution/reaping wrappers, performance collection, and retained direct-Slurm diagnostics. |
 | `scripts/` | Container entrypoint, native source build, and multi-GPU Optuna launcher. |
 | `tests/` | Distribution/static/native/quick/offline verification entry points. |
 | `tools/` | Upstream synchronization, license collection, and SBOM helper. |
@@ -110,8 +110,11 @@ and translates it into `.engine/workflow.json` and `.engine/physics.json`.
 Those files are derived implementation inputs, not another editable API.
 
 Training/optimization materialization writes `workspace_contract.json`,
-binding results to the canonical engine configuration hash, profile, bridge
+binding results to the scientific engine-configuration hash, profile, bridge
 executable hash, synthetic-only flag, corpus, selection, and split policy.
+Allocation-dependent accelerator, CPU-thread, and native-worker fields are
+recorded as execution provenance but excluded from scientific identity, so
+the CPU/GPU stage chain remains compatible without weakening physics checks.
 It also hashes the generated array manifest. Downstream evaluation, comparison,
 holdout, plotting, and real-data diagnostics refuse incompatible results. A
 changed experiment therefore requires a new project, although an unchanged
@@ -160,8 +163,9 @@ The workflow draws 80 GPD-shape coordinates from declared uniform supports,
 asks the bridge for the selected ordered subset of six audited observables at
 every kinematic point, and stores noise-free parameter/CFF/observable shards.
 Covariance, nuisances, noise, and DeepSets contexts are materialized later
-from an immutable group selection. The physics prediction is never
-reimplemented in Python.
+from an immutable group selection. Experiment-constant encoding terms are
+computed once; independently seeded groups fill fixed rows across CPU workers.
+The physics prediction is never reimplemented in Python.
 
 Five controls are inferred for every combination of four GPD types and four
 channels: normalization, small-β exponent, large-β exponent, profile width,

@@ -21,12 +21,18 @@ scientific meaning.
 
 ## Install and initialize
 
+Local Linux:
+
 ```bash
 ./install.sh --profile local --accelerator auto
 ./dvcs init tutorial
 ./dvcs show tutorial
 ./dvcs doctor tutorial
 ```
+
+On JLab use `--profile jlab_ifarm`; initialize and inspect projects on ifarm,
+but submit sustained generation, training, and evaluation through SWIF2. The
+complete JLab sequence is in [JLab ifarm](JLAB_IFARM.md).
 
 `init` creates the project and, when the pinned database is installed,
 borrows only kinematics and metadata from its read-only catalog. It never uses
@@ -44,6 +50,11 @@ workspace/tutorial/
 
 The exact host path depends on `DVCS_WORKSPACE` selected during installation.
 Use `./dvcs show tutorial` instead of assuming a path.
+
+Project names are permanent identities. The directory name and
+`experiment.name` must match exactly. If you copy another experiment into a new
+project, change only its `experiment.name` before `show`; all other changes
+must be scientifically intentional.
 
 ## Read the experiment before running
 
@@ -151,6 +162,10 @@ resumption easier to understand. The former project-local `generate` and
 all-in-one `run` actions are intentionally no longer public: explicit corpus
 and selection names prevent accidental recomputation and split drift.
 
+On JLab, replace direct corpus generation with `farm-corpus-submit`, then give
+the merged portable archive to `farm-submit`. Do not launch one oversized
+multi-node PARTONS process. See [JLab SWIF2](JLAB_SWIF2.md).
+
 ### Corpus generation
 
 Generation performs an injected-truth native preflight, draws a deterministic
@@ -169,9 +184,9 @@ the stored CFFs, and no existing shard is modified. See
 
 `selection-create` deterministically partitions native parameter groups into
 training, internal validation, and locked outer test. Every noise replica of a
-group keeps the same role. Training and Optuna materialize full covariance,
-nuisances, noise, and contexts deterministically from the selected clean
-corpus; materialization calls no native backend.
+group keeps the same role. `materialize` builds full-covariance nuisances,
+noise, and contexts deterministically from the clean corpus without PARTONS or
+a GPU. On SWIF2 it uses a separate eight-CPU job before optimize/training.
 
 ### Training
 
@@ -184,6 +199,12 @@ On CPU, `cpu_threads` bounds Torch threads. On one GPU, training uses that
 device. On multiple allocated GPUs, independent ensemble members are assigned
 deterministically across one NCCL process per visible device. PARTONS is not
 involved in training and never runs on a GPU.
+
+Run `materialize` before training. Experiment-constant covariance and token
+terms are computed once; independent parameter groups fill canonical array rows
+across affinity-limited CPU workers. `Writing training arrays` publishes named
+tensor files and hashes. SWIF2 reaps that CPU-stage state before requesting a
+GPU for training, and reports both stages through separate heartbeats.
 
 ### Evaluation
 
@@ -232,6 +253,12 @@ plots/*.png
 Read [Data contracts](DATA_CONTRACTS.md) for artifact semantics and [Results
 and interpretation](RESULTS_AND_INTERPRETATION.md) before drawing physics
 conclusions.
+
+For a SWIF2 campaign, the original workspace is not modified while jobs run.
+Each successful stage returns a project-state tar archive beneath
+`SWIF_OUTPUT_ROOT/WORKFLOW/state/`; the last archive contains the complete
+project. Stage summaries and measured resource data are in `summaries/` and
+`performance/`, while scheduler logs are under `SWIF_LOG_ROOT/WORKFLOW/`.
 
 ## Main plots
 
@@ -305,6 +332,11 @@ Create a new project when changing:
 - validation policy.
 
 Do not copy `workspace_contract.json` into a changed project to bypass checks.
+
+An interrupted local `corpus-generate` safely resumes complete shards. In
+SWIF2, retry transient problem jobs through SWIF2; dependency gates prevent a
+failed stage from releasing its successors. Never treat an unreaped farm
+scratch directory as a result.
 
 ## A disciplined study procedure
 

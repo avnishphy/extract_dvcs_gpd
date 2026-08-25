@@ -30,8 +30,11 @@ from extract_dvcs_cff.cli.user import (
 from extract_dvcs_cff.workflows.pseudodata import (
     ParallelNativeResult,
     PartitionedNativeResult,
+    _load_generated,
+    _mean_estimator_log_prob,
     sha256,
 )
+from extract_dvcs_cff.inference.stage10 import prepare_stage10_context
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -58,6 +61,103 @@ class ReusableCorpusTests(unittest.TestCase):
 
     def tearDown(self):
         self.temporary.cleanup()
+
+    def test_selective_generated_loader_memory_maps_only_requested_arrays(self):
+        generated = self.root / "workspace/generated"
+        generated.mkdir(parents=True)
+        contexts = np.arange(24, dtype=np.float32).reshape(3, 8)
+        theta = np.arange(6, dtype=np.float32).reshape(3, 2)
+        np.save(generated / "contexts.npy", contexts, allow_pickle=False)
+        np.save(generated / "theta_latent.npy", theta, allow_pickle=False)
+        manifest = {"arrays": {}}
+        for name in ("contexts", "theta_latent"):
+            path = generated / f"{name}.npy"
+            value = np.load(path, allow_pickle=False)
+            manifest["arrays"][name] = {
+                "sha256": sha256(path),
+                "shape": list(value.shape),
+                "dtype": str(value.dtype),
+            }
+        (generated / "array_manifest.json").write_text(
+            json.dumps(manifest), encoding="utf-8"
+        )
+        loaded = _load_generated(
+            self.root / "workspace", names=("contexts",)
+        )
+        self.assertEqual(set(loaded), {"contexts"})
+        self.assertIsInstance(loaded["contexts"], np.memmap)
+        np.testing.assert_array_equal(loaded["contexts"], contexts)
+
+    def test_estimator_scoring_respects_device_batch_bound(self):
+        import torch
+
+        class Estimator:
+            def __init__(self):
+                self.batch_sizes = []
+
+            def log_prob(self, theta, context):
+                self.batch_sizes.append(len(theta))
+                return theta[:, 0] + context[:, 0]
+
+        estimator = Estimator()
+        theta = torch.arange(10, dtype=torch.float32).reshape(10, 1)
+        context = (2 * theta).clone()
+        indices = torch.tensor([9, 1, 7, 2, 5, 3, 8], dtype=torch.long)
+        observed = _mean_estimator_log_prob(
+            estimator, theta, context, indices,
+            device=torch.device("cpu"), batch_size=3,
+        )
+        expected = float((3 * indices.float()).mean().item())
+        self.assertAlmostEqual(observed, expected)
+        self.assertEqual(estimator.batch_sizes, [3, 3, 1])
+
+    def test_precomputed_context_is_exactly_legacy_equivalent(self):
+        points = [
+            {
+                "x_b": 0.2, "t_GeV2": -0.1, "Q2_GeV2": 2.0,
+                "beam_energy_GeV": 10.6, "phi_rad": 0.3,
+                "observable_id": "DVCSCrossSectionUUMinus",
+            },
+            {
+                "x_b": 0.3, "t_GeV2": -0.2, "Q2_GeV2": 3.0,
+                "beam_energy_GeV": 11.0, "phi_rad": 1.2,
+                "observable_id": "DVCSAluMinus",
+            },
+        ]
+        observed = np.asarray([0.7, -0.2])
+        covariance = np.asarray([[1.2, 0.1], [0.1, 0.8]])
+        global_response = np.asarray([0.2, 0.3])
+        lu_response = np.asarray([0.0, 0.4])
+        eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+        inverse_sqrt = (
+            eigenvectors * eigenvalues**-0.5
+        ) @ eigenvectors.T
+        whitened = inverse_sqrt @ observed
+        sigma = np.sqrt(np.diag(covariance))
+        observable_ids = (
+            "DVCSCrossSectionUUMinus",
+            "DVCSCrossSectionDifferenceLUMinus",
+            "DVCSAc", "DVCSAluMinus", "DVCSAulMinus", "DVCSAllMinus",
+        )
+        legacy = []
+        for index, point in enumerate(points):
+            legacy.extend((
+                point["x_b"] / 0.3, -point["t_GeV2"] / 0.2,
+                point["Q2_GeV2"], point["beam_energy_GeV"] / 12.0,
+                np.sin(point["phi_rad"]), np.cos(point["phi_rad"]),
+                *(float(point["observable_id"] == item)
+                  for item in observable_ids),
+                observed[index], sigma[index], whitened[index] / 10.0,
+                global_response[index], lu_response[index], 1.0,
+            ))
+        legacy.extend((1.0,) * 9)
+        expected = np.asarray(legacy, dtype=np.float32)
+        builder = prepare_stage10_context(
+            points=points, covariance=covariance,
+            global_normalization_response=global_response,
+            lu_normalization_response=lu_response,
+        )
+        np.testing.assert_array_equal(builder.build(observed), expected)
 
     @staticmethod
     def _native_result(parameters, config):
@@ -172,13 +272,18 @@ class ReusableCorpusTests(unittest.TestCase):
         self.assertFalse(groups[1] & groups[2])
 
         outputs = []
-        for name in ("run-a", "run-b"):
+        for name, workers in (("run-a", 1), ("run-b", 4)):
             workspace = self.root / name
-            materialize_selection(
-                corpus=self.corpus, selection_path=selection,
-                configuration_path=self.configuration, workspace=workspace,
-                profile="quick", bridge=self.bridge,
-            )
+            with patch(
+                "extract_dvcs_cff.native_parallel.available_affinity_cpus",
+                return_value=(0, 1, 2, 3),
+            ):
+                materialized = materialize_selection(
+                    corpus=self.corpus, selection_path=selection,
+                    configuration_path=self.configuration, workspace=workspace,
+                    profile="quick", bridge=self.bridge, workers=workers,
+                )
+            self.assertEqual(materialized["materialization_workers"], workers)
             progress = json.loads(
                 (workspace / "materialization_progress.json").read_text()
             )
@@ -203,7 +308,10 @@ class ReusableCorpusTests(unittest.TestCase):
                 (workspace / "materialization_progress.json").read_text()
             )
             self.assertEqual(progress["status"], "reused")
-            outputs.append(sha256(workspace / "generated/contexts.npy"))
+            outputs.append({
+                path.name: sha256(path)
+                for path in sorted((workspace / "generated").glob("*.npy"))
+            })
         self.assertEqual(outputs[0], outputs[1])
 
     def test_deep_verification_rejects_corrupt_shard(self):
@@ -303,19 +411,23 @@ class ReusableCorpusTests(unittest.TestCase):
 
 
 class PublicCorpusInterfaceTests(unittest.TestCase):
-    def test_parser_requires_explicit_corpus_and_selection(self):
+    def test_parser_supports_separate_materialize_and_train(self):
         parser = _parser()
         with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             parser.parse_args(["generate", "study"])
         with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             parser.parse_args(["run", "study"])
         with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            parser.parse_args(["train", "study"])
+            parser.parse_args(["materialize", "study"])
+        downstream = parser.parse_args(["train", "study"])
+        self.assertIsNone(downstream.corpus)
+        self.assertIsNone(downstream.selection)
         parsed = parser.parse_args([
-            "train", "study", "--corpus", "shared",
-            "--selection", "baseline",
+            "materialize", "study", "--corpus", "shared",
+            "--selection", "baseline", "--workers", "4",
         ])
         self.assertEqual((parsed.corpus, parsed.selection), ("shared", "baseline"))
+        self.assertEqual(parsed.workers, "4")
 
     def test_workspace_listing_excludes_internal_corpus_stores(self):
         with tempfile.TemporaryDirectory() as temporary:

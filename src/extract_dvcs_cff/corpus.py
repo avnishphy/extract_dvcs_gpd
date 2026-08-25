@@ -41,6 +41,7 @@ from extract_dvcs_cff.workflows.pseudodata import (
     canonical,
     load_configuration,
     pretty_json,
+    scientific_configuration_sha256,
     sha256,
 )
 
@@ -1163,6 +1164,7 @@ def _load_exact_arrays(corpus: Path, manifest: Mapping[str, Any],
 def materialize_selection(*, corpus: Path, selection_path: Path,
                           configuration_path: Path, workspace: Path,
                           profile: str, bridge: Path,
+                          workers: int | str = "all_available",
                           show_progress: bool | None = None) -> dict[str, Any]:
     """Serialize realization publication and reuse an identical result.
 
@@ -1188,6 +1190,7 @@ def materialize_selection(*, corpus: Path, selection_path: Path,
             workspace=workspace,
             profile=profile,
             bridge=bridge,
+            workers=workers,
             show_progress=show_progress,
         )
 
@@ -1195,12 +1198,14 @@ def materialize_selection(*, corpus: Path, selection_path: Path,
 def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
                                   configuration_path: Path, workspace: Path,
                                   profile: str, bridge: Path,
+                                  workers: int | str = "all_available",
                                   show_progress: bool | None = None) -> dict[str, Any]:
     """Build deterministic neural tensors from clean exact corpus groups."""
 
     from extract_dvcs_cff.inference.stage10 import (
-        build_stage10_context, stage10_physical_to_latent,
+        prepare_stage10_context, stage10_physical_to_latent,
     )
+    from extract_dvcs_cff.native_parallel import available_affinity_cpus
     from extract_dvcs_cff.progress import progress_iter
     import torch
 
@@ -1241,7 +1246,9 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
     expected_contract_base = {
         "schema_version": 1,
         "configuration": str(configuration_path.resolve(strict=True)),
-        "configuration_sha256": sha256(configuration_path.resolve(strict=True)),
+        "configuration_sha256": scientific_configuration_sha256(
+            configuration_path
+        ),
         "profile": profile,
         "bridge_sha256": sha256(bridge.resolve(strict=True)),
         "real_data": False,
@@ -1271,7 +1278,9 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
             "schema_version": 2,
             "corpus_manifest_sha256": manifest["manifest_sha256"],
             "selection_manifest_sha256": selection["manifest_sha256"],
-            "configuration_sha256": sha256(configuration_path),
+            "configuration_sha256": scientific_configuration_sha256(
+                configuration_path
+            ),
             "bridge_sha256": sha256(bridge.resolve(strict=True)),
             "realization_schema_version": REALIZATION_SCHEMA_VERSION,
         }
@@ -1362,6 +1371,17 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
     )
     replicates = int(config["profiles"][profile]["noise_replicates_per_parameter"])
     group_count = sum(len(group_indices) for _, group_indices in roles)
+    available_workers = len(available_affinity_cpus())
+    if workers == "all_available":
+        materialization_workers = min(available_workers, group_count)
+    elif isinstance(workers, int) and not isinstance(workers, bool):
+        if not 1 <= workers <= 256:
+            raise ValueError("materialization workers must be in [1,256]")
+        materialization_workers = min(workers, available_workers, group_count)
+    else:
+        raise ValueError(
+            "materialization workers must be an integer or 'all_available'"
+        )
     context_count = group_count * replicates
     theta_physical = np.empty(
         (context_count, parameters.shape[1] + 2), dtype=np.float64
@@ -1369,7 +1389,15 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
     observations_normalized = np.empty(
         (context_count, len(point_table)), dtype=np.float64
     )
-    contexts: np.ndarray | None = None
+    context_builder = prepare_stage10_context(
+        points=point_table,
+        covariance=covariance,
+        global_normalization_response=global_response,
+        lu_normalization_response=lu_response,
+    )
+    contexts = np.empty(
+        (context_count, context_builder.context_width), dtype=np.float32
+    )
     parameter_indices = np.empty(context_count, dtype=np.int64)
     role_codes = np.empty(context_count, dtype=np.uint8)
     role_code = {"train": 0, "validation": 1, "test": 2}
@@ -1377,60 +1405,66 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
     _atomic_json(progress_path, {
         "schema_version": 1, "phase": "contexts",
         "completed": 0, "total": group_count, "status": "running",
+        "workers": materialization_workers,
     })
     noise_seed = int(config["seeds"]["training_noise"])
-    group_iterator = progress_iter(
-        (
-            (role, int(group_index))
-            for role, group_indices in roles
-            for group_index in group_indices
-        ),
-        total=group_count, description="Materializing training contexts",
-        enabled=show_progress, unit="parameter", leave=True,
+    ordered_groups = tuple(
+        (role, int(group_index))
+        for role, indices in roles
+        for group_index in indices
     )
-    row_index = 0
-    update_interval = max(1, group_count // 100)
-    for group_position, (role, group_index) in enumerate(group_iterator, 1):
+    group_items = tuple(
+        (position, role, group_index)
+        for position, (role, group_index) in enumerate(ordered_groups)
+    )
+
+    def materialize_group(item: tuple[int, str, int]) -> None:
+        position, role, group_index = item
+        row_start = position * replicates
         for replica in range(replicates):
+            row_index = row_start + replica
             rng = np.random.Generator(np.random.PCG64(
                 np.random.SeedSequence([
-                    noise_seed, int(group_index), replica,
+                    noise_seed, group_index, replica,
                     REALIZATION_SCHEMA_VERSION,
                 ])
             ))
             eta_global, eta_lu = rng.standard_normal(2)
-            theta = np.concatenate((
-                parameters[group_index], [eta_global, eta_lu]
-            ))
+            theta_physical[row_index] = (
+                *parameters[group_index], eta_global, eta_lu,
+            )
             mean = _effective_prediction(
                 native_predictions[group_index], eta_global, eta_lu,
                 global_response, lu_response,
             )
             observed = mean + cholesky @ rng.standard_normal(len(point_table))
-            context = build_stage10_context(
-                points=point_table, observed=observed,
-                covariance=covariance,
-                global_normalization_response=global_response,
-                lu_normalization_response=lu_response,
-            )
-            if contexts is None:
-                contexts = np.empty(
-                    (context_count, len(context)), dtype=np.float32
-                )
-            theta_physical[row_index] = theta
             observations_normalized[row_index] = observed
-            contexts[row_index] = context
+            contexts[row_index] = context_builder.build(observed)
             parameter_indices[row_index] = group_index
             role_codes[row_index] = role_code[role]
-            row_index += 1
-        if group_position % update_interval == 0 or group_position == group_count:
-            _atomic_json(progress_path, {
-                "schema_version": 1, "phase": "contexts",
-                "completed": group_position, "total": group_count,
-                "status": "running",
-            })
-    if contexts is None or row_index != context_count:
-        raise RuntimeError("materialized context count differs from selection")
+
+    def record_progress(results: Any) -> None:
+        iterator = progress_iter(
+            results, total=group_count,
+            description="Materializing training contexts",
+            enabled=show_progress, unit="parameter", leave=True,
+        )
+        for completed, _ in enumerate(iterator, 1):
+            if completed % update_interval == 0 or completed == group_count:
+                _atomic_json(progress_path, {
+                    "schema_version": 1, "phase": "contexts",
+                    "completed": completed, "total": group_count,
+                    "status": "running", "workers": materialization_workers,
+                })
+
+    update_interval = max(1, group_count // 100)
+    if materialization_workers == 1:
+        record_progress(map(materialize_group, group_items))
+    else:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=materialization_workers) as executor:
+            record_progress(executor.map(materialize_group, group_items))
     theta_latent = stage10_physical_to_latent(
         torch.from_numpy(theta_physical)
     ).numpy()
@@ -1452,12 +1486,7 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
     pseudo_observed = pseudo_mean + cholesky @ pseudo_rng.standard_normal(
         len(point_table)
     )
-    pseudo_context = build_stage10_context(
-        points=point_table, observed=pseudo_observed,
-        covariance=covariance,
-        global_normalization_response=global_response,
-        lu_normalization_response=lu_response,
-    )
+    pseudo_context = context_builder.build(pseudo_observed)
     output.mkdir(parents=True, exist_ok=True)
     arrays = {
         "native_parameters": parameters,
@@ -1512,7 +1541,9 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
         "arrays": array_records,
         "corpus_manifest_sha256": manifest["manifest_sha256"],
         "selection_manifest_sha256": selection["manifest_sha256"],
-        "configuration_sha256": sha256(configuration_path),
+        "configuration_sha256": scientific_configuration_sha256(
+            configuration_path
+        ),
         "bridge_sha256": sha256(bridge.resolve(strict=True)),
         "realization_schema_version": REALIZATION_SCHEMA_VERSION,
     })
@@ -1529,6 +1560,7 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
         "native_called": False,
         "corpus": verification,
         "selection_manifest_sha256": selection["manifest_sha256"],
+        "materialization_workers": materialization_workers,
         "covariance_diagnostics": covariance_diagnostics,
         "synthetic_split_policy": "external_native_parameter_group_selection_v1",
         "surrogate_used": False,
@@ -1583,6 +1615,7 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
     _atomic_json(progress_path, {
         "schema_version": 1, "phase": "complete",
         "completed": 1, "total": 1, "status": "materialized",
+        "workers": materialization_workers,
     })
     return {
         "status": "materialized",
@@ -1590,4 +1623,5 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
         "corpus_manifest_sha256": manifest["manifest_sha256"],
         "selection_manifest_sha256": selection["manifest_sha256"],
         "context_count": len(theta_physical),
+        "materialization_workers": materialization_workers,
     }

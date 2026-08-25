@@ -29,7 +29,7 @@ assert workflow["site_name"] == "jlab/enp"
 assert workflow["max_problems"] == 1
 jobs = workflow["jobs"]
 assert [job["name"] for job in jobs] == [
-    "dvcs-selection", "dvcs-train", "dvcs-evaluate",
+    "dvcs-selection", "dvcs-materialize", "dvcs-train", "dvcs-evaluate",
     "dvcs-compare", "dvcs-holdout", "dvcs-plot",
 ]
 for index, job in enumerate(jobs):
@@ -37,10 +37,19 @@ for index, job in enumerate(jobs):
     assert {tag["name"] for tag in job["tags"]} == {"dvcs-workflow", "dvcs-stage"}
     assert all("-" in item["local"] for item in job["inputs"][:4])
     assert len(job["outputs"]) == 4
-train = jobs[1]
+materialize = jobs[1]
+assert materialize["partition"] == "production"
+assert materialize["cpu_cores"] == 2
+assert materialize["ram_bytes"] == 20_000_000_000
+assert not any(flag.startswith("--gpus=") for flag in materialize["batch_flags"])
+assert len(materialize["inputs"]) == 6
+assert " materialize " in materialize["command"][0]
+train = jobs[2]
 assert train["partition"] == "gpu"
-assert "--gres=gpu:1" in train["batch_flags"]
-assert train["ram_bytes"] == 24_000_000_000
+assert train["cpu_cores"] == 4
+assert "--gpus=1" in train["batch_flags"]
+assert not any(flag.startswith("--gres=gpu") for flag in train["batch_flags"])
+assert train["ram_bytes"] == 32_000_000_000
 assert train["disk_bytes"] == 48_000_000_000
 assert "run_swif2_analysis_stage" not in train["command"][0]
 assert "analysis-runner-" in train["command"][0]
@@ -57,6 +66,12 @@ for left, right in zip(jobs, jobs[1:]):
     produced = left["outputs"][0]
     consumed = right["inputs"][4]
     assert produced == consumed
+for job in jobs:
+    stage = next(tag["value"] for tag in job["tags"] if tag["name"] == "dvcs-stage")
+    gpu_flags = [flag for flag in job["batch_flags"] if flag.startswith("--gpus=")]
+    assert bool(gpu_flags) == (stage in {"optimize", "train", "evaluate"})
+assert len(train["inputs"]) == 5
+assert " --corpus " not in train["command"][0]
 PY
 
 experiment="${temp}/experiment.json"
@@ -138,6 +153,10 @@ grep -F -- '--shard-start "${shard_start}" --max-shards "${shard_count}"' \
   "${root}/jobs/jlab_ifarm/run_swif2_corpus_worker.sh" >/dev/null
 grep -F -- 'corpus-merge --consume-sources' \
   "${root}/jobs/jlab_ifarm/run_swif2_corpus_merge.sh" >/dev/null
+grep -F -- 'payload=(materialize "${project}"' \
+  "${root}/jobs/jlab_ifarm/run_swif2_analysis_stage.sh" >/dev/null
+grep -F -- 'payload=(train "${project}" --profile "${profile}" --no-progress)' \
+  "${root}/jobs/jlab_ifarm/run_swif2_analysis_stage.sh" >/dev/null
 grep -F -- 'CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}' \
   "${root}/jobs/jlab_ifarm/run_swif2_analysis_stage.sh" >/dev/null
 

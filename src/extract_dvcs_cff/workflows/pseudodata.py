@@ -175,6 +175,36 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+_EXECUTION_RUNTIME_KEYS = frozenset({
+    "accelerator", "cpu_threads", "native_workers",
+})
+
+
+def scientific_configuration_sha256(path: Path) -> str:
+    """Hash scientific settings without allocation-dependent execution policy.
+
+    SWIF2 stages intentionally use different CPU and GPU allocations.  Those
+    settings affect execution provenance, but not corpus/selection identity.
+    Determinism policy remains part of this hash.
+    """
+
+    configuration = json.loads(path.resolve(strict=True).read_text(
+        encoding="utf-8"
+    ))
+    if not isinstance(configuration, dict):
+        raise RuntimeError("workflow configuration must be a JSON object")
+    runtime = configuration.get("runtime")
+    if isinstance(runtime, dict):
+        configuration["runtime"] = {
+            key: value
+            for key, value in runtime.items()
+            if key not in _EXECUTION_RUNTIME_KEYS
+        }
+    return hashlib.sha256(
+        (pretty_json(configuration) + "\n").encode("utf-8")
+    ).hexdigest()
+
+
 def write_json(path: Path, value: Any) -> None:
     """Write a stable UTF-8 JSON record."""
 
@@ -1818,7 +1848,36 @@ class _MetricTracker:
         return None
 
 
-def _load_generated(workspace: Path) -> dict[str, np.ndarray]:
+_GENERATED_ARRAY_NAMES = (
+    "theta_physical",
+    "theta_latent",
+    "contexts",
+    "parameter_indices",
+    "train_indices",
+    "validation_indices",
+    "test_indices",
+    "native_parameters",
+    "native_predictions_normalized",
+    "native_cffs",
+    "covariance_normalized",
+    "global_normalization_response",
+    "lu_normalization_response",
+    "pseudodata_observed_normalized",
+    "pseudodata_context",
+    "truth_theta_physical",
+    "truth_cffs",
+    "truth_native_predictions_normalized",
+)
+
+
+def _load_generated(
+    workspace: Path,
+    *,
+    names: Sequence[str] | None = None,
+    mmap_mode: str | None = "c",
+) -> dict[str, np.ndarray]:
+    """Verify and load only required generated arrays, memory-mapped by default."""
+
     directory = workspace / "generated"
     manifest_path = directory / "array_manifest.json"
     if not manifest_path.is_file():
@@ -1830,26 +1889,12 @@ def _load_generated(workspace: Path) -> dict[str, np.ndarray]:
     records = manifest.get("arrays")
     if not isinstance(records, dict):
         raise RuntimeError("generated array manifest is malformed")
-    required = (
-        "theta_physical",
-        "theta_latent",
-        "contexts",
-        "parameter_indices",
-        "train_indices",
-        "validation_indices",
-        "test_indices",
-        "native_parameters",
-        "native_predictions_normalized",
-        "native_cffs",
-        "covariance_normalized",
-        "global_normalization_response",
-        "lu_normalization_response",
-        "pseudodata_observed_normalized",
-        "pseudodata_context",
-        "truth_theta_physical",
-        "truth_cffs",
-        "truth_native_predictions_normalized",
-    )
+    required = _GENERATED_ARRAY_NAMES if names is None else tuple(names)
+    unknown = set(required) - set(_GENERATED_ARRAY_NAMES)
+    if unknown:
+        raise ValueError(f"unknown generated arrays requested: {sorted(unknown)}")
+    if len(required) != len(set(required)):
+        raise ValueError("generated array request contains duplicates")
     values = {}
     for name in required:
         path = directory / f"{name}.npy"
@@ -1860,13 +1905,46 @@ def _load_generated(workspace: Path) -> dict[str, np.ndarray]:
         record = records.get(name)
         if not isinstance(record, dict) or record.get("sha256") != sha256(path):
             raise RuntimeError(f"generated array hash mismatch: {path}")
-        value = np.load(path, allow_pickle=False)
+        value = np.load(path, allow_pickle=False, mmap_mode=mmap_mode)
         if record.get("shape") != list(value.shape) or record.get(
             "dtype"
         ) != str(value.dtype):
             raise RuntimeError(f"generated array contract mismatch: {path}")
         values[name] = value
     return values
+
+
+def _mean_estimator_log_prob(
+    estimator: Any,
+    theta: Any,
+    context: Any,
+    indices: Any,
+    *,
+    device: Any,
+    batch_size: int,
+) -> float:
+    """Score CPU-resident tensors in bounded device batches."""
+
+    import torch
+
+    if batch_size < 1:
+        raise ValueError("log-probability batch size must be positive")
+    total = 0.0
+    count = 0
+    with torch.no_grad():
+        for start in range(0, len(indices), batch_size):
+            rows = indices[start:start + batch_size]
+            values = estimator.log_prob(
+                theta[rows].to(device), context[rows].to(device)
+            )
+            if not torch.isfinite(values).all():
+                raise RuntimeError("trained estimator returned non-finite scores")
+            total += float(values.double().sum().item())
+            count += int(values.numel())
+            del values
+    if count == 0:
+        raise RuntimeError("cannot score an empty tensor selection")
+    return total / count
 
 
 def train_model(
@@ -1911,22 +1989,30 @@ def train_model(
         initialize_distributed_training(device_resolution)
     )
     device = torch.device(device_resolution.resolved)
-    arrays = _load_generated(workspace)
+    arrays = _load_generated(
+        workspace,
+        names=(
+            "theta_latent", "contexts", "train_indices",
+            "validation_indices", "test_indices",
+        ),
+    )
+    # Keep the complete realization CPU-resident. SBI's data_device="cpu"
+    # stores it there and transfers only each dataloader minibatch to CUDA.
     theta = torch.from_numpy(
         arrays["theta_latent"].astype(np.float32, copy=False)
-    ).to(device)
+    )
     context = torch.from_numpy(
         arrays["contexts"].astype(np.float32, copy=False)
-    ).to(device)
+    )
     train_indices = torch.from_numpy(
         arrays["train_indices"].astype(np.int64, copy=False)
-    ).to(device)
+    )
     validation_indices = torch.from_numpy(
         arrays["validation_indices"].astype(np.int64, copy=False)
-    ).to(device)
+    )
     test_indices = torch.from_numpy(
         arrays["test_indices"].astype(np.int64, copy=False)
-    ).to(device)
+    )
     if not torch.isfinite(theta).all() or not torch.isfinite(context).all():
         raise RuntimeError("training tensors contain non-finite values")
     fit_indices = torch.cat((train_indices, validation_indices))
@@ -2028,7 +2114,7 @@ def train_model(
         with warnings.catch_warnings(record=True) as captured:
             warnings.simplefilter("always")
             estimator = inference.append_simulations(
-                theta[fit_indices], context[fit_indices]
+                theta[fit_indices], context[fit_indices], data_device="cpu"
             ).train(
                 training_batch_size=int(network["training_batch_size"]),
                 learning_rate=float(network["learning_rate"]),
@@ -2041,18 +2127,20 @@ def train_model(
             torch.cuda.synchronize()
         elapsed = time.perf_counter() - started
         estimator.eval()
-        with torch.no_grad():
-            train_log_prob = estimator.log_prob(
-                theta[train_indices], context[train_indices]
-            )
-        if not torch.isfinite(train_log_prob).all():
-            raise RuntimeError("trained estimator returned non-finite scores")
+        mean_train_log_prob = _mean_estimator_log_prob(
+            estimator,
+            theta,
+            context,
+            train_indices,
+            device=device,
+            batch_size=int(network["training_batch_size"]),
+        )
         torch.save(estimator.state_dict(), state_path)
 
         # A posterior smoke test catches support/conditioning mistakes before
         # the more expensive coverage and exact-reevaluation steps.
         posterior = inference.build_posterior(estimator)
-        smoke_context = context[validation_indices[0]]
+        smoke_context = context[validation_indices[0]].to(device)
         torch.manual_seed(int(seed) + 1)
         smoke_latent = posterior.sample(
             (128,), x=smoke_context, show_progress_bars=False
@@ -2105,7 +2193,7 @@ def train_model(
                 summary["best_validation_loss"][-1]
             ),
             "mean_train_negative_log_density": float(
-                -train_log_prob.mean().item()
+                -mean_train_log_prob
             ),
             "mean_test_negative_log_density": None,
             "test_minus_validation_negative_log_density": None,
@@ -2130,6 +2218,10 @@ def train_model(
             raise RuntimeError("posterior smoke sample is non-finite")
         write_json(metrics_path, metrics)
         seed_metrics[str(seed)] = metrics
+        del posterior, smoke_context, smoke_latent, smoke_physical
+        del estimator, inference
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
 
     if distributed_world_size > 1:
         torch.distributed.barrier()
@@ -2185,22 +2277,25 @@ def train_model(
                 context[fit_indices[:2]],
                 device=str(device),
             )
-            with torch.no_grad():
-                test_log_prob = posterior.posterior_estimator.log_prob(
-                    theta[test_indices], context[test_indices]
-                )
-            if not torch.isfinite(test_log_prob).all():
-                raise RuntimeError(
-                    "selected estimator returned non-finite outer-test scores"
-                )
+            mean_test_log_prob = _mean_estimator_log_prob(
+                posterior.posterior_estimator,
+                theta,
+                context,
+                test_indices,
+                device=device,
+                batch_size=int(config["network"]["training_batch_size"]),
+            )
             member["mean_test_negative_log_density"] = float(
-                -test_log_prob.mean().item()
+                -mean_test_log_prob
             )
             member["test_minus_validation_negative_log_density"] = float(
-                -test_log_prob.mean().item()
+                -mean_test_log_prob
                 - member["best_validation_negative_log_density"]
             )
             member["test_set_evaluated"] = True
+            del posterior
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
         else:
             member["mean_test_negative_log_density"] = None
             member["test_minus_validation_negative_log_density"] = None
@@ -2300,7 +2395,9 @@ def _ensemble_samples(
     )
     from extract_dvcs_cff.inference.device import resolve_torch_device
 
-    arrays = _load_generated(workspace)
+    arrays = _load_generated(
+        workspace, names=("theta_latent", "contexts")
+    )
     resolution = resolve_torch_device(config["runtime"]["accelerator"])
     device = torch.device(resolution.resolved)
     example_theta = torch.from_numpy(
@@ -2566,7 +2663,16 @@ def evaluate_model(
     from extract_dvcs_cff.progress import progress_iter
 
     settings = config["profiles"][profile]
-    arrays = _load_generated(workspace)
+    arrays = _load_generated(
+        workspace,
+        names=(
+            "contexts", "covariance_normalized",
+            "global_normalization_response", "lu_normalization_response",
+            "pseudodata_context", "pseudodata_observed_normalized",
+            "test_indices", "theta_physical", "truth_cffs",
+            "truth_native_predictions_normalized", "truth_theta_physical",
+        ),
+    )
     test_indices = arrays["test_indices"].astype(np.int64)
     trial_count = min(
         int(settings["coverage_trial_count"]), len(test_indices)
@@ -2918,7 +3024,15 @@ def compare_posteriors(
 
     config = load_configuration(configuration_path)
     settings = config["profiles"][profile]
-    arrays = _load_generated(workspace)
+    arrays = _load_generated(
+        workspace,
+        names=(
+            "covariance_normalized", "global_normalization_response",
+            "lu_normalization_response", "native_parameters",
+            "native_predictions_normalized", "pseudodata_context",
+            "pseudodata_observed_normalized", "truth_theta_physical",
+        ),
+    )
     native_parameters = arrays["native_parameters"]
     native_predictions = arrays["native_predictions_normalized"]
     nuisance_draws = int(

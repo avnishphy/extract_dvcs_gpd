@@ -22,4 +22,26 @@ PATH="${temp}/bin:${PATH}" DVCS_TEST_SWIF2_CALLS="${calls}" \
 grep -Fx -- 'list -display json' "${calls}" >/dev/null
 grep -Fx -- "import -file ${temp}/workflow.json" "${calls}" >/dev/null
 grep -Fx -- 'run test-workflow -maxconcurrent 7' "${calls}" >/dev/null
+
+python3 - "${temp}/workflow.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+workflow = json.load(open(path, encoding="utf-8"))
+job = workflow["jobs"][0]
+job["tags"] = [{"name": "dvcs-stage", "value": "train"}]
+job["batch_flags"] = ["--gpus=1"]
+json.dump(workflow, open(path, "w", encoding="utf-8"))
+PY
+"${script}" --file "${temp}/workflow.json" --dry-run >/dev/null
+python3 - "${temp}/workflow.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+workflow = json.load(open(path, encoding="utf-8"))
+workflow["jobs"][0]["batch_flags"] = ["--gres=gpu:1"]
+json.dump(workflow, open(path, "w", encoding="utf-8"))
+PY
+if "${script}" --file "${temp}/workflow.json" --dry-run >/dev/null 2>&1; then
+    echo "submission accepted conflicting SWIF2 GPU GRES" >&2
+    exit 1
+fi
 echo "JLab SWIF2 submission verification: PASS"

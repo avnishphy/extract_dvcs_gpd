@@ -29,12 +29,14 @@ from .stage10 import (
     STAGE10_PHYSICS_PARAMETER_COUNT,
     STAGE10_PHYSICS_PARAMETER_NAMES,
     STAGE10_POINT_FEATURE_NAMES,
+    Stage10ContextBuilder,
     build_stage10_context,
     load_stage10_posterior,
     stage10_density_builder,
     stage10_latent_to_physical,
     stage10_physical_to_latent,
     stage10_prior,
+    prepare_stage10_context,
 )
 
 __all__ = [
@@ -60,10 +62,12 @@ __all__ = [
     "STAGE10_PHYSICS_PARAMETER_COUNT",
     "STAGE10_PHYSICS_PARAMETER_NAMES",
     "STAGE10_POINT_FEATURE_NAMES",
+    "Stage10ContextBuilder",
     "build_stage10_context",
     "load_stage10_posterior",
     "stage10_density_builder",
     "stage10_latent_to_physical",
     "stage10_physical_to_latent",
     "stage10_prior",
+    "prepare_stage10_context",
 ]

@@ -161,21 +161,24 @@ compatible with a different experiment or bridge.
 ```bash
 ./dvcs init PROJECT
 cp /path/to/source-experiment.json workspace/PROJECT/experiment.json
+# Edit only experiment.name so it exactly equals PROJECT.
 ./dvcs show PROJECT
 mkdir -p workspace/.corpus_exports
-cp --reflink=auto /path/to/corpus.tar.gz workspace/.corpus_exports/
-./dvcs corpus-import corpus CORPUS
+cp --reflink=auto /path/to/corpus.tar.gz workspace/.corpus_exports/shared-corpus.tar.gz
+./dvcs corpus-import shared-corpus CORPUS
 ./dvcs corpus-plan PROJECT CORPUS
 ./dvcs corpus-verify CORPUS --deep
-./dvcs selection-create PROJECT CORPUS baseline --profile validation
 ./dvcs farm-submit --project PROJECT --corpus CORPUS --selection baseline \
   --profile validation --corpus-archive /path/to/corpus.tar.gz \
-  --from train --through plot --dry-run
+  --from selection --through plot --dry-run
 ```
 
 `experiment.name` must equal `PROJECT`. Proceed only when `corpus-plan` reports
 full compatibility and no missing native work; never edit an imported manifest
-to bypass a mismatch. Remove `--dry-run` after reviewing the SWIF2 workflow.
+to bypass a mismatch. Starting at `selection` creates the named selection in
+the staged project; start at `materialize` if selection already exists, and at
+`train` only if complete arrays also exist. Remove `--dry-run` after reviewing
+the SWIF2 workflow.
 If an external corpus needs a wider experimental kinematic envelope, keep that
 policy on an explicitly reviewed branch and treat its results as exploratory
 until scientifically approved.
@@ -221,15 +224,15 @@ early stopping, model selection, Optuna, or architecture choice. Named native
 models (GK11/GK16/GK19/VGG99) are a separate output-blind external validation
 family and never replace the ordinary grouped DD test.
 
-The current sbi API consumes materialized tensors, so replicas are generated
-when the corpus is selected for a training/Optuna invocation rather than by a
-custom lazy minibatch dataset. This still avoids PARTONS regeneration and
-keeps noise outside the corpus. A future streaming loader may reduce disk/RAM
-pressure without changing any physics or split contract.
+The current sbi API consumes materialized tensors. A separate CPU stage creates
+replicas in deterministic fixed rows, with independent seeds per parameter and
+replica. Workers share output arrays; publication hashes every completed file.
+This avoids PARTONS regeneration and GPU preprocessing hours without changing
+physics or split contracts.
 
-Concurrent multi-GPU Optuna workers serialize realization publication with a
-project/profile lock. One worker writes the deterministic arrays; matching
-workers reuse the completed corpus/selection/configuration/bridge identity.
+Local combined invocations serialize realization publication with a
+project/profile lock. SWIF2 finishes and reaps one CPU materialization before
+dispatching GPU Optuna or training jobs.
 
 ## Claims and limitations
 

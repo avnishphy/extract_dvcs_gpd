@@ -43,6 +43,19 @@ known = set(names)
 for job in jobs:
     if not set(job.get("antecedents", [])) <= known:
         raise SystemExit(f"job {job['name']} has an unknown antecedent")
+    tags = {item.get("name"): item.get("value") for item in job.get("tags", [])}
+    stage = tags.get("dvcs-stage")
+    flags = job.get("batch_flags", [])
+    if not isinstance(flags, list) or not all(isinstance(item, str) for item in flags):
+        raise SystemExit(f"job {job['name']} has invalid batch flags")
+    if any(item.startswith("--gres=gpu") for item in flags):
+        raise SystemExit(
+            f"job {job['name']} uses conflicting --gres GPU request; use --gpus=N"
+        )
+    gpu_flags = [item for item in flags if re.fullmatch(r"--gpus=[1-9][0-9]*", item)]
+    needs_gpu = stage in {"optimize", "train", "evaluate"}
+    if needs_gpu != (len(gpu_flags) == 1):
+        raise SystemExit(f"job {job['name']} has inconsistent GPU request")
     for record in job.get("inputs", []):
         remote = Path(str(record.get("remote", "")))
         if not remote.is_file():

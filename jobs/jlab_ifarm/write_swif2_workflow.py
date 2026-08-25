@@ -20,14 +20,18 @@ from typing import Any
 
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
-ANALYSIS_ORDER = ("selection", "optimize", "train", "evaluate", "compare", "holdout", "plot")
+ANALYSIS_ORDER = (
+    "selection", "materialize", "optimize", "train", "evaluate",
+    "compare", "holdout", "plot",
+)
 GPU_STAGES = {"optimize", "train", "evaluate"}
-CORPUS_STAGES = {"selection", "optimize", "train"}
+CORPUS_STAGES = {"selection", "materialize"}
 
 ANALYSIS_DEFAULTS = {
     "selection": (1, "4G", "8G", "30min", 0, "production"),
+    "materialize": (2, "20G", "48G", "4h", 0, "production"),
     "optimize": (8, "32G", "48G", "12h", 1, "gpu"),
-    "train": (8, "24G", "48G", "12h", 1, "gpu"),
+    "train": (4, "32G", "48G", "12h", 1, "gpu"),
     "evaluate": (8, "16G", "48G", "12h", 1, "gpu"),
     "compare": (2, "8G", "32G", "4h", 0, "production"),
     "holdout": (16, "16G", "48G", "12h", 0, "production"),
@@ -124,7 +128,9 @@ def job_base(
     flags = ["--nodes=1", "--ntasks=1", f"--cpus-per-task={cores}"]
     gpus = int(resources["gpus"])
     if gpus:
-        flags.append(f"--gres=gpu:{gpus}")
+        # SWIF2 adds scratch as --gres=disk:...; another --gres can overwrite
+        # rather than combine with it. Use Slurm's independent GPU TRES flag.
+        flags.append(f"--gpus={gpus}")
     return {
         "name": name,
         "account": account,
