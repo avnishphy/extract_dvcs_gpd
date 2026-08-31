@@ -18,6 +18,8 @@ corpus="${DVCS_CORPUS:-}"
 selection="${DVCS_SELECTION:-baseline}"
 profile="${DVCS_PROFILE_NAME:-validation}"
 corpus_archive="${SWIF_CORPUS_ARCHIVE:-}"
+project_archive=
+holdout_design=
 workflow=
 from_stage=selection
 through_stage=plot
@@ -32,6 +34,8 @@ while (($#)); do
         --selection) selection="${2:?missing selection}"; shift 2 ;;
         --profile) profile="${2:?missing profile}"; shift 2 ;;
         --corpus-archive) corpus_archive="${2:?missing corpus archive}"; shift 2 ;;
+        --project-archive) project_archive="${2:?missing project archive}"; shift 2 ;;
+        --holdout-design) holdout_design="${2:?missing holdout design}"; shift 2 ;;
         --workflow) workflow="${2:?missing workflow}"; shift 2 ;;
         --from) from_stage="${2:?missing stage}"; shift 2 ;;
         --through) through_stage="${2:?missing stage}"; shift 2 ;;
@@ -45,6 +49,8 @@ usage: ./dvcs farm-submit --project NAME --corpus NAME --corpus-archive FILE [op
   --selection NAME          default: baseline
   --profile NAME            default: validation
   --workflow NAME           default: unique UTC name
+  --project-archive FILE    resume from a verified reaped project-state archive
+  --holdout-design FILE     explicit hashed native-model holdout design
   --from STAGE --through STAGE | --only STAGE
   --include-optimize        insert optimize before train
   --dry-run                 package and validate; do not contact SWIF2
@@ -64,8 +70,13 @@ done
 }
 workflow="${workflow:-dvcs-${project}-$(date -u +%Y%m%dT%H%M%SZ)}"
 
-assets_env="$(${job_dir}/prepare_swif2_inputs.sh \
-    --project "${project}" --corpus-archive "${corpus_archive}")"
+prepare_arguments=(
+    --project "${project}" --corpus-archive "${corpus_archive}"
+)
+[[ -z "${project_archive}" ]] || prepare_arguments+=(
+    --project-archive "${project_archive}"
+)
+assets_env="$(${job_dir}/prepare_swif2_inputs.sh "${prepare_arguments[@]}")"
 # shellcheck disable=SC1090
 source "${assets_env}"
 result_root="${SWIF_OUTPUT_ROOT:-${DVCS_RESULTS}/swif2}/${workflow}"
@@ -77,6 +88,7 @@ arguments=(
     --constraint "${SWIF_CONSTRAINT:-el9}"
     --result-root "${result_root}" --log-root "${log_root}"
     --image "${SWIF_IMAGE}" --database "${SWIF_DATABASE_ARCHIVE}"
+    --lhapdf "${SWIF_LHAPDF_ARCHIVE}"
     --project "${project}" --profile "${profile}" --corpus "${corpus}"
     --selection "${selection}" --corpus-archive "${SWIF_CORPUS_ARCHIVE}"
     --project-archive "${SWIF_PROJECT_ARCHIVE}"
@@ -86,6 +98,7 @@ arguments=(
     --max-dispatched "${SWIF_MAX_DISPATCHED:-64}"
     --output "${workflow_json}"
 )
+[[ -z "${holdout_design}" ]] || arguments+=(--holdout-design "${holdout_design}")
 [[ -z "${only_stage}" ]] || arguments+=(--only "${only_stage}")
 [[ "${include_optimize}" == false ]] || arguments+=(--include-optimize)
 python3 "${job_dir}/write_swif2_workflow.py" "${arguments[@]}" >/dev/null

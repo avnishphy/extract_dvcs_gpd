@@ -54,16 +54,18 @@ sampling campaign, not that either curve wins.
 
 ## Dataset roles
 
-The same six kinematic sites are used for every DD parameter draw; train,
+The same configured kinematic bank is used for every DD parameter draw; train,
 internal-validation, and outer-test are splits of native parameter groups,
 not kinematic splits. `dd_train_validation_test_split.png` visualizes their
 membership in display PCA. `real_catalog_vs_pseudodata_kinematics.png` shows
-how the six sites sit within measurement-free real-catalog coverage.
+how those sites sit within measurement-free real-catalog coverage.
 
-The fresh GK/VGG slice is different: its six sites were predeclared from the
-catalog before native model outputs existed. It is an external test, never a
-replacement for the DD outer test. Do not repeatedly modify the method based
-on this fixed holdout and continue calling it blind.
+Native-model and kinematic-design shifts are reported separately. A
+same-design GK/VGG run isolates generator-family mismatch. A fresh same-size
+run also probes unseen coordinates. Nested 12/30/60/96 runs quantify
+information loss only for checkpoints trained under the corresponding mask
+contract. These remain external tests, never replacements for the DD outer
+test; repeated method changes invalidate a blind claim.
 
 ## Training scores
 
@@ -116,7 +118,9 @@ twist label, or experimental convention audit.
 - zero invalid exact posterior reevaluations;
 - no false-certainty width failure.
 
-After these pass, run `holdout` once for the first accepted fresh campaign.
+After evaluation passes and comparison completes, run each predeclared
+holdout design. A collapsed conventional comparison keeps holdouts diagnostic
+and can never enable a robustness claim.
 Report execution integrity separately from predictive precision. A low
 GK/VGG coverage is a robustness failure requiring later method development,
 not a broken executable.

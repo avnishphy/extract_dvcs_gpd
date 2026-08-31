@@ -48,7 +48,7 @@ from extract_dvcs_cff.workflows.pseudodata import (
 
 CORPUS_SCHEMA_VERSION = 1
 SELECTION_SCHEMA_VERSION = 1
-REALIZATION_SCHEMA_VERSION = 1
+REALIZATION_SCHEMA_VERSION = 2
 DEFAULT_SHARD_SIZE = 256
 _MAX_CANDIDATE_MULTIPLIER = 10
 ADMITTED_OBSERVABLE_METADATA = {
@@ -74,6 +74,57 @@ ADMITTED_OBSERVABLE_METADATA = {
                      "normalization_scale": 1.0,
                      "user_label": "Longitudinal double-spin asymmetry"},
 }
+
+
+def _nested_kinematic_order(
+    kinematics: Sequence[Mapping[str, Any]], seed: int
+) -> tuple[int, ...]:
+    """Return a deterministic space-filling order; every prefix is nested."""
+
+    features = np.asarray([
+        (
+            float(point["x_b"]) / 0.5,
+            -float(point["t_GeV2"]) / 0.9,
+            math.log(float(point["Q2_GeV2"])) / math.log(80.0),
+            math.log(float(point["beam_energy_GeV"]) / 3.0)
+            / math.log(200.0 / 3.0),
+            math.sin(float(point["phi_rad"])),
+            math.cos(float(point["phi_rad"])),
+        )
+        for point in kinematics
+    ], dtype=np.float64)
+    first = min(
+        range(len(kinematics)),
+        key=lambda index: hashlib.sha256(
+            f"{seed}:{index}".encode("utf-8")
+        ).hexdigest(),
+    )
+    chosen = [first]
+    distances = np.sum((features - features[first]) ** 2, axis=1)
+    distances[first] = -1.0
+    while len(chosen) < len(kinematics):
+        maximum = float(distances.max())
+        tied = np.flatnonzero(
+            np.isclose(distances, maximum, rtol=0.0, atol=1e-15)
+        )
+        next_index = int(min(tied))
+        chosen.append(next_index)
+        distances = np.minimum(
+            distances,
+            np.sum((features - features[next_index]) ** 2, axis=1),
+        )
+        distances[chosen] = -1.0
+    return tuple(chosen)
+
+
+def _masked_design_count(
+    counts: Sequence[int], group_position: int, replica_index: int
+) -> int:
+    """Balance declared design counts deterministically across context rows."""
+
+    if not counts or group_position < 0 or replica_index < 0:
+        raise ValueError("masked design schedule inputs are invalid")
+    return int(counts[(group_position + replica_index) % len(counts)])
 
 
 def _atomic_bytes(path: Path, payload: bytes) -> None:
@@ -1389,18 +1440,57 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
     observations_normalized = np.empty(
         (context_count, len(point_table)), dtype=np.float64
     )
-    context_builder = prepare_stage10_context(
+    full_context_builder = prepare_stage10_context(
         points=point_table,
         covariance=covariance,
         global_normalization_response=global_response,
         lu_normalization_response=lu_response,
     )
     contexts = np.empty(
-        (context_count, context_builder.context_width), dtype=np.float32
+        (context_count, full_context_builder.context_width), dtype=np.float32
     )
+    active_kinematic_counts = np.empty(context_count, dtype=np.uint32)
+    design_variants = np.empty(context_count, dtype=np.uint16)
     parameter_indices = np.empty(context_count, dtype=np.int64)
     role_codes = np.empty(context_count, dtype=np.uint8)
     role_code = {"train": 0, "validation": 1, "test": 2}
+    design_contract = config["observation_design_training"]
+    design_counts = (
+        tuple(int(value) for value in design_contract["active_kinematic_counts"])
+        if design_contract["enabled"]
+        else (len(config["kinematics"]),)
+    )
+    observable_count = len(observable_names)
+    design_indices: dict[tuple[int, int], np.ndarray] = {}
+    design_builders: dict[tuple[int, int], Any] = {}
+    design_cholesky: dict[tuple[int, int], np.ndarray] = {}
+    design_kinematics: dict[tuple[int, int], tuple[int, ...]] = {}
+    for active_count in design_counts:
+        key = (0, active_count)
+        if design_contract["enabled"]:
+            ordering = _nested_kinematic_order(
+                config["kinematics"],
+                int(design_contract["selection_seed"]),
+            )
+            retained_kinematics = ordering[:active_count]
+        else:
+            retained_kinematics = tuple(range(len(config["kinematics"])))
+        indices = np.asarray([
+            kinematic_index * observable_count + observable_index
+            for kinematic_index in retained_kinematics
+            for observable_index in range(observable_count)
+        ], dtype=np.int64)
+        active_covariance = covariance[np.ix_(indices, indices)]
+        design_indices[key] = indices
+        design_kinematics[key] = retained_kinematics
+        design_cholesky[key] = np.linalg.cholesky(active_covariance)
+        design_builders[key] = prepare_stage10_context(
+            points=[point_table[index] for index in indices],
+            covariance=active_covariance,
+            global_normalization_response=global_response[indices],
+            lu_normalization_response=lu_response[indices],
+            maximum_point_count=len(point_table),
+        )
     progress_path = workspace / "materialization_progress.json"
     _atomic_json(progress_path, {
         "schema_version": 1, "phase": "contexts",
@@ -1437,9 +1527,22 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
                 native_predictions[group_index], eta_global, eta_lu,
                 global_response, lu_response,
             )
-            observed = mean + cholesky @ rng.standard_normal(len(point_table))
-            observations_normalized[row_index] = observed
-            contexts[row_index] = context_builder.build(observed)
+            # Rotate count assignment by group. Validation's four replicas
+            # expose every [12,30,60,96] design to each parameter; profiles
+            # with fewer replicas remain balanced across parameter groups.
+            design_key = (
+                0,
+                _masked_design_count(design_counts, position, replica),
+            )
+            indices = design_indices[design_key]
+            observed = mean[indices] + design_cholesky[
+                design_key
+            ] @ rng.standard_normal(len(indices))
+            observations_normalized[row_index].fill(0.0)
+            observations_normalized[row_index, indices] = observed
+            contexts[row_index] = design_builders[design_key].build(observed)
+            design_variants[row_index] = design_key[0]
+            active_kinematic_counts[row_index] = design_key[1]
             parameter_indices[row_index] = group_index
             role_codes[row_index] = role_code[role]
 
@@ -1486,8 +1589,26 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
     pseudo_observed = pseudo_mean + cholesky @ pseudo_rng.standard_normal(
         len(point_table)
     )
-    pseudo_context = context_builder.build(pseudo_observed)
+    pseudo_context = full_context_builder.build(pseudo_observed)
     output.mkdir(parents=True, exist_ok=True)
+    _atomic_json(output / "observation_design_manifest.json", {
+        "schema_version": 1,
+        "enabled": bool(design_contract["enabled"]),
+        "pooling_policy": design_contract["pooling_policy"],
+        "selection_policy": design_contract["selection_policy"],
+        "selection_seed": int(design_contract["selection_seed"]),
+        "maximum_kinematic_count": len(config["kinematics"]),
+        "maximum_token_count": len(point_table),
+        "assignment_policy": (
+            "active_counts[(parameter_group_position+replica_index)%count]"
+        ),
+        "noise_replicates_per_parameter": replicates,
+        "designs": [
+            {"variant": key[0], "active_kinematic_count": key[1],
+             "kinematic_indices": list(design_kinematics[key])}
+            for key in sorted(design_kinematics)
+        ],
+    })
     arrays = {
         "native_parameters": parameters,
         "native_predictions_normalized": native_predictions,
@@ -1500,6 +1621,8 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
         "global_normalization_response": global_response,
         "lu_normalization_response": lu_response,
         "parameter_indices": parameter_indices,
+        "context_active_kinematic_counts": active_kinematic_counts,
+        "context_design_variants": design_variants,
         "train_indices": train_indices,
         "validation_indices": validation_indices,
         "test_indices": test_indices,
@@ -1561,6 +1684,12 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
         "corpus": verification,
         "selection_manifest_sha256": selection["manifest_sha256"],
         "materialization_workers": materialization_workers,
+        "observation_design_training": {
+            "enabled": bool(design_contract["enabled"]),
+            "active_kinematic_counts": list(design_counts),
+            "pooling_policy": design_contract["pooling_policy"],
+            "manifest": "observation_design_manifest.json",
+        },
         "covariance_diagnostics": covariance_diagnostics,
         "synthetic_split_policy": "external_native_parameter_group_selection_v1",
         "surrogate_used": False,

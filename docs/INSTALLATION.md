@@ -95,6 +95,14 @@ Apptainer source build. Site policy must permit that operation. If it does not,
 a maintainer must build/publish the approved OCI image elsewhere or provide an
 approved SIF; the installer never escalates privilege itself.
 
+Before entering Apptainer, the installer downloads and SHA-256 verifies GSL,
+LHAPDF, and the pinned Torch wheel into
+`${DVCS_WHEELHOUSE:-${TMPDIR}/extract-dvcs-gpd-wheels-$UID/ACCELERATOR}`.
+GSL uses multiple locked HTTPS mirrors. The build consumes these host-cached
+files through a read-only bind, avoiding blocked `ftp.gnu.org` access inside
+fakeroot. Git, Ubuntu package, and remaining Python sources still require
+network access for a first source build; reruns reuse verified cached files.
+
 SWIF2 additionally requires a valid JLab SciComp certificate. `swif2 list
 -display json` is a harmless authentication check. Installation does not
 submit a job or leave an Apptainer service running.
@@ -285,3 +293,5 @@ local reinstall.
 Local users continue with the [user guide](USER_GUIDE.md). JLab users should
 copy and validate `jobs/jlab_ifarm/resources.env` using the [ifarm
 guide](JLAB_IFARM.md) before submitting sustained work.
+`--source-build` rebuilds and atomically replaces an existing profile image;
+use it after source changes that must execute inside Apptainer.

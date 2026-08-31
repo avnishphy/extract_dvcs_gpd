@@ -1286,13 +1286,13 @@ PseudodataEvaluation parsePseudodataEvaluation(
                 kExitValidation);
         }
     } else if (!commonDomain ||
-            kinematics.xB < 0.12 || kinematics.xB > 0.28 ||
-            kinematics.t < -0.2 || kinematics.t > -0.08 ||
+            kinematics.xB < 0.10 || kinematics.xB > 0.50 ||
+            kinematics.t < -0.90 || kinematics.t > -0.10 ||
             kinematics.beamEnergy < 3.0 ||
             kinematics.beamEnergy > 200.0) {
         throw BridgeError("invalid_kinematics",
-            context + ".observable_kinematics is outside the frozen "
-                      "milestone multi-Q2 domain",
+            context + ".observable_kinematics is outside the documented "
+                      "schema-8 multi-Q2 domain",
             kExitValidation);
     }
     requirePhysicalFixedTargetInelasticity(

@@ -172,11 +172,17 @@ hardware/site acceptance item.
 | `optimize` | GPU preferred | Independent trials; persistent shared study. |
 | `evaluate` | mixed | Neural coverage/sampling plus CPU exact reevaluation. |
 | `compare` | CPU/memory | Importance calculations on saved exact corpus. |
-| `holdout` | CPU + memory | Fresh native truth and exact DD prediction checks. |
+| `holdout` | CPU + memory | Four named-model truth requests run concurrently; later exact DD checks reuse the allocation. |
 | `plot` | small CPU/memory | Saved artifacts only. |
 
 This is why the JLab templates separate jobs instead of requesting a GPU for
 the entire workflow.
+
+Measured Josh 96-point holdouts sustained 97–98% of four CPUs and reached
+15.25 GiB before the original 12-hour limit. Rather than extend one serial
+job, SWIF2 now runs four concurrent 4-CPU/20-GB/12-hour model workers and a
+2-CPU/20-GB/2-hour verified merge. This preserves CPU-hours while reducing
+elapsed time. Tune each model from its own reaped telemetry.
 
 ## Resource provenance and audit
 

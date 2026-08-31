@@ -206,10 +206,19 @@ ensemble with the conventional exact-bank posterior. The record contains:
 The conventional sample and neural sample arrays are separate. Neither should
 be described as the injected truth.
 
+Before Wasserstein or stress-width calculations, schema 2 checks conventional
+support. If ESS is below its frozen threshold or any 90% direction has zero
+width, `conventional_reference_available` is false, `passed` is false, and
+distance/width metrics are null. The collapsed resample is retained only for
+audit and is explicitly not a posterior reference. No jitter, epsilon width,
+or relaxed ESS threshold is applied.
+
 ## Holdout contract
 
-`holdout/summary.json` and `holdout/MODEL/` artifacts are created only after
-synthetic closure passes. The summary records:
+`holdouts/DESIGN/summary.json` and `holdouts/DESIGN/MODEL/` artifacts require passed synthetic
+evaluation and a completed comparison. A failed conventional reference does
+not block diagnostic execution, but forces `robustness_claim_enabled: false`
+and status `complete_with_failed_synthetic_closure`. The summary records:
 
 - allowlisted model and fresh-kinematic manifests;
 - frozen training/configuration/bridge hashes;
@@ -218,8 +227,17 @@ synthetic closure passes. The summary records:
 - protected before/after artifact manifests;
 - `parameter_recovery_claimed: false` and `real_data_fit_enabled: false`.
 
+The content-hashed design records its relationship to training, selection
+rule, kinematic count, source catalog, and claim scope. Same-design and fresh-
+design results are never merged into one unnamed metric. Reduced designs also
+require `generated/observation_design_manifest.json` to prove that their mask
+count occurred during training.
+
 Per-model directories contain native truth, frozen-NPE posterior samples,
 exact-DD prediction/function intervals, invalid records, metrics, and plots.
+A SWIF model worker also writes `swif-partial.json`, binding that delta to the
+model, design, base project, and image hashes. Only the four-way verified merge
+may publish `summary.json` and the downstream project state.
 A clean execution with predictive disagreement may legitimately report
 `complete_with_scientific_mismatch`; execution success and scientific
 agreement are distinct.

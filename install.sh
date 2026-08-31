@@ -152,7 +152,7 @@ else
     log "preparing JLab Apptainer image"
     candidate_image="${image}"
     built_image=false
-    if [[ ! -s "${image}" ]]; then
+    if [[ "${source_build}" == true || ! -s "${image}" ]]; then
         candidate_image="${image}.partial"
         built_image=true
         if [[ "${published}" == true && -n "${digest}" && "${source_build}" != true ]]; then
@@ -161,6 +161,31 @@ else
             log "no approved published digest is available; the first locked fakeroot source build can take a while"
             wheelhouse="${DVCS_WHEELHOUSE:-${TMPDIR:-/tmp}/extract-dvcs-gpd-wheels-${UID}/${resolved}}"
             mkdir -p "${wheelhouse}"
+            prefetch_locked() {
+                local destination="$1" expected="$2"; shift 2
+                [[ -f "${destination}" ]] && \
+                  echo "${expected}  ${destination}" | sha256sum -c - >/dev/null 2>&1 && return
+                local url
+                for url in "$@"; do
+                    rm -f "${destination}.partial"
+                    if curl --fail --location --http1.1 --retry 3 --retry-all-errors \
+                      --connect-timeout 20 --max-time 1800 "${url}" -o "${destination}.partial" && \
+                      echo "${expected}  ${destination}.partial" | sha256sum -c - >/dev/null 2>&1; then
+                        mv "${destination}.partial" "${destination}"
+                        return
+                    fi
+                done
+                echo "install: all locked mirrors failed for $(basename "${destination}")" >&2
+                exit 69
+            }
+            prefetch_locked "${wheelhouse}/gsl-2.8.tar.gz" \
+              6a99eeed15632c6354895b1dd542ed5a855c0f15d9ad1326c6fe2b2c9e423190 \
+              https://ftpmirror.gnu.org/gsl/gsl-2.8.tar.gz \
+              https://mirrors.kernel.org/gnu/gsl/gsl-2.8.tar.gz \
+              https://ftp.gnu.org/gnu/gsl/gsl-2.8.tar.gz
+            prefetch_locked "${wheelhouse}/LHAPDF-6.5.6.tar.gz" \
+              6b8b7e38dc26a977a24f5a321215b7054c14a4469d04134d70cb93a860eeeea7 \
+              'https://lhapdf.hepforge.org/downloads/?f=LHAPDF-6.5.6.tar.gz'
             if [[ "${resolved}" == cuda ]]; then
                 torch_wheel="torch-2.12.1+cu126-cp312-cp312-manylinux_2_28_x86_64.whl"
                 torch_url="https://download.pytorch.org/whl/cu126/torch-2.12.1%2Bcu126-cp312-cp312-manylinux_2_28_x86_64.whl"

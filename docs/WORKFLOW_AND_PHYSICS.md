@@ -1,7 +1,7 @@
 # Workflow and physics reference
 
 This document is the complete user-level physics specification for public
-schema 8 and compatible schema 7. Reusable native storage, observable
+schema 9 and compatible schemas 7/8. Reusable native storage, observable
 extension, and group-selection mechanics are specified separately in
 [Corpus and data selection](CORPUS_AND_DATA_SELECTION.md).
 The release is a multi-Q2 synthetic posterior laboratory. It is ready for the
@@ -259,11 +259,13 @@ For a new configuration, require in order:
 7. fresh output-blind GK/VGG external validation;
 8. representation and shadow tests when their campaigns are defined.
 
-The external manifest was selected from catalog kinematics with no
-measurements, uncertainties, or named-model outputs. It contains six fresh
-sites; with the default six observables they make the same 36-token shape used
-in training. A schema-8 subset changes the token count consistently and
-requires a fresh project/result contract.
+External designs contain no measurements, uncertainties, or named-model
+outputs. Same-design manifests isolate model-family shift; fresh same-size
+manifests combine model and kinematic shift. Schema 9 additionally supports
+masked nested subsets. Every context retains the configured maximum width;
+the point mask removes padding after the learned point network and fixed-
+maximum normalization exposes the reduced information count. Reduced designs
+require mask-augmented materialization and retraining.
 Named outputs are post-training only and may not drive Optuna or architecture
 changes. A mismatch reports lack of robustness.
 

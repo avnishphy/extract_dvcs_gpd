@@ -40,6 +40,18 @@ mismatch is fail-closed: preserve the object and lock, verify the upstream
 release independently, and update the lock only through a reviewed dependency
 change. Never disable checksum verification for convenience.
 
+If Apptainer reports `Failed to connect to ftp.gnu.org`, update the checkout
+and rerun the identical install command. Current installer prefetches verified
+`gsl-2.8.tar.gz` on the host using GNU/kernel mirrors and binds it read-only
+into the build. Confirm the cache before retrying:
+
+```bash
+find "${DVCS_WHEELHOUSE:-${TMPDIR:-/tmp}/extract-dvcs-gpd-wheels-$UID}" -name 'gsl-2.8.tar.gz' -o -name 'LHAPDF-6.5.6.tar.gz'
+```
+
+Do not manually place an unverified archive there: checksum failure deletes
+the partial download and fails closed.
+
 ### Interrupted install
 
 Rerun the same `install.sh` command. Images/data/environment state use partial
@@ -258,6 +270,25 @@ only minibatches enter CUDA. Use a current image and the 32G initial train RAM
 request. An older image that copies complete contexts to CUDA can fill a 24G
 GPU before cuBLAS initializes; increasing host RAM alone cannot fix it.
 
+### Apptainer reports `squashfuse_ll` could not read the SIF
+
+Compare local and staged sizes/hashes. V9 local image was 6,936,043,520 bytes
+with SHA-256 prefix `8e1b48654be8f243`; SWIF input `117184533` was truncated to
+3,098,542,080 bytes with prefix `921c62fd0ed52ef6`. Its SIF descriptor still
+expected the full filesystem, so squashfuse correctly refused it.
+
+Current startup verifies staged SIF hash before mounting. For this recovery we
+reuse V8's already verified v3 SIF and cached SWIF input; only the separately
+staged runner changes. Do not retry V9, whose cached v4 input is truncated.
+Check yourself with:
+
+```bash
+stat -c '%s' .dvcs/IMAGE.sif
+sha256sum .dvcs/IMAGE.sif
+stat -Lc '%s %N' /lustre/enp/swif2/jobs/$USER/dvcs-compare/ATTEMPT/dvcs-image-*
+sha256sum /lustre/enp/swif2/jobs/$USER/dvcs-compare/ATTEMPT/dvcs-image-*
+```
+
 ### Invalid account or account/partition combination
 
 Set `JLAB_ACCOUNT` in untracked `resources.env`; verify associations with
@@ -318,6 +349,88 @@ allocation is not recovery. Do not run the workload interactively on ifarm to
 evade scheduler limits.
 
 ## Plot and real-data diagnostic failures
+
+### Holdout reports `/workspace/configs` is missing
+
+Older images inferred the repository root by walking upward from the staged
+project's `.engine/workflow.json`. On SWIF2 that incorrectly produced
+`/workspace`, while canonical release configurations live under
+`/opt/dvcs/app/configs`.
+
+Current source passes the canonical holdout-manifest path explicitly. The
+SWIF2 runner also copies the image-embedded manifest into the legacy lookup
+location before running an older image. The manifest's internal SHA-256 check
+still runs, so this compatibility step does not change kinematics or physics.
+Resume from the last reaped compare archive with a new workflow name and
+`--from holdout --through plot`.
+
+### Holdout reports that token count or masked count is incompatible
+
+An older checkpoint accepts only its training width. For Josh this is
+`96 kinematics x 6 observables = 576 tokens = 10,377 context features`.
+A same- or fresh-design 96-point manifest is width-compatible. A 12/30/60
+design requires schema-9 masked materialization and retraining; padding an old
+checkpoint would fabricate an unsupported inference contract. Inspect
+`generated/observation_design_manifest.json` and the holdout design's
+`relationship_to_training` before retrying.
+
+If logs say `staged image-embedded holdout manifest` despite passing
+`--holdout-design`, SWIF2 reused an older runner cached under a mutable remote
+path. Current submission publishes runner, collector, and design at immutable
+content-addressed remote paths. Submit a new workflow name; retrying the old
+workflow preserves its stale input identity.
+
+### VGG99 fails while GK11/GK16/GK19 succeed
+
+VGG99 uniquely requires `MSTW2008nlo68cl`. SWIF2 compute nodes use an empty
+node-local cache, so the host installation alone is insufficient. Current
+submission content-addresses the verified set, stages it only into holdout,
+and checks required members before launching Apptainer. The stdout must contain
+`staged LHAPDF set MSTW2008nlo68cl`. Resume from the compare archive with a new
+workflow name; no retraining is required.
+
+### Compare reports a zero-width conventional stress direction
+
+This is conventional prior-importance collapse, not a PARTONS exception and
+not evidence that neural uncertainty is zero. Josh V7 measured:
+
+- 16,384 native vectors x 8 nuisance draws = 131,072 proposals;
+- 16,384 posterior resamples;
+- ESS 1.00000231, below frozen minimum 80;
+- largest normalized weight 0.999998843775;
+- one unique resampled proposal/native vector;
+- `H_u_normalization` q05=q50=q95=3.219311164780655.
+
+One proposal carried virtually all exact likelihood in 82 dimensions (80
+physics + 2 nuisance). Its empirical 90% width was zero, so old code stopped:
+`conventional H_u_normalization stress direction has zero width`.
+
+Current code writes failure code
+`conventional_prior_importance_sampling_collapsed`, null Wasserstein/width
+metrics, audit arrays, and `passed: false`. Holdout is diagnostic-only and
+cannot enable robustness; plots label conventional reference unavailable.
+Evaluation stays valid. We do not add jitter, substitute epsilon, or lower ESS.
+A future adaptive exact-likelihood sampler is needed for a valid reference.
+
+The CLI returns process success after this complete record is written while
+retaining `scientific_passed: false`. This distinction lets SWIF2 reap the
+state and run diagnostic-only successors. Older code returned exit 1 for the
+scientific failure, so SWIF2 incorrectly reported `SLURM_FAILED` and blocked
+the workflow even though `comparison_metrics.json` was complete.
+
+Josh V8 also measured 8,190,926,848 peak bytes against 8,192,524,288 requested
+(99.98%). Compare now requests 12 GB: 46.5% above this one observed peak and
+about 68.3% expected memory efficiency. Re-measure before reducing it.
+
+Check yourself:
+
+```bash
+jq '{status,passed,effective_sample_size,conventional_reference_available,conventional_reference_diagnostics}' workspace/PROJECT/results/PROFILE/comparison/comparison_metrics.json
+```
+
+Resume from last `project-after-evaluate.tar` with `farm-submit
+--project-archive ... --from compare --through plot`; see
+[JLab SWIF2 workflows](JLAB_SWIF2.md#resume-from-a-completed-stage).
 
 ### Plot says an input is missing/incompatible
 

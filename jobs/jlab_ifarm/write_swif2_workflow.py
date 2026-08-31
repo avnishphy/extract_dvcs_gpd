@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import sys
 from typing import Any
 
@@ -33,8 +34,10 @@ ANALYSIS_DEFAULTS = {
     "optimize": (8, "32G", "48G", "12h", 1, "gpu"),
     "train": (4, "32G", "48G", "12h", 1, "gpu"),
     "evaluate": (8, "16G", "48G", "12h", 1, "gpu"),
-    "compare": (2, "8G", "32G", "4h", 0, "production"),
-    "holdout": (16, "16G", "48G", "12h", 0, "production"),
+    "compare": (2, "12G", "32G", "4h", 0, "production"),
+    "holdout": (4, "20G", "48G", "24h", 0, "production"),
+    "holdout_worker": (4, "20G", "48G", "12h", 0, "production"),
+    "holdout_merge": (2, "20G", "48G", "2h", 0, "production"),
     "plot": (2, "8G", "32G", "1h", 0, "production"),
 }
 
@@ -68,6 +71,27 @@ def staged(path: Path, label: str) -> tuple[str, dict[str, str]]:
     suffixes = "".join(path.suffixes)
     local = f"{label}-{sha256(path)[:16]}{suffixes}"
     return local, {"local": local, "remote": str(path)}
+
+
+def immutable_staged(path: Path, label: str) -> tuple[str, dict[str, str]]:
+    """Publish small controls at unique remote paths; defeat stale SWIF cache."""
+
+    digest = sha256(path)
+    suffixes = "".join(path.suffixes)
+    root = Path(os.environ.get(
+        "DVCS_SWIF_INPUT_ROOT",
+        Path(__file__).resolve().parents[2] / ".dvcs/swif2_inputs",
+    )).expanduser().resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    asset = root / f"{label}-{digest[:16]}{suffixes}"
+    if asset.exists():
+        if not asset.is_file() or asset.is_symlink() or sha256(asset) != digest:
+            fail(f"content-addressed control collision: {asset}")
+    else:
+        temporary = asset.with_name(asset.name + ".partial")
+        shutil.copyfile(path, temporary)
+        os.replace(temporary, asset)
+    return staged(asset, label)
 
 
 def size_bytes(value: str) -> int:
@@ -176,9 +200,15 @@ def analysis_workflow(args: argparse.Namespace) -> dict[str, Any]:
     profile = checked_name(args.profile, "profile")
     image = checked_file(args.image, "image")
     database = checked_file(args.database, "database archive")
+    lhapdf = checked_file(args.lhapdf, "LHAPDF set archive")
     corpus_archive = checked_file(args.corpus_archive, "corpus archive")
     initial_project = checked_file(args.project_archive, "project archive")
+    holdout_design = (
+        checked_file(args.holdout_design, "holdout design")
+        if args.holdout_design else None
+    )
     runner = checked_file(args.runner, "analysis runner")
+    holdout_merger = checked_file(args.holdout_merger, "holdout merge runner")
     collector = checked_file(args.collector, "performance collector")
     result_root = Path(args.result_root).expanduser().resolve()
     log_root = Path(args.log_root).expanduser().resolve()
@@ -186,16 +216,112 @@ def analysis_workflow(args: argparse.Namespace) -> dict[str, Any]:
 
     image_name, image_input = staged(image, "dvcs-image")
     database_name, database_input = staged(database, "gpddatabase")
+    lhapdf_name, lhapdf_input = staged(lhapdf, "MSTW2008nlo68cl")
     corpus_name, corpus_input = staged(corpus_archive, "corpus")
-    runner_name, runner_input = staged(runner, "analysis-runner")
-    collector_name, collector_input = staged(collector, "performance-collector")
+    runner_name, runner_input = immutable_staged(runner, "analysis-runner")
+    merger_name, merger_input = immutable_staged(
+        holdout_merger, "holdout-merger"
+    )
+    collector_name, collector_input = immutable_staged(
+        collector, "performance-collector"
+    )
     project_name, project_input = staged(initial_project, "project-state")
+    if holdout_design is not None:
+        holdout_name, holdout_input = immutable_staged(
+            holdout_design, "holdout-design"
+        )
+    else:
+        holdout_name, holdout_input = "none", None
     prior_job: str | None = None
     jobs: list[dict[str, Any]] = []
     state_remote = initial_project
     state_local = project_name
 
     for index, stage in enumerate(stages, 1):
+        if stage == "holdout":
+            if holdout_input is None:
+                fail("parallel holdout requires --holdout-design")
+            models = ("GPDGK11", "GPDGK16", "GPDGK19", "GPDVGG99")
+            base_input = (
+                project_input if index == 1
+                else transfer(state_local, state_remote)
+            )
+            partials: list[tuple[str, Path]] = []
+            model_jobs: list[str] = []
+            for model in models:
+                model_job_name = f"dvcs-holdout-{model.lower()}"
+                partial_local = f"holdout-{model}.tar"
+                partial_remote = result_root / "partials" / (
+                    f"{workflow}-{partial_local}"
+                )
+                model_summary = f"summary-holdout-{model}.json"
+                model_performance = f"performance-holdout-{model}.json"
+                model_samples = f"performance-holdout-{model}.jsonl"
+                job = job_base(
+                    name=model_job_name, account=args.account,
+                    constraint=args.constraint, resources=resource("holdout_worker"),
+                    log_root=log_root, workflow=workflow,
+                    stage=f"holdout-{model}",
+                )
+                if prior_job:
+                    job["antecedents"] = [prior_job]
+                job["inputs"] = [
+                    image_input, database_input, runner_input, collector_input,
+                    base_input, holdout_input, lhapdf_input,
+                ]
+                job["outputs"] = [
+                    transfer(partial_local, partial_remote),
+                    transfer(model_summary, result_root / "summaries" / model_summary),
+                    transfer(model_performance, result_root / "performance" / model_performance),
+                    transfer(model_samples, result_root / "performance" / model_samples),
+                ]
+                job["command"] = command(
+                    "/bin/bash", runner_name, "holdout", project, profile,
+                    corpus, selection, image_name, database_name, "none",
+                    state_local, partial_local, model_summary, "cpu",
+                    str(args.heartbeat_seconds), collector_name,
+                    model_performance, model_samples,
+                    str(args.performance_interval_seconds), holdout_name,
+                    lhapdf_name, model,
+                )
+                jobs.append(job)
+                model_jobs.append(model_job_name)
+                partials.append((partial_local, partial_remote))
+
+            output_local = "project-after-holdout.tar"
+            output_remote = result_root / "state" / f"{workflow}-{output_local}"
+            summary_local = "summary-holdout.json"
+            performance_local = "performance-holdout-merge.json"
+            samples_local = "performance-holdout-merge.jsonl"
+            merge = job_base(
+                name="dvcs-holdout-merge", account=args.account,
+                constraint=args.constraint, resources=resource("holdout_merge"),
+                log_root=log_root, workflow=workflow, stage="holdout-merge",
+            )
+            merge["antecedents"] = model_jobs
+            merge["inputs"] = [
+                image_input, database_input, runner_input, merger_input,
+                collector_input, base_input, holdout_input, lhapdf_input,
+                *[transfer(local, remote) for local, remote in partials],
+            ]
+            merge["outputs"] = [
+                transfer(output_local, output_remote),
+                transfer(summary_local, result_root / "summaries" / summary_local),
+                transfer(performance_local, result_root / "performance" / performance_local),
+                transfer(samples_local, result_root / "performance" / samples_local),
+            ]
+            merge["command"] = command(
+                "/bin/bash", merger_name, runner_name, project, profile,
+                corpus, selection, image_name, database_name, state_local,
+                output_local, summary_local, str(args.heartbeat_seconds),
+                collector_name, performance_local, samples_local,
+                str(args.performance_interval_seconds), holdout_name,
+                lhapdf_name, *[local for local, _ in partials],
+            )
+            jobs.append(merge)
+            prior_job = "dvcs-holdout-merge"
+            state_local, state_remote = output_local, output_remote
+            continue
         name = f"dvcs-{stage}"
         resources = resource(stage)
         output_local = f"project-after-{stage}.tar"
@@ -217,6 +343,10 @@ def analysis_workflow(args: argparse.Namespace) -> dict[str, Any]:
             inputs.append(transfer(state_local, state_remote))
         if stage in CORPUS_STAGES:
             inputs.append(corpus_input)
+        if stage == "holdout" and holdout_input is not None:
+            inputs.append(holdout_input)
+        if stage == "holdout":
+            inputs.append(lhapdf_input)
         job["inputs"] = inputs
         job["outputs"] = [
             transfer(output_local, output_remote),
@@ -239,6 +369,8 @@ def analysis_workflow(args: argparse.Namespace) -> dict[str, Any]:
             str(args.heartbeat_seconds),
             collector_name, performance_local, samples_local,
             str(args.performance_interval_seconds),
+            holdout_name if stage == "holdout" else "none",
+            lhapdf_name if stage == "holdout" else "none",
         )
         jobs.append(job)
         prior_job = name
@@ -405,8 +537,14 @@ def parser() -> argparse.ArgumentParser:
     analysis.add_argument("--selection", required=True)
     analysis.add_argument("--corpus-archive", required=True)
     analysis.add_argument("--project-archive", required=True)
+    analysis.add_argument("--holdout-design")
+    analysis.add_argument("--lhapdf", required=True)
     analysis.add_argument(
         "--runner", default=str(Path(__file__).with_name("run_swif2_analysis_stage.sh"))
+    )
+    analysis.add_argument(
+        "--holdout-merger",
+        default=str(Path(__file__).with_name("run_swif2_holdout_merge.sh")),
     )
     analysis.add_argument("--include-optimize", action="store_true")
     analysis.add_argument("--from", dest="from_stage", default="selection")

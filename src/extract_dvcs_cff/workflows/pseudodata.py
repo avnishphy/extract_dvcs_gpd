@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import platform
 import subprocess
@@ -228,33 +229,37 @@ def load_configuration(path: Path) -> dict[str, Any]:
     """Load and fail-close the Stage 10 workflow's top-level contract."""
 
     config = json.loads(path.resolve(strict=True).read_text(encoding="utf-8"))
+    schema_version = config.get("schema_version")
+    expected_keys = {
+        "schema_version",
+        "workflow",
+        "physics_configuration",
+        "bridge_schema_version",
+        "representation",
+        "real_data",
+        "data_provenance",
+        "runtime",
+        "truth",
+        "kinematics",
+        "observables",
+        "diagnostics",
+        "experimental_model",
+        "profiles",
+        "context_contract",
+        "network",
+        "hyperparameter_optimization",
+        "seeds",
+        "frozen_validation_gates",
+    }
+    if schema_version == 9:
+        expected_keys.add("observation_design_training")
     _exact_keys(
         config,
-        {
-            "schema_version",
-            "workflow",
-            "physics_configuration",
-            "bridge_schema_version",
-            "representation",
-            "real_data",
-            "data_provenance",
-            "runtime",
-            "truth",
-            "kinematics",
-            "observables",
-            "diagnostics",
-            "experimental_model",
-            "profiles",
-            "context_contract",
-            "network",
-            "hyperparameter_optimization",
-            "seeds",
-            "frozen_validation_gates",
-        },
+        expected_keys,
         "configuration",
     )
     if (
-        config["schema_version"] != 8
+        config["schema_version"] not in {8, 9}
         or config["bridge_schema_version"] != 1
         or config["workflow"]
         != "stage11_full_independent_dd_multiq2_pseudodata_v1"
@@ -408,6 +413,50 @@ def load_configuration(path: Path) -> dict[str, Any]:
             )
     if len(config["kinematics"]) < 4 or not config["observables"]:
         raise ValueError("workflow requires >=4 kinematics and observables")
+    if schema_version == 8:
+        config["observation_design_training"] = {
+            "enabled": False,
+            "active_kinematic_counts": [len(config["kinematics"])],
+            "selection_seed": 51017,
+            "selection_policy": "nested_deterministic_farthest_point_v1",
+            "pooling_policy": "masked_fixed_maximum_normalization_v1",
+        }
+    design = config["observation_design_training"]
+    _exact_keys(
+        design,
+        {
+            "enabled", "active_kinematic_counts", "selection_seed",
+            "selection_policy", "pooling_policy",
+        },
+        "observation_design_training",
+    )
+    if not isinstance(design["enabled"], bool):
+        raise ValueError("observation_design_training.enabled must be boolean")
+    counts = design["active_kinematic_counts"]
+    if (
+        not isinstance(counts, list) or not counts
+        or any(
+            isinstance(count, bool) or not isinstance(count, int)
+            or not 1 <= count <= len(config["kinematics"])
+            for count in counts
+        )
+        or counts != sorted(set(counts))
+    ):
+        raise ValueError(
+            "active_kinematic_counts must be sorted unique integers within "
+            "the configured kinematic count"
+        )
+    if design["enabled"] and counts[-1] != len(config["kinematics"]):
+        raise ValueError("masked design training must include the full design")
+    if (
+        not isinstance(design["selection_seed"], int)
+        or isinstance(design["selection_seed"], bool)
+        or design["selection_policy"]
+        != "nested_deterministic_farthest_point_v1"
+        or design["pooling_policy"]
+        != "masked_fixed_maximum_normalization_v1"
+    ):
+        raise ValueError("unsupported observation-design training contract")
     observable_ids = [item["id"] for item in config["observables"]]
     admitted_order = [
         name for name in ADMITTED_OBSERVABLE_IDS if name in observable_ids
@@ -3008,6 +3057,75 @@ def _sliced_wasserstein(
     )
 
 
+def _conventional_reference_diagnostics(
+    *,
+    weights: np.ndarray,
+    resampled_indices: np.ndarray,
+    samples: np.ndarray,
+    nuisance_draws: int,
+    minimum_effective_sample_size: float,
+) -> dict[str, Any]:
+    """Decide whether exact-bank importance resampling supports comparison."""
+
+    from extract_dvcs_cff.inference.stage10 import STAGE10_PARAMETER_NAMES
+
+    normalized = np.asarray(weights, dtype=np.float64)
+    indices = np.asarray(resampled_indices, dtype=np.int64)
+    conventional = np.asarray(samples, dtype=np.float64)
+    if (
+        normalized.ndim != 1
+        or len(normalized) == 0
+        or not np.all(np.isfinite(normalized))
+        or np.any(normalized < 0.0)
+        or not np.isclose(normalized.sum(), 1.0)
+    ):
+        raise ValueError("conventional importance weights are invalid")
+    if indices.ndim != 1 or len(indices) != len(conventional):
+        raise ValueError("conventional resampling indices are invalid")
+    if conventional.ndim != 2 or conventional.shape[1] != len(
+        STAGE10_PARAMETER_NAMES
+    ):
+        raise ValueError("conventional posterior sample shape is invalid")
+    widths = np.quantile(conventional, 0.95, axis=0) - np.quantile(
+        conventional, 0.05, axis=0
+    )
+    collapsed = [
+        name
+        for name, width in zip(STAGE10_PARAMETER_NAMES, widths)
+        if not np.isfinite(width) or width <= 0.0
+    ]
+    effective_sample_size = float(1.0 / np.sum(normalized**2))
+    ess_passed = bool(
+        effective_sample_size >= float(minimum_effective_sample_size)
+    )
+    available = bool(ess_passed and not collapsed)
+    return {
+        "available": available,
+        "effective_sample_size": effective_sample_size,
+        "minimum_effective_sample_size": float(
+            minimum_effective_sample_size
+        ),
+        "maximum_normalized_weight": float(np.max(normalized)),
+        "unique_resampled_proposal_count": int(len(np.unique(indices))),
+        "unique_resampled_native_parameter_count": int(
+            len(np.unique(indices // nuisance_draws))
+        ),
+        "collapsed_direction_count": len(collapsed),
+        "collapsed_directions": collapsed,
+        "failure_code": (
+            None
+            if available
+            else "conventional_prior_importance_sampling_collapsed"
+        ),
+        "interpretation": (
+            "the finite exact-native prior bank supports posterior comparison"
+            if available
+            else "the exact-native prior bank has insufficient effective "
+            "support for an 82-dimensional posterior comparison"
+        ),
+    }
+
+
 def compare_posteriors(
     *,
     configuration_path: Path,
@@ -3097,7 +3215,6 @@ def compare_posteriors(
     log_likelihood -= np.max(log_likelihood)
     weights = np.exp(log_likelihood)
     weights /= np.sum(weights)
-    ess = float(1.0 / np.sum(weights**2))
     sample_count = int(settings["posterior_sample_count"])
     resample_rng = np.random.Generator(
         np.random.PCG64(int(config["seeds"]["comparison"]))
@@ -3114,6 +3231,83 @@ def compare_posteriors(
         sample_count=sample_count,
         seed_offset=3000,
     )
+    output = workspace / "comparison"
+    output.mkdir(parents=True, exist_ok=True)
+    with (output / "conventional_posterior_samples.npy").open("wb") as stream:
+        np.save(stream, conventional, allow_pickle=False)
+    with (output / "neural_posterior_samples.npy").open("wb") as stream:
+        np.save(stream, neural, allow_pickle=False)
+    gates = config["frozen_validation_gates"]
+    reference = _conventional_reference_diagnostics(
+        weights=weights,
+        resampled_indices=resampled_indices,
+        samples=conventional,
+        nuisance_draws=nuisance_draws,
+        minimum_effective_sample_size=gates[
+            "minimum_conventional_effective_sample_size"
+        ],
+    )
+    intervals = {}
+    truth = arrays["truth_theta_physical"]
+    for index, name in enumerate(STAGE10_PARAMETER_NAMES):
+        intervals[name] = {
+            "truth": float(truth[index]),
+            "conventional_q05": float(
+                np.quantile(conventional[:, index], 0.05)
+            ),
+            "conventional_q50": float(
+                np.quantile(conventional[:, index], 0.5)
+            ),
+            "conventional_q95": float(
+                np.quantile(conventional[:, index], 0.95)
+            ),
+            "neural_q05": float(np.quantile(neural[:, index], 0.05)),
+            "neural_q50": float(np.quantile(neural[:, index], 0.5)),
+            "neural_q95": float(np.quantile(neural[:, index], 0.95)),
+        }
+    if not reference["available"]:
+        record = {
+            "schema_version": 2,
+            "status": "complete_with_invalid_conventional_reference",
+            "profile": profile,
+            "conventional_method": (
+                "self_normalized_prior_importance_sampling_with_exact_native_"
+                "predictions_and_explicit_prior_nuisance_draws"
+            ),
+            "conventional_reference_available": False,
+            "conventional_samples_role": (
+                "diagnostic_collapsed_resample_not_posterior_reference"
+            ),
+            "conventional_reference_diagnostics": reference,
+            "proposal_count": len(proposal_theta),
+            "posterior_dimension": posterior_dimension,
+            "native_parameter_dimension": native_dimension,
+            "nuisance_dimension": nuisance_dimension,
+            "effective_sample_size": reference["effective_sample_size"],
+            "sample_count": sample_count,
+            "ensemble_sliced_wasserstein": None,
+            "marginal_wasserstein_over_conventional_sd": {},
+            "intervals": intervals,
+            "stress_direction_width_reference": {
+                "status": "unavailable",
+                "reason": reference["failure_code"],
+                "neural_conventional_width90_ratio": None,
+                "passed": False,
+            },
+            "gate_checks": {
+                "conventional_effective_sample_size": False,
+                "ensemble_sliced_wasserstein": None,
+                "marginal_wasserstein": None,
+                "stress_directions_not_artificially_narrower_than_conventional": None,
+            },
+            "passed": False,
+            "surrogate_used": False,
+            "real_data_used": False,
+        }
+        write_json(output / "comparison_metrics.json", record)
+        return record
+
+    ess = reference["effective_sample_size"]
     mean = conventional.mean(axis=0)
     sd = conventional.std(axis=0, ddof=1)
     if np.any(sd <= 0.0):
@@ -3137,25 +3331,6 @@ def compare_posteriors(
         )
         for index, name in enumerate(STAGE10_PARAMETER_NAMES)
     }
-    intervals = {}
-    truth = arrays["truth_theta_physical"]
-    for index, name in enumerate(STAGE10_PARAMETER_NAMES):
-        intervals[name] = {
-            "truth": float(truth[index]),
-            "conventional_q05": float(
-                np.quantile(conventional[:, index], 0.05)
-            ),
-            "conventional_q50": float(
-                np.quantile(conventional[:, index], 0.5)
-            ),
-            "conventional_q95": float(
-                np.quantile(conventional[:, index], 0.95)
-            ),
-            "neural_q05": float(np.quantile(neural[:, index], 0.05)),
-            "neural_q50": float(np.quantile(neural[:, index], 0.5)),
-            "neural_q95": float(np.quantile(neural[:, index], 0.95)),
-        }
-    gates = config["frozen_validation_gates"]
     stress_width_reference = stress_width_reference_diagnostic(
         neural,
         conventional,
@@ -3180,14 +3355,9 @@ def compare_posteriors(
             bool(stress_width_reference["passed"])
         ),
     }
-    output = workspace / "comparison"
-    output.mkdir(parents=True, exist_ok=True)
-    with (output / "conventional_posterior_samples.npy").open("wb") as stream:
-        np.save(stream, conventional, allow_pickle=False)
-    with (output / "neural_posterior_samples.npy").open("wb") as stream:
-        np.save(stream, neural, allow_pickle=False)
     record = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "status": "complete",
         "profile": profile,
         "conventional_method": (
             "self_normalized_prior_importance_sampling_with_exact_native_"
@@ -3197,6 +3367,9 @@ def compare_posteriors(
         "posterior_dimension": posterior_dimension,
         "native_parameter_dimension": native_dimension,
         "nuisance_dimension": nuisance_dimension,
+        "conventional_reference_available": True,
+        "conventional_samples_role": "posterior_reference",
+        "conventional_reference_diagnostics": reference,
         "effective_sample_size": ess,
         "sample_count": sample_count,
         "ensemble_sliced_wasserstein": sliced,
@@ -3304,6 +3477,7 @@ def _evaluate_native_named_model(
     physics: Mapping[str, Any],
     model: str,
     gpd_x: np.ndarray,
+    output_directory: Path | None = None,
 ) -> dict[str, Any]:
     """Evaluate one named model exactly and persist its raw native transaction."""
 
@@ -3330,7 +3504,11 @@ def _evaluate_native_named_model(
         "operation": "batch_evaluate_native_model_holdout_dvcs",
         "requests": requests,
     }
-    directory = workspace / "holdout" / model / "native_truth"
+    directory = (
+        output_directory
+        if output_directory is not None
+        else workspace / "holdout" / model / "native_truth"
+    )
     directory.mkdir(parents=True, exist_ok=True)
     request_path = directory / "request.json"
     response_path = directory / "response.json"
@@ -3507,26 +3685,28 @@ def evaluate_native_model_holdouts(
     *,
     bridge: Path,
     configuration_path: Path,
+    blind_configuration_path: Path,
     workspace: Path,
     profile: str,
     show_progress: bool | None = None,
 ) -> dict[str, Any]:
     """Externally test the frozen DD NPE on unseen native model families.
 
-    This operation runs only after grouped DD closure.  It neither replaces
-    the DD outer test nor exposes native-model values to learning or model
-    selection.
+    This operation runs only after grouped DD evaluation and comparison have
+    completed.  If the conventional importance reference collapses, holdout
+    remains a diagnostic but cannot enable a robustness claim.  It neither
+    replaces the DD outer test nor exposes native-model values to learning or
+    model selection.
     """
 
-    from extract_dvcs_cff.inference.stage10 import build_stage10_context
-    from extract_dvcs_cff.progress import progress_iter
-
     config = load_configuration(configuration_path)
-    repository = configuration_path.resolve(strict=True).parents[2]
-    blind_path = (
-        repository
-        / "configs/validation/stage11_blind_fresh_kinematics_v1.json"
-    ).resolve(strict=True)
+    requested_model = os.environ.get("DVCS_HOLDOUT_MODEL")
+    if requested_model is not None and requested_model not in _NATIVE_VALIDATION_MODELS:
+        raise RuntimeError("DVCS_HOLDOUT_MODEL is not allowlisted")
+    selected_models = (
+        (requested_model,) if requested_model else _NATIVE_VALIDATION_MODELS
+    )
+    blind_path = blind_configuration_path.resolve(strict=True)
     blind = json.loads(blind_path.read_text(encoding="utf-8"))
     expected_hash = blind.pop("manifest_content_sha256", None)
     observed_hash = hashlib.sha256(
@@ -3535,7 +3715,10 @@ def evaluate_native_model_holdouts(
     if expected_hash != observed_hash:
         raise RuntimeError("blind kinematics manifest hash changed")
     if (
-        blind.get("protocol") != "output_blind_fresh_kinematics_v1"
+        blind.get("protocol") not in {
+            "output_blind_fresh_kinematics_v1",
+            "native_model_holdout_design_v2",
+        }
         or blind.get("selection_frozen_before_native_outputs") is not True
         or blind.get("native_outputs_generated") is not False
         or blind.get("training_use") is not False
@@ -3544,8 +3727,62 @@ def evaluate_native_model_holdouts(
     ):
         raise RuntimeError("blind kinematics leakage contract changed")
     blind_points = blind.get("npe_dataset_points", ())
-    if len(blind_points) != len(config["kinematics"]):
-        raise RuntimeError("blind NPE dataset must preserve token count")
+    design_name = str(blind.get("design_name", blind_path.stem))
+    if (
+        not design_name
+        or any(
+            character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+            for character in design_name
+        )
+        or design_name[0] in ".-"
+    ):
+        raise RuntimeError("holdout design_name is unsafe")
+    relationship = str(
+        blind.get("relationship_to_training", "fresh_unseen_kinematics")
+    )
+    if not blind_points or len(blind_points) > len(config["kinematics"]):
+        raise RuntimeError(
+            "holdout design kinematic count must lie within trained maximum"
+        )
+    training_coordinate_list = [
+        canonical(point) for point in config["kinematics"]
+    ]
+    holdout_coordinate_list = [
+        canonical({
+            key: float(item[key]) for key in (
+                "x_b", "t_GeV2", "Q2_GeV2",
+                "beam_energy_GeV", "phi_rad",
+            )
+        })
+        for item in blind_points
+    ]
+    training_coordinates = set(training_coordinate_list)
+    holdout_coordinates = set(holdout_coordinate_list)
+    if relationship == "same_training_kinematics":
+        if holdout_coordinate_list != training_coordinate_list:
+            raise RuntimeError("same-design holdout does not match training kinematics")
+    elif relationship == "training_kinematic_subset":
+        if not holdout_coordinates < training_coordinates:
+            raise RuntimeError("training-subset holdout is not a strict subset")
+    elif relationship == "fresh_unseen_kinematics":
+        if holdout_coordinates & training_coordinates:
+            raise RuntimeError("fresh holdout overlaps training kinematics")
+    else:
+        raise RuntimeError("unsupported holdout relationship_to_training")
+    if len(blind_points) < len(config["kinematics"]):
+        metrics_path = workspace / "generated/generation_metrics.json"
+        metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+        trained_design = metrics.get("observation_design_training", {})
+        if (
+            trained_design.get("enabled") is not True
+            or len(blind_points) not in trained_design.get(
+                "active_kinematic_counts", []
+            )
+        ):
+            raise RuntimeError(
+                "reduced holdout requires a checkpoint trained with that "
+                "masked kinematic count"
+            )
     holdout_config = {
         **config,
         "kinematics": [
@@ -3572,13 +3809,14 @@ def evaluate_native_model_holdouts(
     evaluation_path = workspace / "evaluation/evaluation_metrics.json"
     comparison_path = workspace / "comparison/comparison_metrics.json"
     if not evaluation_path.is_file() or not comparison_path.is_file():
-        raise RuntimeError("passed synthetic closure must exist before holdout")
+        raise RuntimeError("completed synthetic evaluation and comparison must exist before holdout")
     closure = {
         "evaluation": json.loads(evaluation_path.read_text(encoding="utf-8")),
         "comparison": json.loads(comparison_path.read_text(encoding="utf-8")),
     }
-    if not closure["evaluation"].get("passed") or not closure["comparison"].get("passed"):
-        raise RuntimeError("synthetic closure gates failed; native holdout is blocked")
+    if not closure["evaluation"].get("passed"):
+        raise RuntimeError("synthetic evaluation gates failed; native holdout is blocked")
+    synthetic_closure_passed = bool(closure["comparison"].get("passed"))
     before = _holdout_manifest(workspace)
     forbidden_names = _NATIVE_VALIDATION_MODELS
     training_text = "\n".join(
@@ -3590,30 +3828,61 @@ def evaluate_native_model_holdouts(
     if any(name in training_text for name in forbidden_names):
         raise RuntimeError("named holdout model leaked into pre-holdout artifacts")
 
+    from extract_dvcs_cff.inference.stage10 import build_stage10_context
+    from extract_dvcs_cff.progress import progress_iter
+
     physics_path = _physics_path(configuration_path, config)
     physics = json.loads(physics_path.read_text(encoding="utf-8"))
     _load_generated(workspace)  # integrity check; holdout never edits corpus
     point_table = _point_table(holdout_config)
+    maximum_point_count = len(config["kinematics"]) * len(
+        config["observables"]
+    )
     grid = config["diagnostics"]["gpd_x_grid"]
     gpd_x = np.linspace(grid["minimum"], grid["maximum"], grid["point_count"])
     exact_count = int(config["profiles"][profile]["exact_reevaluation_sample_count"])
     client = NativeCache(bridge, workspace)
+    missing_models = tuple(
+        model for model in selected_models
+        if not (workspace / "holdouts" / design_name / model / "metrics.json").is_file()
+    )
+    model_workers = min(
+        max(1, len(missing_models)),
+        resolve_native_workers(config["runtime"]["native_workers"]).resolved_workers,
+    )
+    native_truths: dict[str, dict[str, Any]] = {}
+    if missing_models:
+        with ThreadPoolExecutor(max_workers=model_workers) as executor:
+            native_truths = dict(zip(
+                missing_models,
+                executor.map(
+                lambda model: _evaluate_native_named_model(
+                    bridge=bridge, workspace=workspace,
+                    config=holdout_config, physics=physics,
+                    model=model, gpd_x=gpd_x,
+                    output_directory=(
+                        workspace / "holdouts" / design_name
+                        / model / "native_truth"
+                    ),
+                ),
+                    missing_models,
+                ),
+            ))
     records: dict[str, Any] = {}
     for model in progress_iter(
-            _NATIVE_VALIDATION_MODELS,
-            total=len(_NATIVE_VALIDATION_MODELS),
+            selected_models,
+            total=len(selected_models),
             description="External native-model validation",
             enabled=show_progress,
             unit="model",
         ):
-        truth = _evaluate_native_named_model(
-            bridge=bridge,
-            workspace=workspace,
-            config=holdout_config,
-            physics=physics,
-            model=model,
-            gpd_x=gpd_x,
+        existing_metrics = (
+            workspace / "holdouts" / design_name / model / "metrics.json"
         )
+        if existing_metrics.is_file():
+            records[model] = json.loads(existing_metrics.read_text(encoding="utf-8"))
+            continue
+        truth = native_truths[model]
         seed_offsets = _NATIVE_VALIDATION_SEED_OFFSETS[model]
         covariance, global_response, lu_response, covariance_diagnostics = (
             _covariance_and_responses(holdout_config, truth["predictions"])
@@ -3627,6 +3896,7 @@ def evaluate_native_model_holdouts(
             covariance=covariance,
             global_normalization_response=global_response,
             lu_normalization_response=lu_response,
+            maximum_point_count=maximum_point_count,
         )
         posterior = _ensemble_samples(
             config=config,
@@ -3637,15 +3907,19 @@ def evaluate_native_model_holdouts(
             seed_offset=seed_offsets["posterior"],
         )
         exact_indices = np.linspace(0, len(posterior) - 1, exact_count, dtype=np.int64)
-        exact = _partitioned_native_evaluation(
+        exact_parallel = _parallel_partitioned_native_evaluation(
             client=client,
             parameters=posterior[
                 exact_indices, :_PHYSICS_PARAMETER_COUNT
             ],
             config=holdout_config,
             physics=physics,
+            native_workers=config["runtime"]["native_workers"],
+            description=f"{model} exact holdout reevaluation",
+            show_progress=show_progress,
             operation="batch_evaluate_post_training_comparison_dvcs",
         )
+        exact = exact_parallel.result
         valid = np.flatnonzero(exact.valid_mask)
         if len(valid) == 0:
             raise RuntimeError(f"all extracted {model} DD samples are native-invalid")
@@ -3667,15 +3941,22 @@ def evaluate_native_model_holdouts(
                 holdout_config["diagnostics"]["gpd_reference_kinematics"]
             ],
         }
-        diagnostic = client.evaluate(
+        diagnostic_parallel = _parallel_partitioned_native_evaluation(
+            client=client,
             parameters=posterior[
                 exact_indices[valid], :_PHYSICS_PARAMETER_COUNT
             ],
             config=diagnostic_config,
             physics=physics,
+            native_workers=config["runtime"]["native_workers"],
+            description=f"{model} exact GPD diagnostics",
+            show_progress=show_progress,
             gpd_x_grid=gpd_x,
             operation="batch_evaluate_post_training_comparison_dvcs",
         )
+        diagnostic = diagnostic_parallel.result
+        if not np.all(diagnostic.valid_mask):
+            raise RuntimeError(f"{model} GPD diagnostic contains invalid samples")
         extracted_gpds = diagnostic.gpds[:, 0]
         observable_lower = np.quantile(predictions, 0.05, axis=0)
         observable_median = np.quantile(predictions, 0.5, axis=0)
@@ -3731,6 +4012,8 @@ def evaluate_native_model_holdouts(
                 "valid_count": len(valid),
                 "invalid_count": len(exact.invalid_records),
                 "invalid_records": list(exact.invalid_records),
+                "worker_resolution": exact_parallel.worker_resolution,
+                "gpd_worker_resolution": diagnostic_parallel.worker_resolution,
                 "surrogate_used": False,
             },
             "native_truth_provenance": {
@@ -3741,7 +4024,8 @@ def evaluate_native_model_holdouts(
             "parameter_recovery_claimed": False,
             "real_data_used": False,
         }
-        model_output = workspace / "holdout" / model
+        model_output = workspace / "holdouts" / design_name / model
+        model_output.mkdir(parents=True, exist_ok=True)
         with (model_output / "posterior_samples.npy").open("wb") as stream:
             np.save(stream, posterior, allow_pickle=False)
         write_json(model_output / "metrics.json", record)
@@ -3759,8 +4043,10 @@ def evaluate_native_model_holdouts(
         item["observable_comparison"]["pointwise_90_truth_coverage"]
         for item in records.values()
     )
+    complete_model_set = set(records) == set(_NATIVE_VALIDATION_MODELS)
     robustness_enabled = bool(
-        minimum_observable_coverage
+        complete_model_set and synthetic_closure_passed
+        and minimum_observable_coverage
         >= config["frozen_validation_gates"]["minimum_posterior_predictive_point_90_coverage"]
         and all(item["exact_reevaluation"]["invalid_count"] == 0 for item in records.values())
     )
@@ -3777,6 +4063,9 @@ def evaluate_native_model_holdouts(
         "manifest_content_sha256": expected_hash,
         "catalog_sha256": blind["catalog_sha256"],
         "database_revision": blind["database_revision"],
+        "design_name": design_name,
+        "relationship_to_training": relationship,
+        "claim_scope": blind.get("claim_scope"),
     }
     summary = {
         "schema_version": 2,
@@ -3789,10 +4078,35 @@ def evaluate_native_model_holdouts(
         "status": (
             "pass"
             if robustness_enabled
+            else "partial_model_worker_complete"
+            if not complete_model_set
+            else "complete_with_failed_synthetic_closure"
+            if not synthetic_closure_passed
             else "complete_with_scientific_mismatch"
         ),
         "method_improvement_required": not robustness_enabled,
+        "synthetic_closure": {
+            "evaluation_passed": True,
+            "comparison_passed": synthetic_closure_passed,
+            "conventional_reference_available": closure["comparison"].get(
+                "conventional_reference_available", True
+            ),
+            "comparison_failure_code": closure["comparison"].get(
+                "conventional_reference_diagnostics", {}
+            ).get("failure_code"),
+            "holdout_role": (
+                "diagnostic_only; cannot enable robustness claim"
+                if not synthetic_closure_passed
+                else "post-training external validation"
+            ),
+        },
         "models": records,
+        "parallelization": {
+            "named_model_truth_workers": model_workers,
+            "named_model_truth_order": list(selected_models),
+            "deterministic_result_order_preserved": True,
+        },
+        "complete_model_set": complete_model_set,
         "dataset_roles": {
             "dd_learning_distribution": "project_DD_pseudodata_only",
             "dd_grouped_outer_test_fraction": float(
@@ -3804,8 +4118,15 @@ def evaluate_native_model_holdouts(
             "external_native_validation_replaces_dd_outer_test": False,
         },
         "external_validation_kinematics": {
-            "uses_same_kinematic_points_as_dd_pseudodata": False,
-            "fresh_kinematics_output_blind": True,
+            "uses_same_kinematic_points_as_dd_pseudodata": (
+                relationship == "same_training_kinematics"
+            ),
+            "fresh_kinematics_output_blind": (
+                relationship == "fresh_unseen_kinematics"
+            ),
+            "training_kinematic_subset": (
+                relationship == "training_kinematic_subset"
+            ),
             "kinematics_sha256": hashlib.sha256(
                 canonical(holdout_config["kinematics"]).encode("utf-8")
             ).hexdigest(),
@@ -3834,7 +4155,11 @@ def evaluate_native_model_holdouts(
         "real_data_used": False,
         "real_data_fit_enabled": False,
     }
-    write_json(workspace / "holdout" / "summary.json", summary)
+    summary_path = workspace / "holdouts" / design_name / (
+        "summary.json" if complete_model_set else f"partial-{selected_models[0]}.json"
+    )
+    summary["summary_path"] = str(summary_path)
+    write_json(summary_path, summary)
     return summary
 
 
@@ -4259,10 +4584,9 @@ def _summary_markdown(summary: Mapping[str, Any]) -> str:
     comparison = summary["comparison"]
     evaluation = summary["evaluation"]
     training = summary["training"]
-    marginal_distances = comparison[
-        "marginal_wasserstein_over_conventional_sd"
-    ]
-    largest_marginal = max(marginal_distances, key=marginal_distances.get)
+    comparison_available = comparison.get(
+        "conventional_reference_available", True
+    )
     lines = [
         "# Pseudodata workflow summary",
         "",
@@ -4282,25 +4606,12 @@ def _summary_markdown(summary: Mapping[str, Any]) -> str:
             f"`{training['mean_test_negative_log_density']:.6g}`"
         ),
         (
-            "- Neural/conventional sliced Wasserstein: "
-            f"`{comparison['ensemble_sliced_wasserstein']:.6g}`"
-        ),
-        (
-            "- Largest marginal Wasserstein/conventional SD: "
-            f"`{largest_marginal}` = "
-            f"`{marginal_distances[largest_marginal]:.6g}`"
-        ),
-        (
             "- Conventional effective sample size: "
             f"`{comparison['effective_sample_size']:.1f}`"
         ),
         (
             "- Posterior-predictive pointwise 90% coverage: "
             f"`{evaluation['posterior_predictive']['pointwise_90_coverage']:.3f}`"
-        ),
-        (
-            "- Minimum neural/conventional stress-direction 90% width ratio: "
-            f"`{comparison['stress_direction_width_reference']['neural_conventional_width90_ratio']:.3f}`"
         ),
         "",
         "Machine-readable details are in `summary.json`, "
@@ -4317,6 +4628,39 @@ def _summary_markdown(summary: Mapping[str, Any]) -> str:
         "injected stress coefficient was recovered or that it is CFF-null.",
         "",
     ]
+    if comparison_available:
+        marginal_distances = comparison[
+            "marginal_wasserstein_over_conventional_sd"
+        ]
+        largest_marginal = max(
+            marginal_distances, key=marginal_distances.get
+        )
+        lines[7:7] = [
+            (
+                "- Neural/conventional sliced Wasserstein: "
+                f"`{comparison['ensemble_sliced_wasserstein']:.6g}`"
+            ),
+            (
+                "- Largest marginal Wasserstein/conventional SD: "
+                f"`{largest_marginal}` = "
+                f"`{marginal_distances[largest_marginal]:.6g}`"
+            ),
+            (
+                "- Minimum neural/conventional stress-direction 90% width ratio: "
+                f"`{comparison['stress_direction_width_reference']['neural_conventional_width90_ratio']:.3f}`"
+            ),
+        ]
+    else:
+        diagnostics = comparison["conventional_reference_diagnostics"]
+        lines[7:7] = [
+            "- Conventional posterior comparison: `unavailable`",
+            f"- Failure code: `{diagnostics['failure_code']}`",
+            (
+                "- Maximum normalized proposal weight: "
+                f"`{diagnostics['maximum_normalized_weight']:.9g}`"
+            ),
+            "- No Wasserstein or stress-width claim was computed.",
+        ]
     return "\n".join(lines)
 
 
@@ -4377,6 +4721,9 @@ def _write_diagnostic_plots(
         allow_pickle=False,
     )
     intervals = comparison["intervals"]
+    comparison_available = comparison.get(
+        "conventional_reference_available", True
+    )
     # Keep the overview compact: the two nuisance coordinates are plotted
     # here, while all 80 physics marginals are split into four readable GPD
     # sheets below. A single 82-panel page is technically complete but not a
@@ -4385,8 +4732,9 @@ def _write_diagnostic_plots(
     figure, axes = plt.subplots(1, 2, figsize=(12, 4.5), constrained_layout=True)
     for offset, (name, axis) in enumerate(zip(nuisance_names, axes)):
         index = len(STAGE10_PARAMETER_NAMES) - 2 + offset
-        axis.hist(conventional[:, index], bins=32, density=True, alpha=0.5,
-                  label="conventional")
+        if comparison_available:
+            axis.hist(conventional[:, index], bins=32, density=True, alpha=0.5,
+                      label="conventional")
         axis.hist(neural[:, index], bins=32, density=True, alpha=0.5,
                   label="NPE")
         axis.axvline(intervals[name]["truth"], color="black", linewidth=1.5,
@@ -4394,6 +4742,11 @@ def _write_diagnostic_plots(
         axis.set_title(name)
         axis.grid(alpha=0.2)
         axis.legend(fontsize="small")
+        if not comparison_available:
+            axis.text(
+                0.02, 0.98, "Conventional reference unavailable: ESS collapse",
+                transform=axis.transAxes, va="top", fontsize="small",
+            )
     figure.suptitle("Normalization-nuisance posterior comparison")
     comparison_path = output / "posterior_comparison.png"
     figure.savefig(comparison_path, dpi=160)
@@ -4413,14 +4766,20 @@ def _write_diagnostic_plots(
                 )
                 name = STAGE10_PARAMETER_NAMES[index]
                 axis = axes[field_index, channel_index]
-                axis.hist(conventional[:, index], bins=28, density=True,
-                          alpha=0.5, label="conventional")
+                if comparison_available:
+                    axis.hist(conventional[:, index], bins=28, density=True,
+                              alpha=0.5, label="conventional")
                 axis.hist(neural[:, index], bins=28, density=True,
                           alpha=0.5, label="NPE")
                 axis.axvline(intervals[name]["truth"], color="black",
                              linewidth=1.2, label="truth")
                 axis.set_title(f"{channel}: {field}")
                 axis.grid(alpha=0.2)
+                if not comparison_available:
+                    axis.text(
+                        0.02, 0.98, "Conventional unavailable",
+                        transform=axis.transAxes, va="top", fontsize=6,
+                    )
         axes[0, 0].legend(fontsize="x-small")
         figure.suptitle(
             f"{gpd_name}: all independent DD-shape posterior marginals"
@@ -4808,20 +5167,26 @@ def _write_diagnostic_plots(
 
     # Correlations are essential for diagnosing apparently accurate marginal
     # peaks that actually sit on broad or degenerate joint directions.
-    correlations = (
-        ("Conventional", np.corrcoef(conventional, rowvar=False)),
-        ("Neural", np.corrcoef(neural, rowvar=False)),
-    )
     figure, axes = plt.subplots(
         1, 2, figsize=(19, 8), constrained_layout=True
     )
+    correlations = [("Neural", np.corrcoef(neural, rowvar=False))]
+    if comparison_available:
+        correlations.insert(
+            0, ("Conventional", np.corrcoef(conventional, rowvar=False))
+        )
+    else:
+        axes[0].axis("off")
+        axes[0].text(
+            0.5, 0.5,
+            "Conventional reference unavailable\nimportance-sampling ESS collapse",
+            ha="center", va="center", fontsize=14,
+        )
+    plotted_axes = axes if comparison_available else axes[1:]
     correlation_image = None
-    for axis, (method, correlation) in zip(axes, correlations):
+    for axis, (method, correlation) in zip(plotted_axes, correlations):
         correlation_image = axis.imshow(
-            np.nan_to_num(correlation),
-            vmin=-1.0,
-            vmax=1.0,
-            cmap="coolwarm",
+            np.nan_to_num(correlation), vmin=-1.0, vmax=1.0, cmap="coolwarm"
         )
         axis.set_xticks(
             np.arange(len(STAGE10_PARAMETER_NAMES)),
@@ -4835,9 +5200,8 @@ def _write_diagnostic_plots(
             fontsize=6,
         )
         axis.set_title(f"{method} posterior correlation")
-    figure.colorbar(
-        correlation_image, ax=axes, shrink=0.8, label="Pearson correlation"
-    )
+    figure.colorbar(correlation_image, ax=plotted_axes, shrink=0.8,
+                    label="Pearson correlation")
     correlation_path = output / "posterior_correlations.png"
     figure.savefig(correlation_path, dpi=160)
     plt.close(figure)

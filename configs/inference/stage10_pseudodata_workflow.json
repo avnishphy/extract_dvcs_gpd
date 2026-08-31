@@ -1,5 +1,5 @@
 {
-    "schema_version": 8,
+    "schema_version": 9,
     "workflow": "stage11_full_independent_dd_multiq2_pseudodata_v1",
     "physics_configuration": "configs/physics/stage10_pseudodata_systematics_v1.json",
     "bridge_schema_version": 1,
@@ -232,6 +232,13 @@
         "training_batch_size": 256,
         "learning_rate": 0.0005,
         "validation_fraction": 0.1
+    },
+    "observation_design_training": {
+        "enabled": false,
+        "active_kinematic_counts": [6],
+        "selection_seed": 51017,
+        "selection_policy": "nested_deterministic_farthest_point_v1",
+        "pooling_policy": "masked_fixed_maximum_normalization_v1"
     },
     "hyperparameter_optimization": {
         "package": "Optuna",

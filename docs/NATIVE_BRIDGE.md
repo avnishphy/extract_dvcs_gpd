@@ -142,6 +142,8 @@ The holdout representation accepts only `GPDGK11`, `GPDGK16`, `GPDGK19`, or
 an optional strictly increasing GPD x grid. It returns CFFs, observables,
 flavor-separated GPD diagnostics, model source hashes, and a no-learning
 contract. VGG99 also records the LHAPDF set/member and grid/archive hashes.
+The bridge accepts the explicit design selected by orchestration; checkpoint
+width/mask compatibility is validated before any native request.
 
 Named-model internal parameters are not interpreted as DD posterior truth.
 The operation supports predictive validation only.

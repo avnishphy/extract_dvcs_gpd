@@ -17,10 +17,16 @@ case "${mode}" in
     "${root}/tests/verify_jlab_progress_logging.sh"
     "${root}/tests/verify_jlab_swif2_workflows.sh"
     "${root}/tests/verify_jlab_swif2_submission.sh"
+    [[ ! -x "${root}/tests/verify_schema8_kinematic_envelope.sh" ]] || \
+      "${root}/tests/verify_schema8_kinematic_envelope.sh"
     grep -Fx 'log.folder.path = /cache/partons-logs' \
       "${root}/cpp/partons_bridge/config/logger.properties.in" >/dev/null
     grep -F '/cache/partons-logs' \
       "${root}/scripts/container-entrypoint.sh" >/dev/null
+    grep -F '/tmp/dvcs-wheelhouse/gsl-2.8.tar.gz' \
+      "${root}/scripts/build-native-source.sh" >/dev/null
+    grep -F 'https://ftpmirror.gnu.org/gsl/gsl-2.8.tar.gz' \
+      "${root}/install.sh" >/dev/null
     while IFS= read -r script; do bash -n "${script}"; done < <(find "${root}" -type f \( -name '*.sh' -o -name '*.sbatch' -o -name install.sh -o -name dvcs \) -not -path '*/.git/*' | sort)
     install_state_before="$(if [[ -f "${root}/.dvcs/install.env" ]]; then sha256sum "${root}/.dvcs/install.env"; else echo absent; fi)"
     "${root}/install.sh" --profile local --accelerator cpu --dry-run >/dev/null
