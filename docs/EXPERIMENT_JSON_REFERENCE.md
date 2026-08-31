@@ -92,7 +92,7 @@ Generated defaults are:
 | Etilde/gluon | 0.20 | 0.45 | 5.0 | 2.0 | 1.2 |
 
 The parameterization and conventions are derived in
-[WORKFLOW_AND_PHYSICS.md](../user/WORKFLOW_AND_PHYSICS.md).
+[Workflow and physics](WORKFLOW_AND_PHYSICS.md).
 
 ### 2.2 Fixed shadow/stress settings
 

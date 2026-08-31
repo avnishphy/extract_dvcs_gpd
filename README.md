@@ -169,6 +169,7 @@ Start at the [documentation map](docs/INDEX.md). The primary guides are:
 - [JLab SWIF2](docs/JLAB_SWIF2.md)
 - [Resource management](docs/RESOURCE_MANAGEMENT.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Development configuration and testing](docs/DEVELOPMENT_AND_TESTING.md)
 
 ## Verification status
 

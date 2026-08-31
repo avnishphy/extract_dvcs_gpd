@@ -61,7 +61,7 @@ replaceable; user state is not stored in the container writable layer.
 | `containers/` | Canonical OCI multi-stage build and Apptainer definition. |
 | `cpp/partons_bridge/` | C++ bridge, project-defined native modules, schemas/configuration, and retained physics tests. |
 | `src/extract_dvcs_cff/` | Public runtime orchestration, data handling, inference, optimization, and workflows. |
-| `configs/` | Frozen engine, physics, schema, validation, and request examples. |
+| `configs/` | Implementation-owned Stage 10 templates, native protocol schemas, retained validation contracts, and bridge-request examples; users edit only generated project `experiment.json`. |
 | `user/` | Imported scientific user explanations retained from the validated runtime. |
 | `docs/` | Distribution onboarding, operation, reference, and assurance documentation. |
 | `jobs/jlab_ifarm/` | Authoritative SWIF2 workflow generation, node-local execution/reaping wrappers, performance collection, and retained direct-Slurm diagnostics. |

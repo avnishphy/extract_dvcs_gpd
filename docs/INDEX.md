@@ -62,6 +62,9 @@ references for editing or interpreting a stage.
   conditional, and unavailable capabilities.
 - [Acceptance procedures](ACCEPTANCE.md) gives executable local and JLab
   verification sequences.
+- [Development configuration and testing](DEVELOPMENT_AND_TESTING.md) maps
+  implementation-owned configuration, source components, and available test
+  entry points.
 - [Updating from upstream](UPDATING_FROM_EXTRACT_DVCS_CFF.md) describes the
   allowlisted, conflict-detecting import process.
 - [Dependency lock](../provenance/dependencies.lock.json), [image lock](../provenance/images.lock.json),

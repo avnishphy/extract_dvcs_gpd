@@ -272,8 +272,9 @@ sed -n '1,200p' .dvcs/install.env
 du -sh .dvcs workspace results cache 2>/dev/null
 ```
 
-There must be no space in `2>/dev/null`. To test as a completely new user,
-move or remove only paths you have verified are disposable, then rerun
+The `2>/dev/null` redirect only suppresses missing default paths during this
+inspection. To test as a completely new user, move or remove only paths you
+have verified are disposable, then rerun
 `install.sh`. Preserve every corpus archive, project state, SIF digest, and
 result needed for reproducibility. SWIF2 outputs under `SWIF_OUTPUT_ROOT` and
 logs under `/farm_out` are independent of `.dvcs/` and are not removed by a
