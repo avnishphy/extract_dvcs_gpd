@@ -9,11 +9,35 @@ curl_download() {
     curl --fail --location --retry 10 --retry-all-errors \
         --connect-timeout 20 --max-time 1800 "$@"
 }
+locked_archive() {
+    local cached="$1" hash="$2" output="$3"; shift 3
+    if [[ -f "${cached}" ]] && echo "${hash}  ${cached}" | sha256sum -c - >/dev/null 2>&1; then
+        cp "${cached}" "${output}"
+        return
+    fi
+    local url
+    for url in "$@"; do
+        if curl_download "${url}" -o "${output}.partial" && \
+           echo "${hash}  ${output}.partial" | sha256sum -c - >/dev/null 2>&1; then
+            mv "${output}.partial" "${output}"
+            return
+        fi
+        rm -f "${output}.partial"
+    done
+    echo "all locked download mirrors failed for ${output}" >&2
+    exit 69
+}
 cd "${build_root}"
-curl_download https://ftp.gnu.org/gnu/gsl/gsl-2.8.tar.gz -o gsl.tgz
+locked_archive /tmp/dvcs-wheelhouse/gsl-2.8.tar.gz \
+    6a99eeed15632c6354895b1dd542ed5a855c0f15d9ad1326c6fe2b2c9e423190 gsl.tgz \
+    https://ftpmirror.gnu.org/gsl/gsl-2.8.tar.gz \
+    https://mirrors.kernel.org/gnu/gsl/gsl-2.8.tar.gz \
+    https://ftp.gnu.org/gnu/gsl/gsl-2.8.tar.gz
 echo '6a99eeed15632c6354895b1dd542ed5a855c0f15d9ad1326c6fe2b2c9e423190  gsl.tgz' | sha256sum -c -
 tar -xzf gsl.tgz; cd gsl-2.8; ./configure --prefix="${prefix}"; make -j"${jobs}"; make install; cd ..
-curl_download 'https://lhapdf.hepforge.org/downloads/?f=LHAPDF-6.5.6.tar.gz' -o lhapdf.tgz
+locked_archive /tmp/dvcs-wheelhouse/LHAPDF-6.5.6.tar.gz \
+    6b8b7e38dc26a977a24f5a321215b7054c14a4469d04134d70cb93a860eeeea7 lhapdf.tgz \
+    'https://lhapdf.hepforge.org/downloads/?f=LHAPDF-6.5.6.tar.gz'
 echo '6b8b7e38dc26a977a24f5a321215b7054c14a4469d04134d70cb93a860eeeea7  lhapdf.tgz' | sha256sum -c -
 tar -xzf lhapdf.tgz; cd LHAPDF-6.5.6
 # LHAPDF 6.5.6 advertises --incdir but only accepts --includedir. PARTONS uses

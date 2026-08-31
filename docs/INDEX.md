@@ -24,7 +24,7 @@ references for editing or interpreting a stage.
 - [CLI reference](CLI_REFERENCE.md) documents every `./dvcs` action, exit
   behavior, resumability, and command ordering.
 - [Experiment JSON reference](EXPERIMENT_JSON_REFERENCE.md) documents every
-  editable schema-8 field, support, unit, and edit policy.
+  editable schema-9 field, support, unit, and edit policy.
 - [Corpus and data selection](CORPUS_AND_DATA_SELECTION.md) documents reusable
   sharded PARTONS data, immutable group selections, deterministic
   realizations, observable extension, verification, and transfer.

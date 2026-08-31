@@ -63,13 +63,19 @@
 - Simulation-based inference is amortized over the declared synthetic model.
   Calibration outside its prior, uncertainty, kinematic, and representation
   envelope is not established.
-- The conventional posterior uses self-normalized importance sampling on the
-  exact bank. When ESS is poor, its comparison metrics are not reliable.
+- The conventional posterior uses self-normalized prior importance sampling
+  on the exact bank. In high dimension it can collapse onto one proposal. The
+  framework then marks the reference unavailable and emits no distance or
+  width claim. A larger bank is not guaranteed to solve this; an adaptive
+  exact-likelihood reference sampler remains future work.
 - A finite number of coverage trials has Monte Carlo uncertainty. Passing
   configured standard-error gates is not proof of universal calibration.
 - Named GK/VGG holdouts test predictive behavior after freezing the NPE. They
   do not establish DD parameter recovery because native model parameters do
   not map to the inferred DD coordinates.
+- Masked training supports declared subsets of the training kinematic bank.
+  It does not establish calibration at arbitrary new coordinates unless the
+  training corpus itself varies kinematic designs across that domain.
 - No validation threshold may be interpreted beyond the campaign for which it
   was frozen.
 - Corpus integrity and reuse do not establish posterior calibration or

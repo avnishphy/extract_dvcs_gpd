@@ -13,12 +13,16 @@ summary_output="${11:?summary output}" accelerator="${12:?accelerator}"
 heartbeat_seconds="${13:?heartbeat seconds}"
 collector="${14:?performance collector}" performance_summary="${15:?performance summary}"
 performance_samples="${16:?performance samples}" performance_interval="${17:?performance interval}"
+holdout_design="${18:-none}"
+lhapdf_archive="${19:-none}"
+holdout_model="${20:-none}"
 
 [[ "${stage}" =~ ^(selection|materialize|optimize|train|evaluate|compare|holdout|plot)$ ]] || {
     echo "unsupported analysis stage: ${stage}" >&2
     exit 64
 }
 [[ "${accelerator}" == cpu || "${accelerator}" == cuda ]] || exit 64
+[[ "${holdout_model}" == none || "${holdout_model}" =~ ^GPD(GK11|GK16|GK19|VGG99)$ ]] || exit 64
 [[ "${heartbeat_seconds}" =~ ^[0-9]+$ ]] || exit 64
 [[ "${performance_interval}" =~ ^[1-9][0-9]*$ ]] || exit 64
 cd "${SWIF_JOB_WORK_DIR}"
@@ -31,6 +35,48 @@ for path in "${image}" "${database_archive}" "${state_input}" "${collector}"; do
 done
 if [[ "${corpus_archive}" != none ]]; then
     [[ -s "${corpus_archive}" && ! -L "${corpus_archive}" ]] || exit 66
+fi
+if [[ "${stage}" == holdout && "${holdout_design}" != none ]]; then
+    [[ -s "${holdout_design}" && ! -L "${holdout_design}" ]] || {
+        echo "staged holdout design is missing or unsafe: ${holdout_design}" >&2
+        exit 66
+    }
+    python3 - "${holdout_design}" <<'PY'
+import hashlib, json, sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+record = json.loads(path.read_text(encoding="utf-8"))
+expected = record.pop("manifest_content_sha256", None)
+observed = hashlib.sha256(json.dumps(
+    record, sort_keys=True, separators=(",", ":"), allow_nan=False,
+).encode("utf-8")).hexdigest()
+if expected != observed:
+    raise SystemExit("holdout design content hash mismatch")
+if record.get("protocol") not in {
+    "output_blind_fresh_kinematics_v1",
+    "native_model_holdout_design_v2",
+}:
+    raise SystemExit("unsupported holdout design protocol")
+points = record.get("npe_dataset_points")
+if not isinstance(points, list) or not points:
+    raise SystemExit("holdout design has no kinematic points")
+expected_flags = {
+    "selection_frozen_before_native_outputs": True,
+    "training_use": False,
+    "architecture_selection_use": False,
+    "optuna_objective_use": False,
+}
+for key, expected_value in expected_flags.items():
+    if record.get(key) is not expected_value:
+        raise SystemExit(f"holdout design violates {key}")
+PY
+fi
+if [[ "${stage}" == holdout ]]; then
+    [[ -s "${lhapdf_archive}" && ! -L "${lhapdf_archive}" ]] || {
+        echo "staged MSTW2008nlo68cl archive is missing or unsafe" >&2
+        exit 66
+    }
 fi
 
 safe_archive() {
@@ -51,6 +97,7 @@ PY
 
 safe_archive "${database_archive}"
 safe_archive "${state_input}"
+[[ "${stage}" != holdout ]] || safe_archive "${lhapdf_archive}"
 mkdir -p workspace/.corpus_exports results cache database
 tar -xf "${database_archive}" -C database
 tar -xf "${state_input}" -C workspace
@@ -65,9 +112,30 @@ tar -xf "${state_input}" -C workspace
 }
 
 image_sha="$(sha256sum "${image}" | awk '{print $1}')"
+expected_image_prefix="${image#dvcs-image-}"
+expected_image_prefix="${expected_image_prefix%%.*}"
+[[ "${expected_image_prefix}" =~ ^[0-9a-f]{16}$ && \
+   "${image_sha}" == "${expected_image_prefix}"* ]] || {
+    echo "staged SIF digest mismatch: expected prefix ${expected_image_prefix}, observed ${image_sha}; SWIF2 input is incomplete or corrupt" >&2
+    exit 65
+}
 sha256sum "${image}" "${database_archive}" "${state_input}" > staged-inputs-sha256.txt
 if [[ "${corpus_archive}" != none ]]; then
     sha256sum "${corpus_archive}" >> staged-inputs-sha256.txt
+fi
+if [[ "${stage}" == holdout && "${holdout_design}" != none ]]; then
+    sha256sum "${holdout_design}" >> staged-inputs-sha256.txt
+fi
+if [[ "${stage}" == holdout ]]; then
+    sha256sum "${lhapdf_archive}" >> staged-inputs-sha256.txt
+    mkdir -p cache/lhapdf
+    tar -xf "${lhapdf_archive}" -C cache/lhapdf
+    [[ -f cache/lhapdf/MSTW2008nlo68cl/MSTW2008nlo68cl.info && \
+       -f cache/lhapdf/MSTW2008nlo68cl/MSTW2008nlo68cl_0000.dat ]] || {
+        echo "staged MSTW2008nlo68cl content is incomplete" >&2
+        exit 65
+    }
+    echo "[dvcs-swif2] staged LHAPDF set MSTW2008nlo68cl"
 fi
 
 container=(
@@ -91,6 +159,10 @@ if [[ "${accelerator}" == cuda ]]; then
     }
     container+=(--nv --env "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}")
 fi
+if [[ "${stage}" == holdout ]]; then
+    container+=(--env DVCS_HOLDOUT_DESIGN=/workspace/configs/validation/stage11_blind_fresh_kinematics_v1.json)
+    [[ "${holdout_model}" == none ]] || container+=(--env "DVCS_HOLDOUT_MODEL=${holdout_model}")
+fi
 container+=("${image}")
 
 started_epoch="$(date +%s)"
@@ -112,6 +184,25 @@ echo "[dvcs-swif2] start stage=${stage} job=${SLURM_JOB_ID} host=$(hostname) cpu
 if [[ "${corpus_archive}" != none ]]; then
     cp --reflink=auto "${corpus_archive}" workspace/.corpus_exports/staged-corpus.tar.gz
     "${container[@]}" corpus-import staged-corpus "${corpus}" > corpus-import.json
+fi
+
+# Legacy images infer the holdout-manifest root from the staged engine config,
+# which resolves to /workspace. Copy the immutable, self-hashed image manifest
+# there so those images remain resumable without changing scientific inputs.
+if [[ "${stage}" == holdout ]]; then
+    mkdir -p workspace/configs/validation
+    if [[ "${holdout_design}" == none ]]; then
+        "${container[@]}" shell -c \
+          'cp /opt/dvcs/app/configs/validation/stage11_blind_fresh_kinematics_v1.json /workspace/configs/validation/'
+    else
+        cp "${holdout_design}" \
+          workspace/configs/validation/stage11_blind_fresh_kinematics_v1.json
+    fi
+    [[ -s workspace/configs/validation/stage11_blind_fresh_kinematics_v1.json ]] || {
+        echo "failed to stage image-embedded holdout manifest" >&2
+        exit 66
+    }
+    echo "[dvcs-swif2] staged holdout manifest source=${holdout_design}"
 fi
 
 case "${stage}" in
@@ -148,6 +239,10 @@ if stage == "train":
     print(f"models={len(list((root / 'training').glob('seed_*/training_metrics.json')))}", end="")
 elif stage == "optimize":
     print(f"trials={len(list((root / 'optimization/trials').glob('trial_*')))}", end="")
+elif stage == "holdout":
+    truths = len(list(root.glob('holdouts/*/*/native_truth/response.json')))
+    models = len(list(root.glob('holdouts/*/*/metrics.json')))
+    print(f"native_truths={truths}/4 models={models}/4", end="")
 if performance.is_file():
     metrics = json.loads(performance.read_text())
     efficiency = metrics.get("cpu", {}).get("efficiency_percent")
@@ -184,23 +279,115 @@ if [[ -n "${heartbeat_pid}" ]]; then
     wait "${heartbeat_pid}" 2>/dev/null
 fi
 set -e
+scientific_gate_failed=false
+if (( status == 1 )) && [[ "${stage}" == compare ]] && \
+   python3 - "payload.json" \
+     "workspace/${project}/results/${profile}/comparison/comparison_metrics.json" <<'PY'
+import json, sys
+from pathlib import Path
+
+public = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+metrics = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+status = str(metrics.get("status", ""))
+if (
+    public.get("command") != "compare"
+    or public.get("status") != "fail"
+    or metrics.get("passed") is not False
+    or not (status == "complete" or status.startswith("complete_with_"))
+):
+    raise SystemExit(1)
+PY
+then
+    echo "[dvcs-swif2] compare execution complete; scientific gate failed and remains recorded"
+    status=0
+    scientific_gate_failed=true
+fi
 if (( status == 0 )); then
+    if [[ "${stage}" == holdout && "${holdout_design}" != none ]]; then
+        python3 - "${holdout_design}" \
+          "workspace/${project}/results/${profile}" \
+          payload.json "${holdout_model}" <<'PY'
+import json, os, sys
+from pathlib import Path
+
+design_path, result_root, payload_path = map(Path, sys.argv[1:4])
+holdout_model = sys.argv[4]
+design = json.loads(design_path.read_text(encoding="utf-8"))
+design_name = design.get("design_name", design_path.stem)
+modern_summary = result_root / "holdouts" / design_name / "summary.json"
+legacy_summary = result_root / "holdout" / "summary.json"
+partial_summary = result_root / "holdouts" / design_name / f"partial-{holdout_model}.json"
+summary_path = (
+    modern_summary if modern_summary.is_file()
+    else partial_summary if partial_summary.is_file()
+    else legacy_summary
+)
+if not summary_path.is_file():
+    raise SystemExit("completed holdout did not write a summary")
+summary = json.loads(summary_path.read_text(encoding="utf-8"))
+provenance = {
+    "design_name": design_name,
+    "relationship_to_training": design.get("relationship_to_training"),
+    "claim_scope": design.get("claim_scope"),
+    "kinematic_count": len(design["npe_dataset_points"]),
+    "manifest_content_sha256": design["manifest_content_sha256"],
+}
+summary["holdout_design"] = provenance
+external = summary.get("external_validation_kinematics", {})
+same_design = provenance["relationship_to_training"] == "same_training_kinematics"
+external["uses_same_kinematic_points_as_dd_pseudodata"] = same_design
+external["fresh_kinematics_output_blind"] = (
+    provenance["relationship_to_training"] == "fresh_unseen_kinematics"
+)
+external["relationship_to_training"] = provenance["relationship_to_training"]
+external["claim_scope"] = provenance["claim_scope"]
+summary["external_validation_kinematics"] = external
+payload = json.loads(payload_path.read_text(encoding="utf-8"))
+payload["holdout_design"] = provenance
+for path, value in ((summary_path, summary), (payload_path, payload)):
+    temporary = path.with_name(path.name + ".partial")
+    temporary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
+    os.replace(temporary, path)
+PY
+    fi
     if find "workspace/${project}" -type l -print -quit | grep -q .; then
         echo "project output contains a symlink" >&2
         exit 65
     fi
-    tar -cf "${state_output}.partial" -C workspace "${project}"
+    if [[ "${stage}" == holdout && "${holdout_model}" != none ]]; then
+        design_name="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["design_name"])' "${holdout_design}")"
+        model_root="workspace/${project}/results/${profile}/holdouts/${design_name}/${holdout_model}"
+        [[ -f "${model_root}/metrics.json" ]] || exit 65
+        python3 - "${model_root}/swif-partial.json" "${holdout_model}" \
+          "${design_name}" "${holdout_design}" "${state_input}" "${image_sha}" <<'PY'
+import hashlib, json, sys
+from pathlib import Path
+output, model, design, design_path, state_path, image_sha = sys.argv[1:]
+sha = lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
+Path(output).write_text(json.dumps({
+    "schema_version": 1, "model": model, "design_name": design,
+    "design_sha256": sha(design_path), "base_state_sha256": sha(state_path),
+    "image_sha256": image_sha,
+}, indent=2, sort_keys=True) + "\n")
+PY
+        tar -cf "${state_output}.partial" -C \
+          "workspace/${project}/results/${profile}" \
+          "holdouts/${design_name}/${holdout_model}" \
+          "holdouts/${design_name}/partial-${holdout_model}.json"
+    else
+        tar -cf "${state_output}.partial" -C workspace "${project}"
+    fi
     mv "${state_output}.partial" "${state_output}"
 fi
 stop_performance
 trap - EXIT
 
 python3 - "${summary_output}" "${stage}" "${status}" "${started_epoch}" \
-  "${performance_summary}" <<'PY'
+  "${performance_summary}" "${scientific_gate_failed}" <<'PY'
 import json, os, platform, sys, time
 from pathlib import Path
 
-output, stage, status, started, performance = sys.argv[1:]
+output, stage, status, started, performance, scientific_gate_failed = sys.argv[1:]
 performance_record = json.loads(Path(performance).read_text())
 if performance_record.get("status") != "complete":
     raise SystemExit("performance collection did not complete")
@@ -215,6 +402,7 @@ record = {
     "swif_job_id": os.environ.get("SWIF_JOB_ID"),
     "swif_job_attempt_id": os.environ.get("SWIF_JOB_ATTEMPT_ID"),
     "performance": performance_record,
+    "scientific_gate_failed": scientific_gate_failed == "true",
 }
 runtime = Path("results/provenance/runtime.json")
 if runtime.is_file():

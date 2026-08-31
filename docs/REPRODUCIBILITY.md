@@ -183,7 +183,8 @@ At minimum archive:
 - dependency and image locks plus actual digest/SIF hash;
 - SBOM/package manifests;
 - `experiment.json`, engine/workspace contracts, and bridge capabilities;
-- generated/training/evaluation/comparison/holdout summaries and manifests;
+- generated/training/evaluation/comparison and each named `holdouts/DESIGN/`
+  summary/manifest;
 - seeds, checkpoints, array manifests, invalid maps, and plot manifest;
 - runtime/Slurm/hardware provenance;
 - exact commands and exit statuses;

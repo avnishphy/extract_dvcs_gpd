@@ -180,6 +180,11 @@ value, covariance-derived features, and nuisance responses. A shared point
 network maps tokens to embeddings; permutation-invariant pooling produces one
 dataset embedding; a conditional normalizing flow represents the posterior.
 
+Schema-9 masked designs retain a fixed maximum tensor width. `point_mask=0`
+removes a padded embedding after the shared point network, including its
+biases; pooling divides by the fixed maximum count. Nested 12/30/60/96 designs
+therefore encode absence without manufacturing zero-valued observations.
+
 Candidate ensemble members use fixed seeds. Internal grouped-validation NLL
 selects the configured number of active members. The untouched outer DD test,
 named native holdouts, and real-data diagnostic are excluded from selection.
@@ -247,7 +252,11 @@ The framework fails closed for:
   overlapping selections, or changed materialized training arrays;
 - dirty or wrong-revision database checkout during installation;
 - absent prerequisites for a later workflow step;
-- holdout execution before synthetic closure gates pass.
+- holdout execution before synthetic evaluation passes or comparison completes.
+
+A completed but collapsed conventional reference stays a failed scientific
+gate. Diagnostic-only holdout/plot execution may continue, but cannot enable a
+robustness claim.
 
 Invalid prior draws are recorded per corpus shard and replaced
 deterministically. They are not converted to zero or silently imputed.

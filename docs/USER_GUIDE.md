@@ -222,7 +222,10 @@ uses a GPU. Inspect the invalid fraction and each gate, not only command exit.
 The conventional comparison importance-weights the exact prior bank. Its
 effective sample size must be adequate before Wasserstein or width comparisons
 are meaningful. A low ESS is a limitation of that comparison, not proof that
-the neural posterior is wrong.
+the neural posterior is wrong. Collapse produces a completed, failed
+scientific record with null comparison metrics; plotting continues with
+neural/evaluation views. Do not add jitter or lower the ESS gate to manufacture
+a conventional width.
 
 ### Plotting
 
@@ -292,16 +295,24 @@ architecture using outer-test, holdout, or real-data behavior.
 
 ## Native-model holdout
 
-After synthetic evaluation and comparison pass:
+After synthetic evaluation passes and comparison completes (comparison may
+remain scientifically inconclusive because its conventional reference collapsed):
 
 ```bash
-./dvcs holdout tutorial --profile validation
+./dvcs holdout tutorial --profile validation --design /absolute/design.json
 ```
 
 This evaluates frozen NPE checkpoints against fresh GK11/GK16/GK19/VGG99
 native truth. Outputs cannot flow backward into corpus generation, training,
 or selection. A predictive mismatch is a scientific result and may be reported
-as such without being an execution error.
+as such without being an execution error. If conventional comparison collapsed,
+holdout remains diagnostic-only and cannot enable a robustness claim.
+
+Holdout design and native model are separate validation axes. A same-design
+holdout isolates GK/VGG-versus-DD model-family shift. A fresh design also tests
+kinematic generalization. A 12/30/60-point training subset tests information
+loss only after the checkpoint was trained with those masked counts. Never pad
+an older fixed-design checkpoint and interpret the result as calibrated.
 
 ## Read-only real-data diagnostic
 
@@ -349,7 +360,8 @@ scratch directory as a result.
 7. Create, plan, generate, and deep-verify the corpus; freeze a selection.
 8. Run training, evaluation, and comparison.
 9. Interpret identifiability and calibration, not only point estimates.
-10. Run named-model holdout only after closure passes.
+10. Run named-model holdout after evaluation passes and comparison completes;
+    require full closure before making a robustness claim.
 11. Preserve configuration, hashes, manifests, image digest, and commit with
     any result publication.
 

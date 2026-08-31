@@ -57,8 +57,9 @@ training, evaluation, comparison, holdout, and plots:
 The submission commands import and start automatically. `--import-only` stops
 after import; start that workflow later with `swif2 run WORKFLOW
 -maxconcurrent N`. The concurrency limit is a ceiling, not a CPU request.
-Analysis dependencies make the ordinary stage chain effectively serial, while
-independent corpus workers can run concurrently.
+Analysis dependencies are serial except holdout: four model workers run
+concurrently, then one verified merge publishes the canonical project state.
+Independent corpus workers also run concurrently.
 
 ## Submit analysis stages
 
@@ -76,6 +77,8 @@ generated, or set one with `--workflow NAME`. Useful controls are:
 --only STAGE                   one stage only
 --include-optimize             add optimize before train
 --import-only                  import without starting
+--project-archive FILE         resume from a reaped project-state archive
+--holdout-design FILE          stage one explicit content-hashed design
 ```
 
 Analysis stage order is `selection`, CPU `materialize`, optional `optimize`,
@@ -83,6 +86,21 @@ Analysis stage order is `selection`, CPU `materialize`, optional `optimize`,
 CPU workers and no GPU. GPU requests and Apptainer `--nv` passthrough are
 automatic only for optimize, train, and evaluate. Each job is tagged with the
 workflow and stage names.
+
+Run different holdout designs as separate workflows from the same reaped
+compare archive. This prevents overwrites and keeps telemetry, scientific
+scope, and state archives independently auditable.
+
+Within one design, `GPDGK11`, `GPDGK16`, `GPDGK19`, and `GPDVGG99` receive
+independent workers. Each emits only an immutable model delta. Merge requires
+all four models exactly once and identical base-state, image, and design
+hashes before rebuilding the project archive; partial worker failure can be
+retried without treating incomplete coverage as a validation result.
+
+Scientific gate failure and process failure are distinct. A completed compare
+record may report `scientific_passed: false` and still exit zero so SWIF2 can
+reap it and run diagnostic-only holdout/plots. Such a run never enables a
+robustness claim.
 
 Managed GPU jobs use Slurm `--gpus=N`, not `--gres=gpu:N`. SWIF2 independently
 adds scratch as `--gres=disk:...`; a second `--gres` can replace the GPU request.
@@ -98,14 +116,34 @@ arrays do not. Start at `train` only when complete materialized arrays already
 exist. `evaluate` consumes the saved trained result contract; do not combine
 artifacts from a changed experiment, profile, image, or bridge.
 
+## Resume from a completed stage
+
+Use the last valid reaped state, unchanged project/profile/corpus/selection,
+and a new workflow name. Example after evaluation:
+
+```bash
+./dvcs farm-submit --project PROJECT --corpus CORPUS --selection baseline --profile validation --corpus-archive /absolute/verified-corpus.tar.gz --project-archive "$SWIF_OUTPUT_ROOT/OLD-WORKFLOW/state/OLD-WORKFLOW-project-after-evaluate.tar" --from compare --through plot --workflow NEW-WORKFLOW --dry-run
+./dvcs farm-submit --project PROJECT --corpus CORPUS --selection baseline --profile validation --corpus-archive /absolute/verified-corpus.tar.gz --project-archive "$SWIF_OUTPUT_ROOT/OLD-WORKFLOW/state/OLD-WORKFLOW-project-after-evaluate.tar" --from compare --through plot --workflow NEW-WORKFLOW
+```
+
+`--project-archive` is read-only input. Submission rejects links/path traversal
+and requires `PROJECT/experiment.json`. It does not overwrite source workspace
+or rerun completed stages.
+
 ## Data movement and outputs
 
 Submission packages these immutable inputs under `.dvcs/swif2_inputs/`:
 
 - installed SIF;
 - GPD database archive;
+- verified `MSTW2008nlo68cl` LHAPDF archive for VGG99 holdouts;
 - project-state archive;
 - portable corpus archive.
+
+The staged filename contains the source SIF hash prefix. Compute-node startup
+verifies that prefix before mounting; mismatch means transfer corruption, not
+a DVCS or physics failure. Preserve versioned SIF paths after submission so a
+workflow can safely reuse SWIF2's verified cached input.
 
 Names include content hashes so SWIF2 cannot reuse stale content under an old
 logical name. Each job receives them through SWIF2, runs from disposable

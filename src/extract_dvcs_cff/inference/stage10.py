@@ -282,10 +282,14 @@ class Stage10ContextBuilder:
         covariance: npt.ArrayLike,
         global_normalization_response: npt.ArrayLike,
         lu_normalization_response: npt.ArrayLike,
+        maximum_point_count: int | None = None,
     ) -> None:
         count = len(points)
         if count == 0:
             raise ValueError("points must not be empty")
+        maximum = count if maximum_point_count is None else int(maximum_point_count)
+        if maximum < count:
+            raise ValueError("maximum_point_count cannot be below active count")
         matrix = _finite(covariance, (count, count), "covariance")
         global_response = _finite(
             global_normalization_response, (count,), "global response"
@@ -302,8 +306,8 @@ class Stage10ContextBuilder:
             eigenvectors * eigenvalues**-0.5
         ) @ eigenvectors.T
         marginal_sigma = np.sqrt(np.diag(matrix))
-        tokens = np.empty(
-            (count, len(STAGE10_POINT_FEATURE_NAMES)), dtype=np.float64
+        tokens = np.zeros(
+            (maximum, len(STAGE10_POINT_FEATURE_NAMES)), dtype=np.float64
         )
         observable_ids = (
             "DVCSCrossSectionUUMinus",
@@ -359,6 +363,7 @@ class Stage10ContextBuilder:
             len(STAGE10_GLOBAL_FEATURE_NAMES), dtype=np.float64
         )
         self._count = count
+        self._maximum_count = maximum
         self._inverse_sqrt.setflags(write=False)
         self._tokens.setflags(write=False)
         self._global_features.setflags(write=False)
@@ -370,8 +375,10 @@ class Stage10ContextBuilder:
     def build(self, observed: npt.ArrayLike) -> np.ndarray:
         values = _finite(observed, (self._count,), "observed")
         tokens = self._tokens.copy()
-        tokens[:, 12] = values
-        tokens[:, 14] = (self._inverse_sqrt @ values) / 10.0
+        tokens[:self._count, 12] = values
+        tokens[:self._count, 14] = (
+            self._inverse_sqrt @ values
+        ) / 10.0
         context = np.concatenate((tokens.reshape(-1), self._global_features))
         if not np.all(np.isfinite(context)):
             raise ValueError("constructed Stage 10 context is non-finite")
@@ -384,6 +391,7 @@ def prepare_stage10_context(
     covariance: npt.ArrayLike,
     global_normalization_response: npt.ArrayLike,
     lu_normalization_response: npt.ArrayLike,
+    maximum_point_count: int | None = None,
 ) -> Stage10ContextBuilder:
     """Precompute experiment-constant context terms once."""
 
@@ -392,6 +400,7 @@ def prepare_stage10_context(
         covariance=covariance,
         global_normalization_response=global_normalization_response,
         lu_normalization_response=lu_normalization_response,
+        maximum_point_count=maximum_point_count,
     )
 
 
@@ -402,6 +411,7 @@ def build_stage10_context(
     covariance: npt.ArrayLike,
     global_normalization_response: npt.ArrayLike,
     lu_normalization_response: npt.ArrayLike,
+    maximum_point_count: int | None = None,
 ) -> np.ndarray:
     """Encode one complete six-observable dataset as DeepSets tokens.
 
@@ -416,6 +426,7 @@ def build_stage10_context(
         covariance=covariance,
         global_normalization_response=global_normalization_response,
         lu_normalization_response=lu_normalization_response,
+        maximum_point_count=maximum_point_count,
     ).build(observed)
 
 

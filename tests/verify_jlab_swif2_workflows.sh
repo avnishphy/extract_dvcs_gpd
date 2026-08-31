@@ -4,8 +4,10 @@ set -euo pipefail
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 temp="$(mktemp -d)"
 trap 'rm -rf -- "${temp}"' EXIT
+export DVCS_SWIF_INPUT_ROOT="${temp}/staged-controls"
 touch "${temp}/image.sif" "${temp}/database.tar.gz" \
-  "${temp}/corpus.tar.gz" "${temp}/project.tar"
+  "${temp}/corpus.tar.gz" "${temp}/project.tar" "${temp}/holdout.json" \
+  "${temp}/lhapdf.tar.gz"
 printf image > "${temp}/image.sif"
 printf database > "${temp}/database.tar.gz"
 printf corpus > "${temp}/corpus.tar.gz"
@@ -16,9 +18,11 @@ python3 "${root}/jobs/jlab_ifarm/write_swif2_workflow.py" analysis \
   --workflow test-analysis --account hallc \
   --result-root "${temp}/outputs" --log-root "${temp}/logs" \
   --image "${temp}/image.sif" --database "${temp}/database.tar.gz" \
+  --lhapdf "${temp}/lhapdf.tar.gz" \
   --project test-project --profile validation --corpus test-corpus \
   --selection baseline --corpus-archive "${temp}/corpus.tar.gz" \
-  --project-archive "${temp}/project.tar" --output "${analysis}" >/dev/null
+  --project-archive "${temp}/project.tar" \
+  --holdout-design "${temp}/holdout.json" --output "${analysis}" >/dev/null
 
 python3 - "${analysis}" <<'PY'
 import json, shlex, sys
@@ -30,13 +34,20 @@ assert workflow["max_problems"] == 1
 jobs = workflow["jobs"]
 assert [job["name"] for job in jobs] == [
     "dvcs-selection", "dvcs-materialize", "dvcs-train", "dvcs-evaluate",
-    "dvcs-compare", "dvcs-holdout", "dvcs-plot",
+    "dvcs-compare", "dvcs-holdout-gpdgk11", "dvcs-holdout-gpdgk16",
+    "dvcs-holdout-gpdgk19", "dvcs-holdout-gpdvgg99",
+    "dvcs-holdout-merge", "dvcs-plot",
 ]
-for index, job in enumerate(jobs):
-    assert job.get("antecedents", []) == ([] if index == 0 else [jobs[index - 1]["name"]])
+for job in jobs:
     assert {tag["name"] for tag in job["tags"]} == {"dvcs-workflow", "dvcs-stage"}
     assert all("-" in item["local"] for item in job["inputs"][:4])
     assert len(job["outputs"]) == 4
+for index in range(5):
+    assert jobs[index].get("antecedents", []) == ([] if index == 0 else [jobs[index - 1]["name"]])
+for job in jobs[5:9]:
+    assert job["antecedents"] == ["dvcs-compare"]
+assert set(jobs[9]["antecedents"]) == {job["name"] for job in jobs[5:9]}
+assert jobs[10]["antecedents"] == ["dvcs-holdout-merge"]
 materialize = jobs[1]
 assert materialize["partition"] == "production"
 assert materialize["cpu_cores"] == 2
@@ -55,14 +66,15 @@ assert "run_swif2_analysis_stage" not in train["command"][0]
 assert "analysis-runner-" in train["command"][0]
 assert "performance-collector-" in train["command"][0]
 train_command = shlex.split(train["command"][0])
-assert train_command[-4].startswith("performance-collector-")
-assert train_command[-3:] == [
+assert train_command[-6].startswith("performance-collector-")
+assert train_command[-5:-2] == [
     "performance-train.json", "performance-train.jsonl", "30",
 ]
+assert train_command[-2:] == ["none", "none"]
 assert {item["local"] for item in train["outputs"][2:]} == {
     "performance-train.json", "performance-train.jsonl",
 }
-for left, right in zip(jobs, jobs[1:]):
+for left, right in zip(jobs[:4], jobs[1:5]):
     produced = left["outputs"][0]
     consumed = right["inputs"][4]
     assert produced == consumed
@@ -72,6 +84,25 @@ for job in jobs:
     assert bool(gpu_flags) == (stage in {"optimize", "train", "evaluate"})
 assert len(train["inputs"]) == 5
 assert " --corpus " not in train["command"][0]
+compare = jobs[4]
+assert compare["ram_bytes"] == 12_000_000_000
+holdout = jobs[5]
+assert holdout["cpu_cores"] == 4
+assert holdout["ram_bytes"] == 20_000_000_000
+assert holdout["time_secs"] == 43_200
+assert len(holdout["inputs"]) == 7
+assert holdout["inputs"][-2]["local"].startswith("holdout-design-")
+assert holdout["inputs"][-1]["local"].startswith("MSTW2008nlo68cl-")
+holdout_command = shlex.split(holdout["command"][0])
+assert holdout_command[-3].startswith("holdout-design-")
+assert holdout_command[-2].startswith("MSTW2008nlo68cl-")
+assert holdout_command[-1] == "GPDGK11"
+merge = jobs[9]
+assert merge["cpu_cores"] == 2
+assert merge["time_secs"] == 7_200
+assert len(merge["inputs"]) == 12
+assert "holdout-merger-" in merge["command"][0]
+assert jobs[10]["inputs"][4] == merge["outputs"][0]
 PY
 
 experiment="${temp}/experiment.json"
@@ -158,6 +189,12 @@ grep -F -- 'payload=(materialize "${project}"' \
 grep -F -- 'payload=(train "${project}" --profile "${profile}" --no-progress)' \
   "${root}/jobs/jlab_ifarm/run_swif2_analysis_stage.sh" >/dev/null
 grep -F -- 'CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}' \
+  "${root}/jobs/jlab_ifarm/run_swif2_analysis_stage.sh" >/dev/null
+grep -F -- 'staged SIF digest mismatch' \
+  "${root}/jobs/jlab_ifarm/run_swif2_analysis_stage.sh" >/dev/null
+grep -F -- 'scientific gate failed and remains recorded' \
+  "${root}/jobs/jlab_ifarm/run_swif2_analysis_stage.sh" >/dev/null
+grep -F -- 'staged holdout manifest' \
   "${root}/jobs/jlab_ifarm/run_swif2_analysis_stage.sh" >/dev/null
 
 echo "JLab SWIF2 workflow verification: PASS"

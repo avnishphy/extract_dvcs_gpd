@@ -1,7 +1,7 @@
 # `experiment.json` reference
 
 This is the complete field reference for the public, user-editable
-`experiment.json` **schema 8** created by:
+`experiment.json` **schema 9** created by:
 
 ```bash
 ./dvcs init NAME
@@ -190,9 +190,9 @@ Each selected record contains:
 | `synthetic_dataset.kinematics_source.selected_records[].reference` | Source literature/reference string. |
 | `synthetic_dataset.kinematics_source.selected_records[].source_Q2_GeV2` | Catalog $Q^2$ in GeV$^2$. |
 | `synthetic_dataset.kinematics_source.selected_records[].source_beam_energy_GeV` | Catalog beam energy in GeV. |
-| `synthetic_dataset.kinematics_source.selected_records[].generated_Q2_GeV2` | $Q^2$ actually sent to PARTONS; schema 8 retains the source value. |
-| `synthetic_dataset.kinematics_source.selected_records[].Q2_projected` | Boolean projection flag; generated schema 8 projects no $Q^2$. |
-| `synthetic_dataset.kinematics_source.selected_records[].generated_beam_energy_GeV` | Beam energy actually sent to PARTONS; schema 8 retains the source value. |
+| `synthetic_dataset.kinematics_source.selected_records[].generated_Q2_GeV2` | $Q^2$ actually sent to PARTONS; schemas 8/9 retain the source value. |
+| `synthetic_dataset.kinematics_source.selected_records[].Q2_projected` | Boolean projection flag; generated schemas 8/9 project no $Q^2$. |
+| `synthetic_dataset.kinematics_source.selected_records[].generated_beam_energy_GeV` | Beam energy actually sent to PARTONS; schemas 8/9 retain the source value. |
 | `synthetic_dataset.kinematics_source.selected_records[].measurement_values_used` | Must be `false`; any other value aborts. |
 
 ### 3.3 Native observable selection
@@ -353,6 +353,20 @@ outer test or GK/VGG data.
 
 Categorical lists must be nonempty unique positive integers.
 
+## 8.1 Observation-design training
+
+| Path | Default | Meaning |
+|---|---|---|
+| `inference.observation_design_training.enabled` | `false` | Enable mask-augmented variable-design contexts; requires rematerialization and retraining. |
+| `inference.observation_design_training.active_kinematic_counts[]` | `[6]` | Sorted unique trained counts within the configured maximum. Enabled training must include the full count; use `[12,30,60,96]` for a 96-point campaign. |
+| `inference.observation_design_training.selection_seed` | `51017` | Deterministic nested space-filling ordering seed. |
+| `inference.observation_design_training.selection_policy` | `nested_deterministic_farthest_point_v1` | Every smaller design is a prefix/subset of its larger partner. |
+| `inference.observation_design_training.pooling_policy` | `masked_fixed_maximum_normalization_v1` | Remove padded embeddings and divide by maximum token count. |
+
+Masking represents absent observations, not zero measurements and not hidden
+physics parameters. It supports trained subsets; arbitrary new-coordinate
+calibration requires varied kinematics in the native training corpus.
+
 ## 9. Output diagnostics
 
 These entries change saved plots/reevaluations, not the training corpus.
@@ -377,7 +391,7 @@ threshold afterward.
 
 | Path | Default | Pass condition and interpretation |
 |---|---:|---|
-| `validation_gates.minimum_conventional_effective_sample_size` | 80 | Self-normalized exact-bank importance-sampling ESS must be at least this value. |
+| `validation_gates.minimum_conventional_effective_sample_size` | 80 | Self-normalized exact-bank importance-sampling ESS must be at least this value. Below it, conventional distance/width metrics are unavailable rather than regularized. |
 | `validation_gates.maximum_ensemble_sliced_wasserstein` | 0.45 | Standardized multivariate sliced-Wasserstein distance between neural and conventional samples must not exceed this value. |
 | `validation_gates.maximum_marginal_wasserstein_over_conventional_sd` | 0.60 | Every marginal Wasserstein distance divided by conventional SD must not exceed this value. |
 | `validation_gates.maximum_test_nll_minus_validation_nll` | 0.75 | For every selected member, held-out outer-test NLL minus best internal-validation NLL must not exceed this value. |
@@ -393,7 +407,7 @@ not enable real-data fitting or establish representation/shadow robustness.
 
 The documentation regression normalizes repeated list, GPD, channel, and
 profile entries to the following paths and verifies that every leaf generated
-by the schema-8 template appears in this document:
+by the schema-9 template appears in this document:
 
 ```text
 schema_version

@@ -143,6 +143,11 @@ INFERENCE_KEYS = {
     "runtime",
     "hyperparameter_optimization",
 }
+INFERENCE_KEYS_V9 = INFERENCE_KEYS | {"observation_design_training"}
+OBSERVATION_DESIGN_TRAINING_KEYS = {
+    "enabled", "active_kinematic_counts", "selection_seed",
+    "selection_policy", "pooling_policy",
+}
 RUNTIME_KEYS_V5 = {"accelerator", "cpu_threads", "deterministic_algorithms"}
 RUNTIME_KEYS = RUNTIME_KEYS_V5 | {"native_workers"}
 TRUTH_KEYS = {
@@ -352,6 +357,28 @@ def _canonical_paths(repository: Path) -> tuple[Path, Path]:
     )
 
 
+def _holdout_design_path(
+    repository: Path, argument: Path | None
+) -> Path:
+    """Resolve one explicit holdout design or the release default."""
+
+    configured = os.environ.get("DVCS_HOLDOUT_DESIGN")
+    candidate = (
+        argument
+        if argument is not None
+        else Path(configured)
+        if configured
+        else repository
+        / "configs"
+        / "validation"
+        / "stage11_blind_fresh_kinematics_v1.json"
+    )
+    resolved = candidate.resolve(strict=True)
+    if candidate.is_symlink() or not resolved.is_file():
+        raise RuntimeError("holdout design must be one real JSON file")
+    return resolved
+
+
 def _public_experiment(
     name: str,
     canonical_configuration: Mapping[str, Any],
@@ -370,7 +397,7 @@ def _public_experiment(
     }
     truth = canonical_configuration["truth"]
     return {
-        "schema_version": 8,
+        "schema_version": 9,
         "experiment": {
             "name": name,
             "description": (
@@ -451,6 +478,9 @@ def _public_experiment(
             "hyperparameter_optimization": deepcopy(
                 canonical_configuration["hyperparameter_optimization"]
             ),
+            "observation_design_training": deepcopy(
+                canonical_configuration["observation_design_training"]
+            ),
         },
         "output_diagnostics": deepcopy(
             canonical_configuration["diagnostics"]
@@ -497,6 +527,7 @@ Run commands from the repository root:
 ./dvcs train {name} --profile quick --corpus {name}-corpus --selection baseline
 ./dvcs evaluate {name} --profile quick
 ./dvcs compare {name} --profile quick
+./dvcs holdout {name} --profile quick --design /absolute/holdout-design.json
 ./dvcs plot {name} --profile quick
 ```
 
@@ -553,6 +584,12 @@ loader and native bridge recheck it before simulation.
 The GPD starts at `Q0^2=1 GeV2` and the native backend evolves it to each
 retained datum scale; data are never evolved. No database measurement or
 uncertainty is used.
+
+Schema-9 masked-design training is opt-in. Review
+`inference.observation_design_training`, rematerialize, and retrain before
+using a reduced holdout. Masking supports declared subsets of the training
+kinematic bank; it does not establish calibration at arbitrary unseen
+coordinates.
 
 Outputs for the quick profile appear in `results/quick/`. Start with
 `results/quick/summary.md` and the PNG files under `results/quick/plots/`:
@@ -628,7 +665,7 @@ def _load_experiment(project: Path) -> dict[str, Any]:
     """Load the full-independent public schema; reject reduced schemas.
 
     Schema v1 remains readable only for historical developer tests. New user
-    projects receive schema v8. Schema v7 remains readable as the same physics
+    projects receive schema v9. Schemas v7/v8 remain readable as the same physics
     contract with the canonical six observables. Earlier schemas encoded a different,
     reduced posterior and are never migrated silently.
     """
@@ -667,7 +704,7 @@ def _load_experiment(project: Path) -> dict[str, Any]:
             "validation_gates": validation_gates,
             "kinematics_source": {"mode": "manual"},
         }
-    elif value.get("schema_version") in {7, 8}:
+    elif value.get("schema_version") in {7, 8, 9}:
         public_schema = int(value["schema_version"])
         _exact_keys(value, EXPERIMENT_KEYS_V3, "experiment")
         _exact_keys(
@@ -717,7 +754,7 @@ def _load_experiment(project: Path) -> dict[str, Any]:
             value["synthetic_dataset"],
             (
                 SYNTHETIC_DATASET_KEYS
-                if public_schema == 8
+                if public_schema >= 8
                 else SYNTHETIC_DATASET_KEYS_V7
             ),
             "synthetic_dataset",
@@ -757,7 +794,18 @@ def _load_experiment(project: Path) -> dict[str, Any]:
                         )
             else:
                 raise ValueError("unsupported kinematics_source.mode")
-        _exact_keys(value["inference"], INFERENCE_KEYS, "inference")
+        _exact_keys(
+            value["inference"],
+            INFERENCE_KEYS_V9 if public_schema == 9 else INFERENCE_KEYS,
+            "inference",
+        )
+        if public_schema == 9:
+            design = value["inference"]["observation_design_training"]
+            _exact_keys(
+                design,
+                OBSERVATION_DESIGN_TRAINING_KEYS,
+                "inference.observation_design_training",
+            )
         _exact_keys(
             value["inference"]["runtime"],
             RUNTIME_KEYS if public_schema >= 7 else RUNTIME_KEYS_V5,
@@ -784,7 +832,7 @@ def _load_experiment(project: Path) -> dict[str, Any]:
             )
         if not isinstance(value["experiment"]["description"], str):
             raise ValueError("experiment.description must be a string")
-        if public_schema == 8:
+        if public_schema >= 8:
             observables = value["synthetic_dataset"]["observables"]
             if not isinstance(observables, list) or not observables:
                 raise ValueError("synthetic_dataset.observables must be nonempty")
@@ -846,7 +894,7 @@ def _load_experiment(project: Path) -> dict[str, Any]:
             ),
             "observables": (
                 value["synthetic_dataset"]["observables"]
-                if public_schema == 8
+                if public_schema >= 8
                 else None
             ),
             "uncertainties": value["synthetic_dataset"][
@@ -866,11 +914,28 @@ def _load_experiment(project: Path) -> dict[str, Any]:
             "seeds": value["inference"]["random_seeds"],
             "validation_gates": validation_gates,
             "diagnostics": value["output_diagnostics"],
+            "observation_design_training": (
+                value["inference"]["observation_design_training"]
+                if public_schema == 9
+                else {
+                    "enabled": False,
+                    "active_kinematic_counts": [
+                        len(value["synthetic_dataset"]["kinematics"])
+                    ],
+                    "selection_seed": 51017,
+                    "selection_policy": (
+                        "nested_deterministic_farthest_point_v1"
+                    ),
+                    "pooling_policy": (
+                        "masked_fixed_maximum_normalization_v1"
+                    ),
+                }
+            ),
         }
     elif value.get("schema_version") in {2, 3, 4, 5, 6}:
         raise ValueError(
             "this experiment schema is retired; create a new project to use "
-            "the full-independent multi-Q2 schema_version 8"
+            "the full-independent multi-Q2 schema_version 9"
         )
     else:
         raise ValueError("unsupported experiment schema_version")
@@ -1025,6 +1090,13 @@ def prepare_engine(
     _validate_kinematics_provenance(experiment)
     canonical_path, physics_path = _canonical_paths(repository)
     configuration = load_configuration(canonical_path)
+    public_schema = int(json.loads(
+        (project / "experiment.json").read_text(encoding="utf-8")
+    ).get("schema_version", 1))
+    if public_schema < 9:
+        # Preserve historical engine/result hashes for existing projects.
+        configuration["schema_version"] = 8
+        configuration.pop("observation_design_training", None)
     _require_matching_shape(
         experiment["profiles"], configuration["profiles"], "profiles"
     )
@@ -1066,6 +1138,10 @@ def prepare_engine(
     configuration["profiles"] = deepcopy(experiment["profiles"])
     configuration["network"] = deepcopy(experiment["network"])
     configuration["runtime"] = deepcopy(experiment["runtime"])
+    if public_schema >= 9:
+        configuration["observation_design_training"] = deepcopy(
+            experiment["observation_design_training"]
+        )
     configuration["hyperparameter_optimization"] = deepcopy(
         experiment["optimization"]
     )
@@ -1263,12 +1339,23 @@ def _public_result(
     elif command == "evaluate":
         public["gate_checks"] = result["gate_checks"]
     elif command == "compare":
+        # A completed comparison can legitimately fail a scientific gate.
+        # Preserve that result for downstream diagnostics instead of making
+        # an orchestrator mistake it for an execution failure.
+        public["status"] = result.get("status", "complete")
+        public["scientific_passed"] = result.get("passed")
         public["effective_sample_size"] = result[
             "effective_sample_size"
         ]
         public["ensemble_sliced_wasserstein"] = result[
             "ensemble_sliced_wasserstein"
         ]
+        public["conventional_reference_available"] = result.get(
+            "conventional_reference_available", True
+        )
+        public["conventional_reference_failure"] = result.get(
+            "conventional_reference_diagnostics", {}
+        ).get("failure_code")
     elif command == "plot":
         public["plots"] = result["plot_count"]
         public["plot_directory"] = str(
@@ -1327,7 +1414,10 @@ def _public_result(
         ]
         public["real_data_fit_enabled"] = False
         public["summary"] = str(
-            project / "results" / str(profile) / "holdout" / "summary.json"
+            result.get(
+                "summary_path",
+                project / "results" / str(profile) / "holdout" / "summary.json",
+            )
         )
     return public
 
@@ -1505,6 +1595,12 @@ def _parser() -> argparse.ArgumentParser:
                     "exact posterior samples to reevaluate (default: the "
                     "profile exact-reevaluation count)"
                 ),
+            )
+        if command == "holdout":
+            subparser.add_argument(
+                "--design",
+                type=Path,
+                help="explicit content-hashed native-model holdout design",
             )
     return parser
 
@@ -1783,6 +1879,9 @@ def main() -> int:
                     elif args.command == "holdout":
                         internal = evaluate_native_model_holdouts(
                             bridge=bridge,
+                            blind_configuration_path=(
+                                _holdout_design_path(repository, args.design)
+                            ),
                             **common,
                         )
                     else:

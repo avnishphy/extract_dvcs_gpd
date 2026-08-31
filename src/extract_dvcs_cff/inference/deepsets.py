@@ -132,8 +132,18 @@ class DeepSetsDatasetEncoder(nn.Module):
         tokens = context[:, :token_width].reshape(
             context.shape[0], self.token_count, self.feature_count
         )
-        point_embeddings = self.point_encoder(tokens)
-        pooled = point_embeddings.mean(dim=1)
+        # Final frozen token feature is point_mask. Mask outside the learned
+        # point network so padding cannot create pseudo-data through biases.
+        mask = tokens[:, :, -1:].clamp(0.0, 1.0)
+        if bool(torch.any(mask.sum(dim=1) <= 0.0)):
+            raise ValueError("every context must contain an active token")
+        point_embeddings = self.point_encoder(tokens) * mask
+        # Fixed maximum normalization equals the historical mean when every
+        # token is active and exposes reduced information when tokens vanish.
+        masked_pool = point_embeddings.sum(dim=1) / float(self.token_count)
+        historical_pool = point_embeddings.mean(dim=1)
+        all_active = mask.sum(dim=1) == float(self.token_count)
+        pooled = torch.where(all_active, historical_pool, masked_pool)
         if self.global_feature_count:
             pooled = torch.cat((pooled, context[:, token_width:]), dim=1)
         return self.dataset_encoder(pooled)

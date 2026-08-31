@@ -115,6 +115,28 @@ an sbi conditional normalizing flow. Candidate ensemble members are selected
 only with grouped internal validation. Replicates from one native parameter
 vector never cross train/internal-validation/outer-test roles.
 
+### Review before the next large campaign: masked-design training
+
+Schema 9 can train one fixed-maximum DeepSets model on missing-data designs.
+Set `inference.observation_design_training.enabled` only after reviewing the
+design distribution. Active tokens retain `point_mask=1`; padded tokens have
+`point_mask=0`, are multiplied out after the point network, and cannot act as
+zero-valued measurements. Pooling divides by the fixed maximum token count, so
+the network can learn that fewer measurements contain less information while
+historical all-active contexts remain numerically unchanged.
+
+For Josh-style 96-kinematic training, `[12,30,60,96]` creates deterministic
+nested space-filling designs across noise replicas. This supports subsets of
+the trained kinematic bank only after rematerialization and retraining. It does
+not by itself validate arbitrary unseen coordinates; that requires a future
+corpus whose PARTONS simulations vary kinematic layouts across the declared
+domain. Review mask frequencies, covariance submatrices, design replicates,
+and coverage before producing that larger corpus.
+
+After the current Josh holdouts finish, use their reaped SWIF2 telemetry to
+tune later CPU, RAM, disk, GPU, and walltime requests. Resource tuning must not
+change physics, masks, seeds, or result contracts.
+
 ## End-to-end workflow
 
 ```text

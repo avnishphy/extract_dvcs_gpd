@@ -85,6 +85,11 @@ Sustained `optimize`, `train`, and `evaluate` are not launched interactively on
 ifarm. They point to `./dvcs farm-submit`, which gives them explicit resources,
 retries, logs, node-local I/O, and reaped outputs.
 
+For post-training validation, pass one content-hashed design with
+`farm-submit --holdout-design FILE`. Submit same-kinematic and fresh-kinematic
+holdouts as separate workflows from the same compare archive; see
+[JLAB_SWIF2.md](JLAB_SWIF2.md).
+
 ## Submit the managed workflow
 
 For a new corpus, first validate and then submit the parallel corpus workflow:

@@ -248,6 +248,7 @@ preserving the saved result contract and explicit dependency chain.
 ```bash
 ./dvcs farm-submit --project PROJECT --corpus CORPUS --selection baseline \
   --profile validation --corpus-archive /absolute/verified-corpus.tar.gz \
+  [--project-archive /absolute/reaped-project-state.tar] \
   --from selection --through plot [--dry-run]
 ```
 
@@ -256,6 +257,10 @@ workflow, and either validates it (`--dry-run`) or imports and starts it. Use
 `--only STAGE`, `--include-optimize`, or `--import-only` as needed. See
 [JLab SWIF2 workflows](JLAB_SWIF2.md). Every stage requires and reaps aggregate
 CPU/memory/I/O/GPU metrics plus raw time-series samples.
+
+`--project-archive` resumes from a verified SWIF2 project-state archive instead
+of packaging local state. Start `--from` at the next unfinished stage and use
+a new workflow name. Archive safety and project identity are checked.
 
 The default range is `selection` through `plot`. Start at `materialize` when
 the selection exists; start at `train` only when its arrays already exist.
@@ -303,13 +308,24 @@ presentation artifacts without repeating expensive computation.
 ### `holdout`
 
 ```bash
-./dvcs holdout NAME --profile validation
+./dvcs holdout NAME --profile validation --design /absolute/design.json
 ```
 
-Runs only after synthetic closure gates pass. It generates fresh native truth
+Runs after synthetic evaluation passes and comparison completes. It generates fresh native truth
 from allowlisted `GPDGK11`, `GPDGK16`, `GPDGK19`, and `GPDVGG99`, conditions
 the already frozen NPE, exact-reevaluates inferred DD samples, and writes
-model-specific metrics/plots beneath `holdout/`.
+model-specific metrics/plots beneath `holdouts/DESIGN/`.
+
+Create content-hashed same-design, nested training-subset, or measurement-free
+fresh designs with `scripts/create_holdout_design.py`. A reduced design is
+accepted only when materialization records that exact masked kinematic count.
+Same-size fresh designs work with a fixed-width legacy checkpoint but combine
+native-model and unseen-kinematic shifts.
+
+```bash
+python3 scripts/create_holdout_design.py --project-archive /absolute/project-after-compare.tar --project NAME --design-name same-96 --source same --kinematics 96 --output /absolute/same-96.json
+python3 scripts/create_holdout_design.py --project-archive /absolute/project-after-compare.tar --project NAME --design-name fresh-96 --source fresh --kinematics 96 --database database/gpddatabase --output /absolute/fresh-96.json
+```
 
 The command hashes protected pre-holdout artifacts before and after execution
 and aborts if they change. Named model outputs cannot select or retrain the
@@ -338,7 +354,7 @@ init -> doctor -> corpus-create -> corpus-plan -> corpus-generate
                                                  |
                                                  +-- optimize (separate study)
 
-after passed closure ----------+-- holdout
+after passed evaluation and completed comparison -- holdout
 after frozen posterior --------+-- compare-real
 ```
 
