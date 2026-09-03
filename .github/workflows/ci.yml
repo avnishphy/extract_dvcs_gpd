@@ -30,7 +30,7 @@ jobs:
             IMAGE_REVISION=${{ github.sha }}
       - run: docker run --rm extract-dvcs-gpd:ci-cpu partons-bridge --self-test
       - run: docker run --rm extract-dvcs-gpd:ci-cpu shell -lc 'python -c "import torch,sbi,extract_dvcs_cff; assert not torch.cuda.is_available()" && pip check'
-      - uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7
+      - uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
         with:
           image: extract-dvcs-gpd:ci-cpu
           fail-build: true
