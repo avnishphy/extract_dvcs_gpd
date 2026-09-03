@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.3.0 - 2026-08-31
+
+- Split reusable analysis data into versioned master-corpus, selection,
+  architecture-neutral pseudodata-realization, model-view, and result-bundle
+  contracts. Historical schema-1 corpora remain valid for the DD baseline;
+  neural-GPD mode requires complete checksummed canonical GPD-truth shards.
+- Added the `dd_deepsets_maf` and `neural_gpd_deepsets_maf` registry, offline
+  latent-function autoencoder/prior contracts, train-only normalization,
+  truth-leakage guards, typed physics constraints, and common comparison
+  metrics. The neural branch is explicitly a DD-induced closure test when its
+  source corpus uses a DD generator.
+- Made MAF the sole density estimator. Retired spline-only `num_bins` fields
+  are removed from canonical configurations and explicitly warned/migrated in
+  historical schema-9 projects; NSF/spline configurations fail closed.
+- Separated saved-artifact `evaluate` from explicit native
+  `exact-reevaluate`; selection, realization, model-view creation, training,
+  comparison, plotting, and literature diagnostics no longer resolve or
+  launch the native bridge.
+- Added stage-specific SWIF2 placement: 16-CPU corpus workers use farm25 by
+  default, farm19 requires an explicit fallback profile, and farm23 is
+  excluded. Merge/lightweight stages do not inherit farm25 placement.
+- Added dependency/container consistency validation, literature benchmark and
+  coverage registries, and the compiled one-time 2026-08-31 progress deck.
+- Recorded the current native blocker for external neural-GPD exact
+  reevaluation: the installed bridge lacks a validated loader from a frozen
+  external function artifact into its PARTONS/APFEL++ table path.
+
 ## 0.2.0 - 2026-08-14
 
 - Ported the reusable PARTONS corpus workflow from upstream commit `255b8f7`:

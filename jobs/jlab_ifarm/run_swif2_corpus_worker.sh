@@ -6,16 +6,17 @@ set -euo pipefail
 : "${SLURM_CPUS_PER_TASK:?Slurm CPU allocation is required}"
 project="${1:?project}" profile="${2:?profile}" corpus="${3:?corpus}"
 image="${4:?image}" database_archive="${5:?database archive}"
-experiment="${6:?experiment}" shard_size="${7:?shard size}"
-shard_start="${8:?shard start}" shard_count="${9:?shard count}"
-archive_output="${10:?archive output}" summary_output="${11:?summary output}"
-heartbeat_seconds="${12:-300}"
-collector="${13:?performance collector}" performance_summary="${14:?performance summary}"
-performance_samples="${15:?performance samples}" performance_interval="${16:?performance interval}"
+experiment="${6:?experiment}" gpd_truth="${7:?GPD truth request}"
+shard_size="${8:?shard size}"
+shard_start="${9:?shard start}" shard_count="${10:?shard count}"
+archive_output="${11:?archive output}" summary_output="${12:?summary output}"
+heartbeat_seconds="${13:-300}"
+collector="${14:?performance collector}" performance_summary="${15:?performance summary}"
+performance_samples="${16:?performance samples}" performance_interval="${17:?performance interval}"
 [[ "${heartbeat_seconds}" =~ ^[0-9]+$ ]] || exit 64
 [[ "${performance_interval}" =~ ^[1-9][0-9]*$ ]] || exit 64
 cd "${SWIF_JOB_WORK_DIR}"
-for path in "${image}" "${database_archive}" "${experiment}" "${collector}"; do
+for path in "${image}" "${database_archive}" "${experiment}" "${gpd_truth}" "${collector}"; do
     [[ -s "${path}" && ! -L "${path}" ]] || exit 66
 done
 python3 - "${database_archive}" <<'PY'
@@ -35,7 +36,7 @@ mkdir -p workspace/.corpus_exports results cache database
 tar -xf "${database_archive}" -C database
 [[ "$(git -C database/gpddatabase rev-parse HEAD)" == \
    "1e9e97fd417ce1d6d44fc73550bdbf32cca4eeb1" ]] || exit 65
-sha256sum "${image}" "${database_archive}" "${experiment}" > staged-inputs-sha256.txt
+sha256sum "${image}" "${database_archive}" "${experiment}" "${gpd_truth}" > staged-inputs-sha256.txt
 image_sha="$(sha256sum "${image}" | awk '{print $1}')"
 container=(
     /usr/bin/apptainer run --cleanenv
@@ -83,7 +84,8 @@ PY
 "${container[@]}" init "${project}" > init.json
 cp "${experiment}" "workspace/${project}/experiment.json"
 "${container[@]}" corpus-create "${project}" "${corpus}" \
-    --profile "${profile}" --shard-size "${shard_size}" > corpus-create.json
+    --profile "${profile}" --shard-size "${shard_size}" \
+    --gpd-truth-request "${gpd_truth}" > corpus-create.json
 set +e
 "${container[@]}" corpus-generate "${project}" "${corpus}" \
     --shard-start "${shard_start}" --max-shards "${shard_count}" \

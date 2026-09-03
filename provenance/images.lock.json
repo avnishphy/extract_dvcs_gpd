@@ -3,9 +3,9 @@
   "registry": "ghcr.io/OWNER/extract-dvcs-gpd",
   "published": false,
   "images": {
-    "cpu": {"tag": "0.2.0-cpu", "digest": null},
-    "cuda": {"tag": "0.2.0-cuda12.6", "digest": null},
-    "jlab_ifarm": {"tag": "jlab_ifarm-0.2.0", "digest": null}
+    "cpu": {"tag": "0.3.0-cpu", "digest": null},
+    "cuda": {"tag": "0.3.0-cuda12.6", "digest": null},
+    "jlab_ifarm": {"tag": "jlab_ifarm-0.3.0", "digest": null}
   },
   "policy": "Installer builds from the locked sources while published=false or digest is null. Maintainers must replace OWNER and record the registry digest after CI publication."
 }

@@ -1,5 +1,10 @@
 # Data and artifact contracts
 
+The current contracts are master corpus v2, selection v1, pseudodata
+realization v3, model view v1, and result bundle v2. Their JSON schemas are in
+`configs/schemas/`; [the 0.3 architecture page](ARTIFACT_ARCHITECTURE_0_3.md)
+defines ownership, IDs, historical readers, and the compatibility wrapper.
+
 ## Contract principles
 
 The framework treats files as versioned interfaces rather than incidental
@@ -16,7 +21,7 @@ and compatibility relationship. The main rules are:
 
 ## Public project contract
 
-`experiment.json` is the only user-editable scientific contract. Schema 8
+`experiment.json` is the only user-editable scientific contract. Schema 9
 contains exactly these top-level blocks:
 
 ```text
@@ -32,7 +37,7 @@ validation_gates
 The validator rejects missing and unknown keys. See the [field-by-field
 reference](EXPERIMENT_JSON_REFERENCE.md).
 
-Schema 8 adds `synthetic_dataset.observables`: an ordered nonempty subset of
+The public contract includes `synthetic_dataset.observables`: an ordered nonempty subset of
 the six audited native modules, including frozen unit, normalization-scale,
 and label metadata. Schema 7 remains readable as the canonical six-observable
 selection.
@@ -80,19 +85,21 @@ other configuration field, including determinism policy, still fail closed.
 ## Reusable native corpus contract
 
 The reusable corpus is the expensive, noise-free PARTONS asset. Corpus schema
-1 content-binds the 80-parameter order and prior, parameter seed/count,
-kinematics, complete GPD/CFF/process configuration, bridge hash, atomic
-parameter/CFF shards, independent observable shards, rejected draws, and
-consolidated native-evidence hashes. It deliberately excludes neural
+2 content-binds the 80-parameter order and prior, parameter seed/count,
+kinematics, complete GPD/CFF/process configuration, bridge hash, the explicit
+canonical GPD coordinate request, aligned parameter/GPD/CFF shards,
+independent observable shards, per-coordinate GPD validity masks, rejected
+draws, and consolidated native-evidence hashes. It deliberately excludes neural
 architecture, split roles, nuisance draws, and noise replicas.
 
 Selection schema 1 stores only disjoint, complete train/internal-validation/
 outer-test group lists, their split seed and policy, a locked-test assertion,
-and the corpus core-identity hash. Realization schema 1 deterministically
+and the corpus core-identity hash. Realization schema 3 deterministically
 creates nuisance/noise rows and neural tensors immediately before training or
 Optuna, binding the result to corpus, selection, configuration, bridge, and
 every materialized array hash. See
-[Corpus and data selection](CORPUS_AND_DATA_SELECTION.md).
+[Corpus and data selection](CORPUS_AND_DATA_SELECTION.md) and
+[Canonical GPD truth](CANONICAL_GPD_TRUTH.md).
 
 ## Transient native cache contract
 
@@ -175,6 +182,10 @@ experiment or selected production architecture automatically.
 
 ## Evaluation contract
 
+`evaluation/saved_evaluation_metrics.json` contains grouped outer-test
+coverage and score gates without native execution. It is sufficient for the
+saved-only coverage plot.
+
 `evaluation/evaluation_metrics.json` combines:
 
 - selected-member outer-test performance;
@@ -184,6 +195,8 @@ experiment or selected production architecture automatically.
 - exact CFF and GPD diagnostic summaries;
 - separate parallel-execution records for posterior and GPD phases;
 - validation-gate values, observations, and pass/fail decisions.
+
+This second artifact exists only after the explicit `exact-reevaluate` stage.
 
 Parallel records contain chunk size, task count, requested/resolved workers,
 affinity CPUs, cache keys, and process-isolation policy. Associated posterior,

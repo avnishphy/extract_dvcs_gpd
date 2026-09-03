@@ -1,5 +1,16 @@
 # Native PARTONS bridge
 
+## Neural-function capability status
+
+`--capabilities` reports `canonical_gpd_truth_v1` and
+`external_neural_gpd_function_v1` explicitly. Canonical truth generation is
+available through `batch_evaluate_canonical_gpd_truth`: it evaluates explicit,
+irregular signed-`x` coordinates through the same native input GPD used by
+pseudodata production, at the declared common input scale. External neural
+function loading still fails closed: the installed `TabulatedPseudodataGPD`
+has no validated public loader for a frozen irregular external function
+artifact. Python does not replace either physics path.
+
 ## Why an executable boundary exists
 
 The C++ bridge is the sole authoritative physics interface used by the public

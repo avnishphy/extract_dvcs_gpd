@@ -83,6 +83,13 @@ Then install:
 ./install.sh --profile jlab_ifarm --accelerator auto
 ```
 
+This ordinary command is also the recovery command. It verifies and reuses a
+known-good final SIF, or verifies the labels/embedded definition of a complete
+matching `.sif.partial` and resumes it when no other in-image source changed.
+Do not add `--source-build` unless an image-impacting source or dependency
+change intentionally requires a replacement. Maintainers must use the [image
+update and recovery runbook](IMAGE_UPDATE_RUNBOOK.md).
+
 This requires Apptainer, not a Docker daemon. Because login nodes need not
 expose GPUs, `auto` builds or retrieves the CUDA-capable JLab SIF while leaving
 runtime selection as `auto`. CPU jobs omit `--nv`; GPU jobs export
@@ -102,6 +109,24 @@ GSL uses multiple locked HTTPS mirrors. The build consumes these host-cached
 files through a read-only bind, avoiding blocked `ftp.gnu.org` access inside
 fakeroot. Git, Ubuntu package, and remaining Python sources still require
 network access for a first source build; reruns reuse verified cached files.
+
+The installer serializes updates with the NFS-safe atomic directory
+`.dvcs/install.lock.d`, probes the pinned
+Ubuntu snapshot before beginning a first build, and records source-build output
+under `.dvcs/build-logs/`. If an earlier run completed a tag-matched
+`.sif.partial` but stopped during verification, the next ordinary run verifies
+and promotes it instead of rebuilding. Use `--source-build` only when you
+intentionally want to replace that candidate.
+
+The JLab profile always builds one CUDA-capable SIF, even when the requested
+runtime accelerator is `cpu`. CPU stages run that image without `--nv`; GPU
+stages use the same verified image with `--nv`. This prevents a CPU-only image
+from occupying the JLab tag and failing later GPU jobs. Before publishing the
+SIF atomically, `install.sh` runs the definition's automatic read-only `%test`,
+then reruns `%test` with the user-owned cache bound at `/cache`. The native
+logger-writing self-test is mandatory in that writable-cache phase. A final
+`pip check` and CUDA-runtime metadata check follow. The installer records the
+actual local SIF SHA-256 in `.dvcs/install.env`.
 
 SWIF2 additionally requires a valid JLab SciComp certificate. `swif2 list
 -display json` is a harmless authentication check. Installation does not
@@ -218,6 +243,9 @@ For an additional project-level check:
 For a local CPU workflow:
 
 ```bash
+source .dvcs/install.env
+cp configs/examples/master_corpus_gpd_truth_smoke_v1.json \
+  "$DVCS_WORKSPACE/installation-check/gpd_truth.json"
 ./dvcs corpus-create installation-check installation-corpus --profile quick
 ./dvcs corpus-plan installation-check installation-corpus
 ./dvcs corpus-generate installation-check installation-corpus
@@ -247,11 +275,17 @@ mounts and existing caches.
 
 ## Upgrading or changing variants
 
-Rerun `install.sh` with the desired profile/accelerator after updating the
-distribution. Existing user directories are not deleted. A new image or
-bridge hash intentionally prevents old generated results from being consumed
-as if they belonged to the new runtime. Preserve the prior image digest and
-Git commit when retaining old results.
+Classify the update before running anything expensive. Documentation and
+host-only site configuration changes do not require an image rebuild. Changes
+to `src/`, `cpp/`, `pyproject.toml`, container definitions, in-image scripts,
+or dependency locks do. The complete decision table, known-good-image
+preservation procedure, monitoring commands, and acceptance gates are in the
+[image update and recovery runbook](IMAGE_UPDATE_RUNBOOK.md).
+
+Existing user directories are not deleted. A new image or bridge hash
+intentionally prevents old generated results from being consumed as if they
+belonged to the new runtime. Preserve the prior image digest and Git commit
+when retaining old results.
 
 Do not hand-edit `.dvcs/install.env` except for diagnosis. Prefer environment
 overrides or rerun installation so state remains auditable.
@@ -263,6 +297,12 @@ git pull --ff-only
 ./install.sh --profile jlab_ifarm --accelerator auto
 ./dvcs doctor PROJECT
 ```
+
+That command reuses the current image. If the pulled commit changed code or
+dependencies executed inside the image and no newly published digest exists,
+a maintainer must follow the runbook and perform one controlled
+`--source-build`; ordinary users should continue using the known-good image
+until it is accepted.
 
 If Git reports diverged history, inspect `git log --oneline --left-right
 HEAD...origin/main` and integrate deliberately; do not force-push or reset a

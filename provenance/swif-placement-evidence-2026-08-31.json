@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-31",
+  "source": "user-supplied completed corpus-worker aggregates",
+  "per_job_records_available": false,
+  "queue_time_available": false,
+  "node_families": {
+    "farm25": {"completed_jobs": 8, "mean_runtime_hours": 8.39, "minimum_runtime_hours": 7.96, "maximum_runtime_hours": 9.17},
+    "farm19": {"completed_jobs": 9, "mean_runtime_hours": 12.74, "minimum_runtime_hours": 11.34, "maximum_runtime_hours": 13.81},
+    "farm23": {"completed_jobs": 13, "mean_runtime_hours": 17.89, "minimum_runtime_hours": 14.74, "maximum_runtime_hours": 19.97}
+  },
+  "fastest_hosts": [
+    {"host": "farm2511", "runtime": "7:57"},
+    {"host": "farm2508", "runtime": "8:04"},
+    {"host": "farm2507", "runtime": "8:07"},
+    {"host": "farm2503", "runtime": "8:11"},
+    {"host": "farm2509", "runtime": "8:14"}
+  ],
+  "production_policy": {
+    "corpus_worker_cpus": 16,
+    "default": "farm25_strict",
+    "explicit_fallback": "farm19_fallback",
+    "implicit_farm23_fallback": false,
+    "lightweight_jobs_inherit_corpus_placement": false
+  },
+  "historical_values_not_synthesized": ["per-job records", "submission times", "start times", "queue waits", "CPU efficiency", "RSS", "I/O"]
+}

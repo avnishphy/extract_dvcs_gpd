@@ -8,11 +8,13 @@ import sys
 
 python_source = open(sys.argv[1], encoding="utf-8").read()
 bridge_source = open(sys.argv[2], encoding="utf-8").read()
-assert '0.10 <= float(point["x_b"]) <= 0.50' in python_source
-assert '-0.90 <= float(point["t_GeV2"]) <= -0.10' in python_source
-assert 'kinematics.xB < 0.10 || kinematics.xB > 0.50' in bridge_source
-assert 'kinematics.t < -0.90 || kinematics.t > -0.10' in bridge_source
-assert 'documented "\n                      "schema-8 multi-Q2 domain' in bridge_source
+assert 't_GeV2=float(point["t_GeV2"])' in python_source
+assert 'phi_rad=float(point["phi_rad"])' in python_source
+assert '0.10 <= float(point["x_b"]) <= 0.50' not in python_source
+assert '-0.90 <= float(point["t_GeV2"]) <= -0.10' not in python_source
+assert 'kinematics.t < -0.90 || kinematics.t > -0.10' not in bridge_source
+assert 'outside exact finite-Q2 DVCS limits' in bridge_source
+assert 'kinematics.q2 < q0Squared' in bridge_source
 PY
 
-echo "Schema-8 Python/native kinematic envelope verification: PASS"
+echo "User-controlled physical kinematic contract verification: PASS"

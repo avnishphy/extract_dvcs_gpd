@@ -1,5 +1,11 @@
 # JLab SWIF2 workflows
 
+Corpus workers always request 16 CPUs. `farm25_strict` is the production
+placement profile; `farm19_fallback` must be chosen explicitly; farm23 has no
+implicit fallback. Merge, selection, realization, metadata, and plot jobs do
+not inherit farm25 placement. Use `validate_node_placement.py` before
+submission and `report_performance.py` for workflow/stage/family/host reports.
+
 SWIF2 is the supported interface for sustained ifarm/farm work. It manages the
 underlying Slurm jobs, dependencies, retries, and file movement. Direct
 `.sbatch` scripts remain low-level diagnostics; do not use them for a normal
@@ -34,6 +40,10 @@ Create and inspect the scientific identities on ifarm:
 ./dvcs init PROJECT
 ./dvcs show PROJECT
 ./dvcs doctor PROJECT
+source .dvcs/install.env
+cp configs/examples/master_corpus_gpd_truth_smoke_v1.json \
+  "$DVCS_WORKSPACE/PROJECT/gpd_truth.json"
+# Replace the smoke table with the reviewed production coordinates.
 ./dvcs corpus-create PROJECT CORPUS --profile validation --shard-size 16
 ./dvcs corpus-plan PROJECT CORPUS
 ```
@@ -82,10 +92,16 @@ generated, or set one with `--workflow NAME`. Useful controls are:
 ```
 
 Analysis stage order is `selection`, CPU `materialize`, optional `optimize`,
-`train`, `evaluate`, `compare`, `holdout`, `plot`. Materialization uses two
+`train`, saved-only `evaluate`, native `exact-reevaluate`, `compare`, `holdout`,
+`plot`. Materialization uses two
 CPU workers and no GPU. GPU requests and Apptainer `--nv` passthrough are
 automatic only for optimize, train, and evaluate. Each job is tagged with the
 workflow and stage names.
+
+Legacy node-family tokens in `SWIF_CONSTRAINT` are accepted with a warning but
+stripped from non-worker jobs. Select `farm25_strict` or `farm19_fallback`
+through the corpus placement profile; no family placement is inherited by the
+merge or other lightweight stages.
 
 Run different holdout designs as separate workflows from the same reaped
 compare archive. This prevents overwrites and keeps telemetry, scientific
@@ -115,15 +131,18 @@ project. Start at `materialize` when the selection exists but its deterministic
 arrays do not. Start at `train` only when complete materialized arrays already
 exist. `evaluate` consumes the saved trained result contract; do not combine
 artifacts from a changed experiment, profile, image, or bridge.
+`exact-reevaluate` is the separately scheduled CPU/PARTONS boundary. Comparison
+and holdout depend on its reaped state, so a saved-only result can never be
+mistaken for exact native validation.
 
 ## Resume from a completed stage
 
 Use the last valid reaped state, unchanged project/profile/corpus/selection,
-and a new workflow name. Example after evaluation:
+and a new workflow name. Example after exact reevaluation:
 
 ```bash
-./dvcs farm-submit --project PROJECT --corpus CORPUS --selection baseline --profile validation --corpus-archive /absolute/verified-corpus.tar.gz --project-archive "$SWIF_OUTPUT_ROOT/OLD-WORKFLOW/state/OLD-WORKFLOW-project-after-evaluate.tar" --from compare --through plot --workflow NEW-WORKFLOW --dry-run
-./dvcs farm-submit --project PROJECT --corpus CORPUS --selection baseline --profile validation --corpus-archive /absolute/verified-corpus.tar.gz --project-archive "$SWIF_OUTPUT_ROOT/OLD-WORKFLOW/state/OLD-WORKFLOW-project-after-evaluate.tar" --from compare --through plot --workflow NEW-WORKFLOW
+./dvcs farm-submit --project PROJECT --corpus CORPUS --selection baseline --profile validation --corpus-archive /absolute/verified-corpus.tar.gz --project-archive "$SWIF_OUTPUT_ROOT/OLD-WORKFLOW/state/OLD-WORKFLOW-project-after-exact-reevaluate.tar" --from compare --through plot --workflow NEW-WORKFLOW --dry-run
+./dvcs farm-submit --project PROJECT --corpus CORPUS --selection baseline --profile validation --corpus-archive /absolute/verified-corpus.tar.gz --project-archive "$SWIF_OUTPUT_ROOT/OLD-WORKFLOW/state/OLD-WORKFLOW-project-after-exact-reevaluate.tar" --from compare --through plot --workflow NEW-WORKFLOW
 ```
 
 `--project-archive` is read-only input. Submission rejects links/path traversal

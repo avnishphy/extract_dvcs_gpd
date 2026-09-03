@@ -137,13 +137,16 @@ explicit approval variable in addition to this documentation.
 
 ## Updating dependencies
 
-For any dependency change:
+For any dependency change, first preserve the accepted image and follow the
+[image update and recovery runbook](IMAGE_UPDATE_RUNBOOK.md). Then:
 
 1. verify the authoritative upstream and exact release/commit;
 2. check license and redistribution changes;
 3. update the lock, Dockerfile, Apptainer definition, and relevant CMake flags;
 4. verify source/archive hashes and Git reachability;
-5. rebuild CPU and CUDA/JLab variants from a clean cache;
+5. run static installer/container tests, then rebuild each affected CPU and
+   CUDA/JLab variant once; retain verified caches unless clean-cache
+   independence is the test objective;
 6. run bridge capabilities/self-test and all retained native tests;
 7. run Python and end-to-end workflow regression;
 8. produce new SBOM/package manifests;

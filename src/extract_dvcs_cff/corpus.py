@@ -33,6 +33,7 @@ from extract_dvcs_cff.workflows.pseudodata import (
     _covariance_and_responses,
     _effective_prediction,
     _parallel_partitioned_native_evaluation,
+    _parallel_native_gpd_truth_evaluation,
     _physics_path,
     _point_table,
     _sample_shape_parameters,
@@ -46,9 +47,9 @@ from extract_dvcs_cff.workflows.pseudodata import (
 )
 
 
-CORPUS_SCHEMA_VERSION = 1
+CORPUS_SCHEMA_VERSION = 2
 SELECTION_SCHEMA_VERSION = 1
-REALIZATION_SCHEMA_VERSION = 2
+REALIZATION_SCHEMA_VERSION = 3
 DEFAULT_SHARD_SIZE = 256
 _MAX_CANDIDATE_MULTIPLIER = 10
 ADMITTED_OBSERVABLE_METADATA = {
@@ -145,7 +146,9 @@ def _atomic_json(path: Path, value: Any) -> None:
     _atomic_bytes(path, (pretty_json(value) + "\n").encode())
 
 
-def _atomic_npz(path: Path, **arrays: np.ndarray) -> dict[str, Any]:
+def _atomic_npz(
+    path: Path, *, compression: str = "npz_deflate", **arrays: np.ndarray,
+) -> dict[str, Any]:
     """Write, reopen, validate, hash, and atomically publish one shard."""
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -153,10 +156,10 @@ def _atomic_npz(path: Path, **arrays: np.ndarray) -> dict[str, Any]:
     if temporary.exists():
         temporary.unlink()
     with temporary.open("wb") as stream:
-        np.savez_compressed(
-            stream,
-            **{name: np.asarray(value) for name, value in arrays.items()},
-        )
+        writer = np.savez_compressed if compression == "npz_deflate" else np.savez
+        if compression not in {"npz_deflate", "none"}:
+            raise ValueError("unsupported NPZ compression policy")
+        writer(stream, **{name: np.asarray(value) for name, value in arrays.items()})
         stream.flush()
         os.fsync(stream.fileno())
     with np.load(temporary, allow_pickle=False) as observed:
@@ -256,12 +259,13 @@ def _parameter_names() -> list[str]:
 
 
 def _core_identity(config: Mapping[str, Any], physics: Mapping[str, Any],
-                   profile: str, bridge_hash: str) -> dict[str, Any]:
+                   profile: str, bridge_hash: str,
+                   schema_version: int = CORPUS_SCHEMA_VERSION,
+                   gpd_truth_request: Mapping[str, Any] | None = None) -> dict[str, Any]:
     settings = config["profiles"][profile]
     physics_core = deepcopy(physics)
     physics_core["theory_configuration"].pop("observable_modules", None)
-    return {
-        "representation": config["representation"],
+    result = {
         "parameter_count": int(settings["native_parameter_count"]),
         "parameter_seed": int(config["seeds"]["native_parameters"]),
         "parameter_names": _parameter_names(),
@@ -273,6 +277,16 @@ def _core_identity(config: Mapping[str, Any], physics: Mapping[str, Any],
         "physics": physics_core,
         "bridge_sha256": bridge_hash,
     }
+    if schema_version == 1:
+        result["representation"] = config["representation"]
+    else:
+        result.update({
+            "generator_family": "dd",
+            "generator_representation": config["representation"],
+            "generator_prior_id": "full_independent_dd_uniform_v1",
+            "gpd_truth_request": deepcopy(gpd_truth_request),
+        })
+    return result
 
 
 def _observable_metadata(config: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
@@ -280,7 +294,8 @@ def _observable_metadata(config: Mapping[str, Any]) -> dict[str, dict[str, Any]]
 
 
 def create_corpus(*, corpus: Path, bridge: Path, configuration_path: Path,
-                  profile: str, shard_size: int = DEFAULT_SHARD_SIZE) -> dict[str, Any]:
+                  profile: str, shard_size: int = DEFAULT_SHARD_SIZE,
+                  gpd_truth_request_path: Path | None = None) -> dict[str, Any]:
     """Freeze a corpus definition without performing a native calculation."""
 
     if corpus.exists():
@@ -294,12 +309,6 @@ def create_corpus(*, corpus: Path, bridge: Path, configuration_path: Path,
     physics = json.loads(physics_path.read_text(encoding="utf-8"))
     bridge_path = bridge.resolve(strict=True)
     bridge_hash = sha256(bridge_path)
-    core = _core_identity(config, physics, profile, bridge_hash)
-    core_hash = hashlib.sha256(canonical(core).encode()).hexdigest()
-    corpus.mkdir(parents=True)
-    (corpus / "configuration").mkdir()
-    _atomic_json(corpus / "configuration" / "workflow.json", config)
-    _atomic_json(corpus / "configuration" / "physics.json", physics)
     capabilities = subprocess.run(
         [str(bridge_path), "--capabilities"], text=True,
         capture_output=True, check=False,
@@ -309,6 +318,43 @@ def create_corpus(*, corpus: Path, bridge: Path, configuration_path: Path,
             f"bridge capabilities failed: {capabilities.stderr.strip()}"
         )
     backend = json.loads(capabilities.stdout)
+    if gpd_truth_request_path is None:
+        raise ValueError(
+            "every new schema-2 master corpus requires canonical GPD truth; "
+            "provide --gpd-truth-request or project/gpd_truth.json"
+        )
+    from extract_dvcs_cff.contracts import validate_gpd_truth_request
+
+    gpd_truth_request = validate_gpd_truth_request(json.loads(
+        gpd_truth_request_path.resolve(strict=True).read_text(encoding="utf-8")
+    ))
+    requested_q0 = float(gpd_truth_request["scale"]["Q0_squared_GeV2"])
+    configured_q0 = float(physics["input_scale"]["Q0_squared"]["value"])
+    if requested_q0 != configured_q0:
+        raise ValueError(
+            "GPD truth input scale differs from the native generator input scale"
+        )
+    if gpd_truth_request["generator_representation"] == "declared_by_master_corpus":
+        gpd_truth_request["generator_representation"] = config["representation"]
+    elif gpd_truth_request["generator_representation"] != config["representation"]:
+        raise ValueError("GPD truth generator representation differs from corpus")
+    native_truth = backend.get("capabilities", {}).get(
+        "canonical_gpd_truth_v1", {}
+    )
+    if native_truth.get("available") is not True:
+        raise RuntimeError(
+            "native bridge lacks canonical_gpd_truth_v1: "
+            + str(native_truth.get("reason", "capability not reported"))
+        )
+    core = _core_identity(
+        config, physics, profile, bridge_hash,
+        gpd_truth_request=gpd_truth_request,
+    )
+    core_hash = hashlib.sha256(canonical(core).encode()).hexdigest()
+    corpus.mkdir(parents=True)
+    (corpus / "configuration").mkdir()
+    _atomic_json(corpus / "configuration" / "workflow.json", config)
+    _atomic_json(corpus / "configuration" / "physics.json", physics)
     _atomic_json(corpus / "backend_provenance.json", backend)
     count = int(core["parameter_count"])
     manifest = {
@@ -317,6 +363,7 @@ def create_corpus(*, corpus: Path, bridge: Path, configuration_path: Path,
         "corpus_name": corpus.name,
         "corpus_root": str(corpus.resolve()),
         "core_identity_sha256": core_hash,
+        "master_corpus_id": f"master-corpus-{core_hash}",
         "core_identity": core,
         "profile_source": profile,
         "shard_size": int(shard_size),
@@ -326,6 +373,18 @@ def create_corpus(*, corpus: Path, bridge: Path, configuration_path: Path,
         "observable_metadata": deepcopy(ADMITTED_OBSERVABLE_METADATA),
         "core_shards": [],
         "truth": None,
+        "gpd_truth": {
+            "status": "planned", "request": gpd_truth_request,
+            "coordinates": gpd_truth_request["coordinates"],
+            "coordinate_table_sha256": gpd_truth_request[
+                "coordinate_table_sha256"
+            ],
+            "value_shape": [count, len(gpd_truth_request["coordinates"])],
+            "dtype": gpd_truth_request["dtype"],
+            "compression": gpd_truth_request["compression"],
+            "status_mask": True, "shards": [],
+            "native_adapter_capability": "canonical_gpd_truth_v1",
+        },
         "rejected_candidate_count": 0,
         "surrogate_used": False,
         "split_roles_stored_in_corpus": False,
@@ -390,6 +449,52 @@ def _generate_truth(*, corpus: Path, client: NativeCache,
     return {"core": core_record, "observables": observable_records}
 
 
+def _generate_gpd_truth_shard(
+    *, corpus: Path, client: NativeCache, shard_index: int,
+    group_index: np.ndarray, parameters: np.ndarray,
+    config: Mapping[str, Any], physics: Mapping[str, Any],
+    truth_request: Mapping[str, Any], show_progress: bool | None,
+    force: bool,
+) -> dict[str, Any]:
+    native = _parallel_native_gpd_truth_evaluation(
+        client=client, parameters=parameters, config=config, physics=physics,
+        truth_request=truth_request,
+        native_workers=config["runtime"]["native_workers"],
+        description=f"GPD truth shard {shard_index + 1}",
+        show_progress=show_progress, force=force,
+    )
+    dtype = np.dtype(truth_request["dtype"])
+    values = native.values.astype(dtype, copy=False)
+    status_mask = native.status_mask.astype(bool, copy=False)
+    path = corpus / "gpd_truth" / "shards" / f"shard-{shard_index:06d}.npz"
+    record = _atomic_npz(
+        path, compression=truth_request["compression"],
+        group_index=group_index, values=values, status_mask=status_mask,
+    )
+    record["path"] = _shard_relative(path, corpus)
+    record["shard_index"] = shard_index
+    record["group_index_start"] = int(group_index[0])
+    record["group_index_stop_exclusive"] = int(group_index[-1] + 1)
+    record["valid_value_count"] = int(np.count_nonzero(status_mask))
+    record["invalid_value_count"] = int(
+        status_mask.size - np.count_nonzero(status_mask)
+    )
+    record["native_execution"] = {
+        "worker_resolution": native.worker_resolution,
+        "chunk_size": native.chunk_size,
+        "task_count": native.task_count,
+    }
+    evidence = _archive_native_cache(
+        client.cache_root,
+        corpus / "evidence" / "gpd_truth" /
+        f"shard-{shard_index:06d}-native.tar.gz",
+    )
+    if evidence is not None:
+        evidence["path"] = _shard_relative(Path(evidence["path"]), corpus)
+        record["native_evidence"] = evidence
+    return record
+
+
 def generate_corpus(*, corpus: Path, bridge: Path,
                     requested_observables: Sequence[str] | None = None,
                     show_progress: bool | None = None,
@@ -413,8 +518,8 @@ def generate_corpus(*, corpus: Path, bridge: Path,
 
     manifest_path = corpus / "corpus.json"
     manifest = _load_manifest(manifest_path)
-    if manifest["schema_version"] != CORPUS_SCHEMA_VERSION:
-        raise RuntimeError("unsupported corpus schema")
+    if manifest["schema_version"] not in {1, CORPUS_SCHEMA_VERSION}:
+        raise RuntimeError("unsupported master corpus schema")
     config_path = corpus / manifest["configuration"]
     physics_path = corpus / manifest["physics_configuration"]
     config = load_configuration(config_path)
@@ -439,7 +544,16 @@ def generate_corpus(*, corpus: Path, bridge: Path,
     ):
         raise RuntimeError("corpus manifest contains invalid core shard indices")
     core_complete = len(existing_indices) == shard_count
-    if core_complete and not missing:
+    gpd_truth = manifest.get("gpd_truth")
+    if int(manifest["schema_version"]) == CORPUS_SCHEMA_VERSION and not isinstance(
+        gpd_truth, dict
+    ):
+        raise RuntimeError("schema-2 master corpus is missing required GPD truth")
+    gpd_complete = int(manifest["schema_version"]) == 1 or (
+        gpd_truth.get("status") == "complete"
+        and len(gpd_truth.get("shards", ())) == shard_count
+    )
+    if core_complete and gpd_complete and not missing:
         return {
             "status": "complete_cache_hit",
             "corpus": manifest["corpus_name"],
@@ -571,6 +685,16 @@ def generate_corpus(*, corpus: Path, bridge: Path,
                     name, {"metadata": metadata[name], "shards": []}
                 )
                 extension["shards"].append(observable_record)
+            if int(manifest["schema_version"]) == CORPUS_SCHEMA_VERSION:
+                gpd_record = _generate_gpd_truth_shard(
+                    corpus=corpus, client=client, shard_index=shard_index,
+                    group_index=group_index, parameters=parameters,
+                    config=config, physics=physics,
+                    truth_request=manifest["gpd_truth"]["request"],
+                    show_progress=show_progress, force=force_native,
+                )
+                manifest["gpd_truth"]["shards"].append(gpd_record)
+                manifest["gpd_truth"]["status"] = "partial"
             rejection_path = (
                 corpus / "rejections" / f"shard-{shard_index:06d}.json"
             )
@@ -591,6 +715,10 @@ def generate_corpus(*, corpus: Path, bridge: Path,
                     "shard_index", Path(record["path"]).stem.split("-")[-1]
                 ))
             )
+        if int(manifest["schema_version"]) == CORPUS_SCHEMA_VERSION:
+            manifest["gpd_truth"]["shards"].sort(
+                key=lambda record: int(record["shard_index"])
+            )
         manifest = _write_manifest(manifest_path, manifest)
         core_complete = len(manifest["core_shards"]) == shard_count
         if not core_complete:
@@ -603,6 +731,35 @@ def generate_corpus(*, corpus: Path, bridge: Path,
                 "manifest_sha256": manifest["manifest_sha256"],
             }
         missing = []
+
+    # Resume or repair a schema-2 campaign whose core shard was committed by
+    # an earlier generator before its corresponding function-truth shard.
+    if int(manifest["schema_version"]) == CORPUS_SCHEMA_VERSION:
+        present = {
+            int(record["shard_index"])
+            for record in manifest["gpd_truth"]["shards"]
+        }
+        selected = [
+            record for record in manifest["core_shards"]
+            if int(record["shard_index"]) not in present
+        ]
+        for core_record in selected:
+            shard_index = int(core_record["shard_index"])
+            with np.load(corpus / core_record["path"], allow_pickle=False) as arrays:
+                group_index = arrays["group_index"]
+                parameters = arrays["native_parameters"]
+            manifest["gpd_truth"]["shards"].append(_generate_gpd_truth_shard(
+                corpus=corpus, client=client, shard_index=shard_index,
+                group_index=group_index, parameters=parameters,
+                config=config, physics=physics,
+                truth_request=manifest["gpd_truth"]["request"],
+                show_progress=show_progress, force=force_native,
+            ))
+            manifest["gpd_truth"]["status"] = "partial"
+            manifest["gpd_truth"]["shards"].sort(
+                key=lambda record: int(record["shard_index"])
+            )
+            manifest = _write_manifest(manifest_path, manifest)
 
     # Appending an observable replays only that native observable for the
     # immutable core parameters. CFF equality proves the same upstream route.
@@ -684,6 +841,10 @@ def generate_corpus(*, corpus: Path, bridge: Path,
         manifest["available_observables"][name] = extension
         manifest = _write_manifest(manifest_path, manifest)
 
+    if int(manifest["schema_version"]) == CORPUS_SCHEMA_VERSION:
+        if len(manifest["gpd_truth"]["shards"]) != shard_count:
+            raise RuntimeError("canonical GPD truth shards are incomplete")
+        manifest["gpd_truth"]["status"] = "complete"
     manifest["status"] = "complete"
     manifest = _write_manifest(manifest_path, manifest)
     for directory in (client.cache_root, client.cache_root.parent):
@@ -727,7 +888,7 @@ def plan_corpus(*, corpus: Path, requested_observables: Sequence[str]) -> dict[s
 
 
 def assert_corpus_compatible(*, corpus: Path, configuration_path: Path,
-                             bridge: Path) -> dict[str, Any]:
+                             bridge: Path | None = None) -> dict[str, Any]:
     """Require unchanged GPD physics, parameters, kinematics, and backend."""
 
     manifest = _load_manifest(corpus / "corpus.json")
@@ -735,8 +896,18 @@ def assert_corpus_compatible(*, corpus: Path, configuration_path: Path,
     profile = manifest["profile_source"]
     physics_path = _physics_path(configuration_path, config)
     physics = json.loads(physics_path.read_text(encoding="utf-8"))
+    stored_bridge_hash = str(manifest["core_identity"]["bridge_sha256"])
+    bridge_hash = (
+        sha256(bridge.resolve(strict=True)) if bridge is not None
+        else stored_bridge_hash
+    )
     identity = _core_identity(
-        config, physics, profile, sha256(bridge.resolve(strict=True))
+        config, physics, profile, bridge_hash,
+        int(manifest["schema_version"]),
+        (
+            manifest.get("gpd_truth", {}).get("request")
+            if isinstance(manifest.get("gpd_truth"), dict) else None
+        ),
     )
     observed = hashlib.sha256(canonical(identity).encode()).hexdigest()
     if observed != manifest["core_identity_sha256"]:
@@ -752,6 +923,11 @@ def verify_corpus(*, corpus: Path, deep: bool = False,
     """Verify manifest structure and optionally every shard byte and array."""
 
     manifest = _load_manifest(corpus / "corpus.json")
+    if int(manifest.get("schema_version", -1)) not in {1, CORPUS_SCHEMA_VERSION}:
+        raise RuntimeError(
+            "unsupported master corpus schema; supported historical/current "
+            f"schemas are 1 and {CORPUS_SCHEMA_VERSION}"
+        )
     expected_shards = int(manifest["shard_count"])
     completed_shards = len(manifest["core_shards"])
     core_indices = [
@@ -783,6 +959,27 @@ def verify_corpus(*, corpus: Path, deep: bool = False,
         if extension_indices != core_indices:
             raise RuntimeError("observable extension shard indices differ from core")
         records.extend(extension["shards"])
+    gpd_truth = manifest.get("gpd_truth")
+    if int(manifest["schema_version"]) == CORPUS_SCHEMA_VERSION:
+        if not isinstance(gpd_truth, dict):
+            raise RuntimeError("schema-2 master corpus lacks canonical GPD truth")
+        if not gpd_truth.get("coordinates") or not isinstance(
+            gpd_truth.get("request"), dict
+        ):
+            raise RuntimeError("canonical GPD truth metadata is incomplete")
+        gpd_records = gpd_truth.get("shards", [])
+        required_shards = completed_shards if allow_partial else expected_shards
+        if len(gpd_records) != required_shards:
+            raise RuntimeError("canonical GPD truth shards are incomplete")
+        gpd_indices = [int(record["shard_index"]) for record in gpd_records]
+        if gpd_indices != core_indices:
+            raise RuntimeError("GPD truth shard indices differ from core")
+        expected_status = (
+            "complete" if completed_shards == expected_shards else "partial"
+        )
+        if gpd_truth.get("status") != expected_status:
+            raise RuntimeError("canonical GPD truth status is inconsistent")
+        records.extend(gpd_records)
     if manifest["truth"] is not None:
         records.append(manifest["truth"]["core"])
         records.extend(manifest["truth"]["observables"].values())
@@ -807,6 +1004,17 @@ def verify_corpus(*, corpus: Path, deep: bool = False,
                         raise RuntimeError(f"array dtype mismatch in {path}")
                 if "group_index" in arrays.files and "native_parameters" in arrays.files:
                     seen.extend(int(value) for value in arrays["group_index"])
+                if {"group_index", "values", "status_mask"}.issubset(arrays.files):
+                    values = arrays["values"]
+                    status_mask = arrays["status_mask"]
+                    if values.shape != status_mask.shape:
+                        raise RuntimeError(f"GPD truth value/mask shape mismatch in {path}")
+                    if values.shape[1] != len(gpd_truth["coordinates"]):
+                        raise RuntimeError(f"GPD truth coordinate width mismatch in {path}")
+                    if status_mask.dtype != np.dtype(bool):
+                        raise RuntimeError(f"GPD truth status mask must be boolean in {path}")
+                    if not np.all(np.isfinite(values)):
+                        raise RuntimeError(f"GPD truth shard contains non-finite storage in {path}")
         verified_files += 1
     for evidence in evidence_records:
         path = corpus / evidence["path"]
@@ -845,6 +1053,9 @@ def verify_corpus(*, corpus: Path, deep: bool = False,
         "shard_count": expected_shards,
         "parameter_count": manifest["core_identity"]["parameter_count"],
         "observable_count": len(manifest["available_observables"]),
+        "gpd_truth_point_count": (
+            len(gpd_truth["coordinates"]) if isinstance(gpd_truth, dict) else 0
+        ),
     }
 
 
@@ -977,6 +1188,11 @@ def merge_corpora(*, corpora: Sequence[Path], destination: Path,
         )
     )
     reference_observables = list(reference["available_observables"])
+    reference_gpd = reference.get("gpd_truth")
+    if int(reference["schema_version"]) == CORPUS_SCHEMA_VERSION and not isinstance(
+        reference_gpd, dict
+    ):
+        raise RuntimeError("schema-2 corpus shard batch lacks canonical GPD truth")
     if reference["truth"] is None:
         raise RuntimeError("corpus shard batch is missing truth data")
 
@@ -984,6 +1200,7 @@ def merge_corpora(*, corpora: Sequence[Path], destination: Path,
     combined_observables: dict[str, dict[int, dict[str, Any]]] = {
         name: {} for name in reference_observables
     }
+    combined_gpd: dict[int, dict[str, Any]] = {}
     shard_sources: dict[int, int] = {}
     for source_index, (source, manifest) in enumerate(zip(sources, manifests)):
         observed_identity = {field: manifest[field] for field in identity_fields}
@@ -991,6 +1208,20 @@ def merge_corpora(*, corpora: Sequence[Path], destination: Path,
             raise RuntimeError("corpus shard batch identity mismatch")
         if list(manifest["available_observables"]) != reference_observables:
             raise RuntimeError("corpus shard batch observable mismatch")
+        observed_gpd = manifest.get("gpd_truth")
+        if isinstance(reference_gpd, dict):
+            if not isinstance(observed_gpd, dict):
+                raise RuntimeError("corpus shard batch GPD truth mismatch")
+            gpd_metadata_keys = (
+                "request", "coordinates", "coordinate_table_sha256",
+                "value_shape", "dtype", "compression", "status_mask",
+                "native_adapter_capability",
+            )
+            if any(
+                observed_gpd.get(key) != reference_gpd.get(key)
+                for key in gpd_metadata_keys
+            ):
+                raise RuntimeError("corpus shard batch GPD truth metadata mismatch")
         if json.loads((source / manifest["configuration"]).read_text()) != reference_configuration:
             raise RuntimeError("corpus shard batch workflow configuration mismatch")
         if json.loads((source / manifest["physics_configuration"]).read_text()) != reference_physics:
@@ -1016,6 +1247,10 @@ def merge_corpora(*, corpora: Sequence[Path], destination: Path,
             for name in reference_observables:
                 combined_observables[name][shard_index] = deepcopy(
                     manifest["available_observables"][name]["shards"][position]
+                )
+            if isinstance(reference_gpd, dict):
+                combined_gpd[shard_index] = deepcopy(
+                    observed_gpd["shards"][position]
                 )
 
     shard_count = int(reference["shard_count"])
@@ -1052,6 +1287,8 @@ def merge_corpora(*, corpora: Sequence[Path], destination: Path,
             copy_record(source, combined_core[shard_index])
             for name in reference_observables:
                 copy_record(source, combined_observables[name][shard_index])
+            if isinstance(reference_gpd, dict):
+                copy_record(source, combined_gpd[shard_index])
             rejection = Path("rejections") / f"shard-{shard_index:06d}.json"
             rejection_target = destination / rejection
             if rejection_target.exists() or rejection_target.is_symlink():
@@ -1077,6 +1314,12 @@ def merge_corpora(*, corpora: Sequence[Path], destination: Path,
             }
             for name in reference_observables
         }
+        if isinstance(reference_gpd, dict):
+            merged["gpd_truth"] = deepcopy(reference_gpd)
+            merged["gpd_truth"]["status"] = "complete"
+            merged["gpd_truth"]["shards"] = [
+                combined_gpd[index] for index in range(shard_count)
+            ]
         merged["rejected_candidate_count"] = sum(
             int(manifest["rejected_candidate_count"]) for manifest in manifests
         )
@@ -1161,7 +1404,15 @@ def create_selection(*, corpus: Path, selection_path: Path, profile: str,
         },
         "k_fold_validation": False,
     }
-    return _write_manifest(selection_path, selection)
+    selected = _write_manifest(selection_path, selection)
+    identity_payload = {
+        key: value for key, value in selected.items()
+        if key not in {"manifest_sha256", "selection_name"}
+    }
+    selected["selection_id"] = "selection-" + hashlib.sha256(
+        canonical(identity_payload).encode()
+    ).hexdigest()
+    return _write_manifest(selection_path, selected)
 
 
 def _load_exact_arrays(corpus: Path, manifest: Mapping[str, Any],
@@ -1214,7 +1465,7 @@ def _load_exact_arrays(corpus: Path, manifest: Mapping[str, Any],
 
 def materialize_selection(*, corpus: Path, selection_path: Path,
                           configuration_path: Path, workspace: Path,
-                          profile: str, bridge: Path,
+                          profile: str, bridge: Path | None = None,
                           workers: int | str = "all_available",
                           show_progress: bool | None = None) -> dict[str, Any]:
     """Serialize realization publication and reuse an identical result.
@@ -1248,7 +1499,7 @@ def materialize_selection(*, corpus: Path, selection_path: Path,
 
 def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
                                   configuration_path: Path, workspace: Path,
-                                  profile: str, bridge: Path,
+                                  profile: str, bridge: Path | None = None,
                                   workers: int | str = "all_available",
                                   show_progress: bool | None = None) -> dict[str, Any]:
     """Build deterministic neural tensors from clean exact corpus groups."""
@@ -1262,6 +1513,9 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
 
     verification = verify_corpus(corpus=corpus, deep=False)
     manifest = _load_manifest(corpus / "corpus.json")
+    bridge_hash = str(manifest["core_identity"]["bridge_sha256"])
+    if bridge is not None and sha256(bridge.resolve(strict=True)) != bridge_hash:
+        raise RuntimeError("bridge hash differs from the immutable master corpus")
     selection = _load_manifest(selection_path)
     if selection["corpus_name"] != manifest["corpus_name"]:
         raise RuntimeError("selection references another corpus")
@@ -1301,7 +1555,7 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
             configuration_path
         ),
         "profile": profile,
-        "bridge_sha256": sha256(bridge.resolve(strict=True)),
+        "bridge_sha256": bridge_hash,
         "real_data": False,
         "synthetic_split_policy": (
             "native_parameter_grouped_train_validation_test_v1"
@@ -1332,7 +1586,7 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
             "configuration_sha256": scientific_configuration_sha256(
                 configuration_path
             ),
-            "bridge_sha256": sha256(bridge.resolve(strict=True)),
+            "bridge_sha256": bridge_hash,
             "realization_schema_version": REALIZATION_SCHEMA_VERSION,
         }
         observed_identity = {
@@ -1376,6 +1630,12 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
             and complete_files
             and not any(output.glob("*.partial"))
         ):
+            from extract_dvcs_cff.contracts import publish_layered_materialization
+
+            layered = publish_layered_materialization(
+                workspace=workspace, master_corpus_manifest=manifest,
+                selection_manifest=selection, configuration=config,
+            )
             _atomic_json(workspace / "materialization_progress.json", {
                 "schema_version": 1,
                 "phase": "complete",
@@ -1391,6 +1651,7 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
                 "context_count": int(
                     existing_arrays["arrays"]["contexts"]["shape"][0]
                 ),
+                **layered,
             }
     parameters, native_predictions, native_cffs = _load_exact_arrays(
         corpus, manifest, observable_names, show_progress
@@ -1667,7 +1928,7 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
         "configuration_sha256": scientific_configuration_sha256(
             configuration_path
         ),
-        "bridge_sha256": sha256(bridge.resolve(strict=True)),
+        "bridge_sha256": bridge_hash,
         "realization_schema_version": REALIZATION_SCHEMA_VERSION,
     })
     _atomic_json(output / "generation_metrics.json", {
@@ -1719,7 +1980,7 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
         "seed": config["seeds"]["pseudodata"],
         "corpus_manifest_sha256": manifest["manifest_sha256"],
         "selection_manifest_sha256": selection["manifest_sha256"],
-        "backend_bridge_sha256": sha256(bridge.resolve(strict=True)),
+        "backend_bridge_sha256": bridge_hash,
         "analysis_order_label": None,
     })
     _atomic_json(output / "invalid_simulation_map.json", {
@@ -1746,6 +2007,12 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
         "completed": 1, "total": 1, "status": "materialized",
         "workers": materialization_workers,
     })
+    from extract_dvcs_cff.contracts import publish_layered_materialization
+
+    layered = publish_layered_materialization(
+        workspace=workspace, master_corpus_manifest=manifest,
+        selection_manifest=selection, configuration=config,
+    )
     return {
         "status": "materialized",
         "native_called": False,
@@ -1753,4 +2020,5 @@ def _materialize_selection_locked(*, corpus: Path, selection_path: Path,
         "selection_manifest_sha256": selection["manifest_sha256"],
         "context_count": len(theta_physical),
         "materialization_workers": materialization_workers,
+        **layered,
     }

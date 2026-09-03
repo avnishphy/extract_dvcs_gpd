@@ -227,7 +227,7 @@ observables are used only to generate training pairs and reevaluate samples.
 
 The release default is a three-layer 128-wide point network, a two-layer
 128-wide dataset network, 96 embedding features, and a zuko MAF with 96 hidden
-features, six transforms, and eight bins. Training uses batch size 256,
+features and six MAF transforms. Training uses batch size 256,
 learning rate $5\times10^{-4}$, and a 10% internal-validation fraction.
 These values are frozen for the release campaign, not asserted optimal.
 

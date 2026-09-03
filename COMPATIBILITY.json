@@ -1,10 +1,15 @@
 {
   "schema_version": 1,
-  "distribution_version": "0.2.0",
+  "distribution_version": "0.3.0",
   "runtime_package": "extract-dvcs-cff",
   "runtime_version": "0.9.0",
   "partons_bridge_schema": 1,
-  "experiment_schema": 8,
-  "compatible_experiment_schemas": [7, 8],
+  "experiment_schema": 9,
+  "compatible_experiment_schemas": [7, 8, 9],
+  "master_corpus_schema": 2,
+  "compatible_master_corpus_schemas": [1, 2],
+  "pseudodata_realization_schema": 3,
+  "model_view_schema": 1,
+  "result_bundle_schema": 2,
   "upstream_commit": "255b8f79738681b4cb0c8dc2174a111e9f6fcb46"
 }

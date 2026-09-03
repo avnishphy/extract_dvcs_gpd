@@ -203,7 +203,7 @@
             "point_mask"
         ],
         "global_features": [
-            "representation_is_full_independent_four_gpd_flavor_dd",
+            "physics_backend_is_partons",
             "q0_squared_GeV2_over_1",
             "coefficient_function_is_lo",
             "evolution_is_configured",
@@ -226,7 +226,6 @@
         "point_layer_norm": false,
         "flow_hidden_features": 96,
         "num_transforms": 6,
-        "num_bins": 8,
         "z_score_theta": "independent",
         "z_score_x": "none",
         "training_batch_size": 256,
@@ -279,11 +278,6 @@
                 4,
                 6,
                 8
-            ],
-            "num_bins": [
-                6,
-                8,
-                10
             ],
             "training_batch_size": [
                 128,

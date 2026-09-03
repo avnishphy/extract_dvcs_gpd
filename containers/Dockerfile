@@ -9,9 +9,8 @@ ARG APFELXX_COMMIT=27deaec493d95bad0686b3b1c91fbbc910c891ff
 ARG ELEMENTARY_COMMIT=0133fc6e69872270027c37381a273893f7841b42
 ARG NUMA_COMMIT=f184ee75f1d61b380e522d38ba48fbcbe9d78ae5
 ARG PARTONS_EXAMPLE_COMMIT=7ca59c36634dce411643e0846b495fcf0690e545
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && \
-    echo "APT::Snapshot \"${UBUNTU_SNAPSHOT}\";" > /etc/apt/apt.conf.d/50snapshot && \
-    apt-get update && apt-get install -y --no-install-recommends \
+COPY scripts/install-system-packages.sh /usr/local/sbin/dvcs-install-system-packages
+RUN /bin/sh /usr/local/sbin/dvcs-install-system-packages "${UBUNTU_SNAPSHOT}" \
     curl git build-essential gfortran cmake pkg-config autoconf \
     automake libtool python3 python3-dev python3-venv locales libboost-json1.83-dev \
     libcln-dev libsfml-dev libeigen3-dev libxml2-dev && \
@@ -67,10 +66,13 @@ RUN ${PREFIX}/venv/bin/pip install --no-cache-dir --retries 10 --timeout 120 --i
       --constraint /src/extract-dvcs-gpd/requirements/runtime-constraints.txt '/src/extract-dvcs-gpd[neural]' && \
     ${PREFIX}/venv/bin/pip check && mkdir -p /cache/partons-logs && \
     ${PREFIX}/bin/partons_bridge --self-test && \
+    ${PREFIX}/bin/partons_bridge --capabilities >/dev/null && \
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/src/extract-dvcs-gpd/src \
+      ${PREFIX}/venv/bin/python -m unittest tests.test_architecture_contracts && \
     ${PREFIX}/venv/bin/python -c 'import matplotlib, numpy, optuna, particle, scipy, sbi, torch, yaml, zuko'
 
 FROM ubuntu:24.04@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90 AS runtime
-ARG IMAGE_VERSION=0.2.0
+ARG IMAGE_VERSION=0.3.0
 ARG IMAGE_SOURCE
 ARG IMAGE_REVISION=unknown
 LABEL org.opencontainers.image.title="extract-dvcs-gpd" \
@@ -79,9 +81,8 @@ LABEL org.opencontainers.image.title="extract-dvcs-gpd" \
       org.opencontainers.image.revision="${IMAGE_REVISION}"
 ARG DEBIAN_FRONTEND=noninteractive
 ARG UBUNTU_SNAPSHOT=20260801T000000Z
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && \
-    echo "APT::Snapshot \"${UBUNTU_SNAPSHOT}\";" > /etc/apt/apt.conf.d/50snapshot && \
-    apt-get update && apt-get install -y --no-install-recommends \
+COPY scripts/install-system-packages.sh /usr/local/sbin/dvcs-install-system-packages
+RUN /bin/sh /usr/local/sbin/dvcs-install-system-packages "${UBUNTU_SNAPSHOT}" \
     libboost-json1.83.0 libcln6 libsfml-system2.6 \
     libxml2 libgfortran5 python3 locales && \
     echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen && locale-gen && \

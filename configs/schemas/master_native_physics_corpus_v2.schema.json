@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/extract_dvcs_gpd/master_native_physics_corpus_v2.schema.json",
+  "title": "Master native physics corpus v2",
+  "type": "object",
+  "required": ["schema_version", "master_corpus_id", "core_identity", "core_shards", "gpd_truth", "native_backend_provenance"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "master_corpus_id": {"type": "string", "pattern": "^master-corpus-[0-9a-f]{64}$"},
+    "core_identity": {"type": "object"},
+    "core_shards": {"type": "array"},
+    "gpd_truth": {"$ref": "#/$defs/gpdTruth"},
+    "native_backend_provenance": {"type": "string"}
+  },
+  "$defs": {
+    "gpdTruth": {
+      "type": "object",
+      "required": ["status", "request", "coordinates", "coordinate_table_sha256", "value_shape", "dtype", "compression", "status_mask", "shards", "native_adapter_capability"],
+      "properties": {
+        "status": {"enum": ["planned", "partial", "complete"]},
+        "request": {"type": "object"},
+        "coordinates": {"type": "array", "minItems": 1},
+        "coordinate_table_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "value_shape": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 1}},
+        "dtype": {"enum": ["float32", "float64"]},
+        "compression": {"enum": ["npz_deflate", "none"]},
+        "status_mask": {"const": true},
+        "shards": {"type": "array"},
+        "native_adapter_capability": {"const": "canonical_gpd_truth_v1"}
+      }
+    }
+  }
+}

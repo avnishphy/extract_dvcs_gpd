@@ -17,7 +17,7 @@ holdout_design="${18:-none}"
 lhapdf_archive="${19:-none}"
 holdout_model="${20:-none}"
 
-[[ "${stage}" =~ ^(selection|materialize|optimize|train|evaluate|compare|holdout|plot)$ ]] || {
+[[ "${stage}" =~ ^(selection|materialize|optimize|train|evaluate|exact-reevaluate|compare|holdout|plot)$ ]] || {
     echo "unsupported analysis stage: ${stage}" >&2
     exit 64
 }
@@ -216,6 +216,8 @@ case "${stage}" in
         payload=(train "${project}" --profile "${profile}" --no-progress) ;;
     evaluate)
         payload=(evaluate "${project}" --profile "${profile}" --no-progress) ;;
+    exact-reevaluate)
+        payload=(exact-reevaluate "${project}" --profile "${profile}" --no-progress) ;;
     compare)
         payload=(compare "${project}" --profile "${profile}" --no-progress) ;;
     holdout)

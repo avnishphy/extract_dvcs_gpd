@@ -1,5 +1,12 @@
 # Reusable PARTONS corpus and neural data selections
 
+The **master native physics corpus** is architecture-neutral. A model or noise
+change creates a new model view or pseudodata realization, not a new corpus.
+Schema-1 corpora remain DD-compatible; neural-GPD views require complete
+schema-2 canonical GPD-truth shards. New schema-2 corpora require them. Use
+`corpus-preflight` with the project truth request to estimate files/storage and
+report coverage without PARTONS.
+
 This is the user and technical contract for reusing expensive exact PARTONS
 calculations. It explains what is stored, what is generated later, how data
 leakage is prevented, and how to add an observable without recomputing the
@@ -12,7 +19,8 @@ The framework deliberately separates three objects:
 1. **Corpus** — clean, noise-free native calculations. A parameter group is
    one 80-component DD parameter vector evaluated at every declared
    kinematic point. The corpus stores that vector, the native CFFs, and each
-   selected observable in compact atomic shards.
+   selected observable in compact atomic shards. It also stores the native GPD
+   value and validity flag at every explicitly requested function coordinate.
 2. **Selection** — immutable lists of parameter-group indices assigned to
    training, internal validation, and the locked outer test. It contains no
    physics arrays and no neural architecture.
@@ -30,6 +38,12 @@ cross-entropy estimate). The split only determines which independent groups
 may contribute to optimization, early stopping, and the final untouched
 score.
 
+The exact ordered kinematic design is also independent of the parameter-group
+split but is part of corpus identity. The proposed large-envelope design and
+its physical constraints are documented in [Pseudodata kinematic
+sampling](PSEUDODATA_KINEMATIC_SAMPLING.md). That notebook strategy remains a
+design study until its stated production-integration gates are completed.
+
 K-fold validation is intentionally absent. It would multiply 82-dimensional
 NPE training cost and complicate the untouched-test rule without fixing a
 weak simulator design. The default policy is one deterministic grouped split:
@@ -45,6 +59,11 @@ identity, review of the generation plan, and immutable group ownership.
 From the repository root, after installation, `init`, and `doctor`:
 
 ```bash
+source .dvcs/install.env
+cp configs/examples/master_corpus_gpd_truth_smoke_v1.json \
+  "$DVCS_WORKSPACE/my-study/gpd_truth.json"
+# Replace the smoke table with the reviewed production coordinates.
+./dvcs corpus-preflight my-study
 ./dvcs corpus-create my-study my-corpus --profile validation --shard-size 256
 ./dvcs corpus-plan my-study my-corpus
 ```
@@ -90,7 +109,9 @@ installed container and `user/corpora/CORPUS` in a source checkout:
 - input representation and complete GPD physics configuration;
 - input scale, evolution, flavor/mixing and shadow/stress settings;
 - exact ordered kinematics and their beam settings;
-- CFF/process configuration; and
+- CFF/process configuration;
+- exact ordered canonical GPD coordinates, dtype, compression, scale, scheme,
+  flavor basis, and interpolation policy; and
 - SHA-256 of the exact C++ bridge executable.
 
 Changing any item above requires a new corpus. In particular, a changed GPD
@@ -114,6 +135,19 @@ group_index              int64 [groups]
 native_parameters        float64 [groups, 80]
 native_cffs              float64 [groups, kinematics, 4, 2]
 ```
+
+Every schema-2 core shard has one aligned GPD-truth shard:
+
+```text
+group_index              int64 [groups]
+values                   float32|float64 [groups, requested coordinates]
+status_mask              bool [groups, requested coordinates]
+```
+
+The manifest stores the coordinate table once, rather than duplicating it in
+every shard. A native exception or non-finite result is stored as value `0`
+with `status_mask=false`; consumers must never interpret that placeholder as
+physics. See [Canonical GPD truth](CANONICAL_GPD_TRUTH.md).
 
 Each observable has independent shards containing `group_index` and
 `values[groups, kinematics]`. Files are written as compressed NPZ to a

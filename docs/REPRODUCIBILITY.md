@@ -69,7 +69,8 @@ dpkg/Python package manifests
 ## Configuration identity
 
 The public `experiment.json` is translated into canonical `.engine` files.
-Corpus creation hashes the canonical native configuration and exact bridge.
+Corpus creation hashes the canonical native configuration, exact bridge, and
+normalized canonical GPD coordinate request.
 The corpus manifest additionally inventories every atomic native shard and
 evidence archive. Selection creation binds immutable group roles to the corpus
 core identity. Corpus-backed materialization then writes
@@ -115,7 +116,7 @@ evolution behavior, basis mixing, conformal reconstruction, and shadow
 composition.
 
 A corpus is reproducible only as a complete verified object: retain
-`corpus.json`, all core/observable shards, and all declared evidence archives.
+`corpus.json`, all core/GPD/observable shards, and all declared evidence archives.
 Use `corpus-export` for transfer; its archive is deep-verified before creation,
 and import verifies the archive again. Preserve the project-local selection
 JSON separately. A corpus alone does not identify the neural data split or

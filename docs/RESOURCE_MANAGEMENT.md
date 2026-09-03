@@ -170,7 +170,8 @@ hardware/site acceptance item.
 | `materialize` | CPU + memory/storage | Affinity-limited deterministic workers; no PARTONS and no GPU. |
 | `train` | GPU preferred | CPU fallback supported; candidate members parallelize across GPUs. |
 | `optimize` | GPU preferred | Independent trials; persistent shared study. |
-| `evaluate` | mixed | Neural coverage/sampling plus CPU exact reevaluation. |
+| `evaluate` | GPU preferred | Saved-artifact neural coverage/sampling; no PARTONS. |
+| `exact-reevaluate` | CPU + memory | Explicit affinity-bounded PARTONS posterior checks. |
 | `compare` | CPU/memory | Importance calculations on saved exact corpus. |
 | `holdout` | CPU + memory | Four named-model truth requests run concurrently; later exact DD checks reuse the allocation. |
 | `plot` | small CPU/memory | Saved artifacts only. |

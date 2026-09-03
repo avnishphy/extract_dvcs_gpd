@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/extract_dvcs_gpd/model_view_v1.schema.json",
+  "title": "Model-specific view v1",
+  "type": "object",
+  "required": ["schema_version", "model_view_id", "identity", "realization_id", "model_family", "inference_method", "gpd_inference_representation", "observation_encoder", "density_estimator", "physics_backend", "arrays", "truth_fields_in_context"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "model_view_id": {"type": "string", "pattern": "^model-view-[0-9a-f]{64}$"},
+    "identity": {"type": "object"},
+    "realization_id": {"type": "string"},
+    "model_family": {"enum": ["dd_deepsets_maf", "neural_gpd_deepsets_maf"]},
+    "inference_method": {"const": "npe"},
+    "gpd_inference_representation": {"type": "string"},
+    "observation_encoder": {"const": "deepsets"},
+    "density_estimator": {"const": "maf"},
+    "density_estimator_implementation": {"const": "zuko_maf"},
+    "physics_backend": {"const": "partons"},
+    "arrays": {"type": "object"},
+    "truth_fields_in_context": {"type": "array", "maxItems": 0}
+  }
+}

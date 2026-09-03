@@ -10,6 +10,7 @@ match.
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
@@ -19,6 +20,7 @@ import os
 from pathlib import Path
 import platform
 import subprocess
+import tempfile
 import time
 from typing import Any, Mapping, Sequence
 
@@ -207,10 +209,16 @@ def scientific_configuration_sha256(path: Path) -> str:
 
 
 def write_json(path: Path, value: Any) -> None:
-    """Write a stable UTF-8 JSON record."""
+    """Atomically write a stable UTF-8 JSON record."""
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(pretty_json(value) + "\n", encoding="utf-8")
+    payload = (pretty_json(value) + "\n").encode("utf-8")
+    with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
+        temporary = Path(stream.name)
+        stream.write(payload)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
 
 
 def _exact_keys(
@@ -363,7 +371,6 @@ def load_configuration(path: Path) -> dict[str, Any]:
         "embedding_features",
         "flow_hidden_features",
         "num_transforms",
-        "num_bins",
         "training_batch_size",
     }
     _exact_keys(
@@ -619,16 +626,152 @@ class ParallelNativeResult:
     task_count: int
 
 
+@dataclass(frozen=True)
+class NativeGPDTruthResult:
+    """Canonical input-scale GPD values and per-coordinate native status."""
+
+    values: np.ndarray
+    status_mask: np.ndarray
+    cache_key: str
+    cache_hit: bool
+    bridge_sha256: str
+    request_sha256: str
+    response_sha256: str
+    elapsed_seconds: float
+    evaluation_count: int
+
+
+@dataclass(frozen=True)
+class ParallelGPDTruthResult:
+    values: np.ndarray
+    status_mask: np.ndarray
+    worker_resolution: dict[str, Any]
+    chunk_size: int
+    task_count: int
+
+
+@dataclass(frozen=True)
+class CachedBridgeResponse:
+    response: dict[str, Any]
+    cache_key: str
+    cache_hit: bool
+    request_sha256: str
+    response_sha256: str
+    elapsed_seconds: float
+
+
 class NativeCache:
     """Content-addressed client for atomic C++ bridge batches."""
 
     def __init__(self, bridge: Path, workspace: Path) -> None:
+        if os.environ.get("DVCS_DISABLE_NATIVE_EXECUTION") == "1":
+            raise RuntimeError(
+                "native execution disabled by DVCS_DISABLE_NATIVE_EXECUTION"
+            )
         self.bridge = bridge.resolve(strict=True)
         if not self.bridge.is_file():
             raise ValueError("bridge must be a regular executable file")
         self.cache_root = workspace / "cache"
         self.cache_root.mkdir(parents=True, exist_ok=True)
         self.bridge_hash = sha256(self.bridge)
+
+    def _execute_payload(
+        self, *, payload: Mapping[str, Any], operation: str,
+        evaluation_count: int, force: bool,
+    ) -> CachedBridgeResponse:
+        request_bytes = (pretty_json(payload) + "\n").encode()
+        request_hash = hashlib.sha256(request_bytes).hexdigest()
+        key = hashlib.sha256(
+            canonical({
+                "cache_schema_version": 1,
+                "bridge_sha256": self.bridge_hash,
+                "request_sha256": request_hash,
+            }).encode()
+        ).hexdigest()
+        directory = self.cache_root / key
+        request_path = directory / "request.json"
+        response_path = directory / "response.json"
+        metadata_path = directory / "metadata.json"
+        stderr_path = directory / "stderr.txt"
+        exit_path = directory / "exit_code.txt"
+
+        cache_hit = False
+        started = time.perf_counter()
+        if not force and response_path.exists() and metadata_path.exists():
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            cache_hit = bool(
+                metadata.get("bridge_sha256") == self.bridge_hash
+                and metadata.get("request_sha256") == request_hash
+                and metadata.get("response_sha256") == sha256(response_path)
+                and metadata.get("exit_code") == 0
+            )
+            if not cache_hit:
+                raise RuntimeError(
+                    f"stale or corrupt native cache entry: {directory}"
+                )
+        if not cache_hit:
+            directory.mkdir(parents=True, exist_ok=True)
+            request_path.write_bytes(request_bytes)
+            process = subprocess.run(
+                [str(self.bridge), "--input", str(request_path)],
+                text=True, capture_output=True, check=False,
+            )
+            raw_stdout_path = directory / "stdout.raw.txt"
+            raw_stdout_path.write_text(process.stdout, encoding="utf-8")
+            stderr_path.write_text(process.stderr, encoding="utf-8")
+            exit_path.write_text(f"{process.returncode}\n", encoding="utf-8")
+            if process.returncode != 0:
+                detail = ""
+                try:
+                    error_response = json.loads(process.stdout)
+                except json.JSONDecodeError:
+                    error_response = None
+                if isinstance(error_response, dict):
+                    error = error_response.get("error")
+                    if isinstance(error, dict):
+                        code = error.get("code", "unknown_native_error")
+                        message = error.get("message", "no native message")
+                        detail = f": {code}: {message}"
+                raise RuntimeError(
+                    "native bridge batch failed with exit "
+                    f"{process.returncode}{detail}; raw stdout "
+                    f"{raw_stdout_path}; stderr {stderr_path}"
+                )
+            try:
+                raw_response = json.loads(process.stdout)
+            except json.JSONDecodeError as error:
+                raise RuntimeError(
+                    "native bridge returned malformed JSON; see "
+                    f"{raw_stdout_path} and {stderr_path}"
+                ) from error
+            response_path.write_text(
+                pretty_json(raw_response) + "\n", encoding="utf-8"
+            )
+            response_hash = sha256(response_path)
+            write_json(metadata_path, {
+                "cache_schema_version": 1,
+                "bridge": str(self.bridge),
+                "bridge_sha256": self.bridge_hash,
+                "request_sha256": request_hash,
+                "response_sha256": response_hash,
+                "exit_code": process.returncode,
+                "operation": operation,
+                "evaluation_count": evaluation_count,
+                "surrogate_used": False,
+            })
+        elapsed = time.perf_counter() - started
+        response = json.loads(response_path.read_text(encoding="utf-8"))
+        if (
+            response.get("status") != "ok"
+            or response.get("operation") != operation
+            or len(response.get("evaluations", ())) != evaluation_count
+        ):
+            raise RuntimeError("native response violates the batch contract")
+        return CachedBridgeResponse(
+            response=response, cache_key=key, cache_hit=cache_hit,
+            request_sha256=request_hash,
+            response_sha256=sha256(response_path), elapsed_seconds=elapsed,
+        )
 
     def evaluate(
         self,
@@ -674,104 +817,11 @@ class NativeCache:
             "operation": operation,
             "requests": requests,
         }
-        request_bytes = (pretty_json(payload) + "\n").encode()
-        request_hash = hashlib.sha256(request_bytes).hexdigest()
-        key = hashlib.sha256(
-            canonical(
-                {
-                    "cache_schema_version": 1,
-                    "bridge_sha256": self.bridge_hash,
-                    "request_sha256": request_hash,
-                }
-            ).encode()
-        ).hexdigest()
-        directory = self.cache_root / key
-        request_path = directory / "request.json"
-        response_path = directory / "response.json"
-        metadata_path = directory / "metadata.json"
-        stderr_path = directory / "stderr.txt"
-        exit_path = directory / "exit_code.txt"
-
-        cache_hit = False
-        started = time.perf_counter()
-        if not force and response_path.exists() and metadata_path.exists():
-            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-            cache_hit = bool(
-                metadata.get("bridge_sha256") == self.bridge_hash
-                and metadata.get("request_sha256") == request_hash
-                and metadata.get("response_sha256") == sha256(response_path)
-                and metadata.get("exit_code") == 0
-            )
-            if not cache_hit:
-                raise RuntimeError(
-                    f"stale or corrupt native cache entry: {directory}"
-                )
-        if not cache_hit:
-            directory.mkdir(parents=True, exist_ok=True)
-            request_path.write_bytes(request_bytes)
-            process = subprocess.run(
-                [str(self.bridge), "--input", str(request_path)],
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            # Persist raw process evidence before parsing.  A crash, truncated
-            # JSON response, or native exception must remain auditable and may
-            # never be converted into a cache hit or a simulator fallback.
-            raw_stdout_path = directory / "stdout.raw.txt"
-            raw_stdout_path.write_text(process.stdout, encoding="utf-8")
-            stderr_path.write_text(process.stderr, encoding="utf-8")
-            exit_path.write_text(f"{process.returncode}\n", encoding="utf-8")
-            if process.returncode != 0:
-                detail = ""
-                try:
-                    error_response = json.loads(process.stdout)
-                except json.JSONDecodeError:
-                    error_response = None
-                if isinstance(error_response, dict):
-                    error = error_response.get("error")
-                    if isinstance(error, dict):
-                        code = error.get("code", "unknown_native_error")
-                        message = error.get("message", "no native message")
-                        detail = f": {code}: {message}"
-                raise RuntimeError(
-                    "native bridge batch failed with exit "
-                    f"{process.returncode}{detail}; raw stdout "
-                    f"{raw_stdout_path}; stderr {stderr_path}"
-                )
-            try:
-                raw_response = json.loads(process.stdout)
-            except json.JSONDecodeError as error:
-                raise RuntimeError(
-                    "native bridge returned malformed JSON; see "
-                    f"{raw_stdout_path} and {stderr_path}"
-                ) from error
-            response_path.write_text(
-                pretty_json(raw_response) + "\n", encoding="utf-8"
-            )
-            response_hash = sha256(response_path)
-            write_json(
-                metadata_path,
-                {
-                    "cache_schema_version": 1,
-                    "bridge": str(self.bridge),
-                    "bridge_sha256": self.bridge_hash,
-                    "request_sha256": request_hash,
-                    "response_sha256": response_hash,
-                    "exit_code": process.returncode,
-                    "operation": operation,
-                    "evaluation_count": len(requests),
-                    "surrogate_used": False,
-                },
-            )
-        elapsed = time.perf_counter() - started
-        response = json.loads(response_path.read_text(encoding="utf-8"))
-        if (
-            response.get("status") != "ok"
-            or response.get("operation") != operation
-            or len(response.get("evaluations", ())) != len(requests)
-        ):
-            raise RuntimeError("native response violates the batch contract")
+        cached = self._execute_payload(
+            payload=payload, operation=operation,
+            evaluation_count=len(requests), force=force,
+        )
+        response = cached.response
         if operation == "batch_evaluate_post_training_comparison_dvcs":
             comparison_contract = response.get("comparison_contract", {})
             if comparison_contract != {
@@ -878,12 +928,67 @@ class NativeCache:
             predictions=predictions,
             cffs=cffs,
             gpds=gpds,
-            cache_key=key,
-            cache_hit=cache_hit,
+            cache_key=cached.cache_key,
+            cache_hit=cached.cache_hit,
             bridge_sha256=self.bridge_hash,
-            request_sha256=request_hash,
-            response_sha256=sha256(response_path),
-            elapsed_seconds=elapsed,
+            request_sha256=cached.request_sha256,
+            response_sha256=cached.response_sha256,
+            elapsed_seconds=cached.elapsed_seconds,
+            evaluation_count=len(requests),
+        )
+
+    def evaluate_gpd_truth(
+        self, *, parameters: np.ndarray, config: Mapping[str, Any],
+        physics: Mapping[str, Any], truth_request: Mapping[str, Any],
+        force: bool = False,
+    ) -> NativeGPDTruthResult:
+        """Evaluate one canonical input-scale function table per parameter row."""
+
+        coordinates = list(truth_request["coordinates"])
+        if not coordinates:
+            raise ValueError("canonical GPD truth coordinates must not be empty")
+        anchor = config["kinematics"][0]
+        requests = [
+            _native_request(
+                request_id=f"gpd-theta-{index:06d}", parameters=row,
+                kinematics=anchor, physics=physics,
+                observable_names=[config["observables"][0]["id"]],
+            )
+            for index, row in enumerate(parameters)
+        ]
+        operation = "batch_evaluate_canonical_gpd_truth"
+        cached = self._execute_payload(
+            payload={
+                "schema_version": 1, "operation": operation,
+                "coordinates": coordinates, "requests": requests,
+            },
+            operation=operation, evaluation_count=len(requests), force=force,
+        )
+        values = np.zeros((len(parameters), len(coordinates)), dtype=np.float64)
+        status_mask = np.zeros_like(values, dtype=bool)
+        for parameter_index, evaluation in enumerate(cached.response["evaluations"]):
+            points = evaluation.get("result", {}).get("values", ())
+            if len(points) != len(coordinates):
+                raise RuntimeError("native canonical GPD table has wrong size")
+            for coordinate_index, point in enumerate(points):
+                if int(point.get("coordinate_index", -1)) != coordinate_index:
+                    raise RuntimeError("native canonical GPD coordinate order changed")
+                valid = point.get("valid") is True and point.get("status") == "ok"
+                status_mask[parameter_index, coordinate_index] = valid
+                if valid:
+                    value = float(point["value"])
+                    if not math.isfinite(value):
+                        raise RuntimeError("valid canonical GPD value is non-finite")
+                    values[parameter_index, coordinate_index] = value
+                elif point.get("value") is not None:
+                    raise RuntimeError("invalid canonical GPD value must be null")
+        return NativeGPDTruthResult(
+            values=values, status_mask=status_mask,
+            cache_key=cached.cache_key, cache_hit=cached.cache_hit,
+            bridge_sha256=self.bridge_hash,
+            request_sha256=cached.request_sha256,
+            response_sha256=cached.response_sha256,
+            elapsed_seconds=cached.elapsed_seconds,
             evaluation_count=len(requests),
         )
 
@@ -1137,6 +1242,74 @@ def _parallel_partitioned_native_evaluation(
         worker_resolution=worker_resolution.as_dict(),
         chunk_size=chunk_size,
         task_count=len(chunk_specs),
+    )
+
+
+def _parallel_native_gpd_truth_evaluation(
+    *, client: NativeCache, parameters: np.ndarray,
+    config: Mapping[str, Any], physics: Mapping[str, Any],
+    truth_request: Mapping[str, Any], native_workers: int | str,
+    description: str, show_progress: bool | None,
+    chunk_size: int = _NATIVE_GENERATION_CHUNK_SIZE,
+    force: bool = False,
+) -> ParallelGPDTruthResult:
+    """Evaluate canonical function truth in isolated, ordered native chunks."""
+
+    from extract_dvcs_cff.progress import progress_bar
+
+    parameters = np.asarray(parameters, dtype=np.float64)
+    if not isinstance(chunk_size, int) or isinstance(chunk_size, bool) or chunk_size < 1:
+        raise ValueError("native GPD truth chunk_size must be a positive integer")
+    chunks = [
+        (index, start, parameters[start:min(start + chunk_size, len(parameters))])
+        for index, start in enumerate(range(0, len(parameters), chunk_size))
+    ]
+    resolution = resolve_native_workers(native_workers, task_count=len(chunks))
+
+    def evaluate(specification: tuple[int, int, np.ndarray]):
+        index, start, chunk = specification
+        return index, start, chunk, client.evaluate_gpd_truth(
+            parameters=chunk, config=config, physics=physics,
+            truth_request=truth_request, force=force,
+        )
+
+    progress = progress_bar(
+        total=len(parameters), description=description, enabled=show_progress,
+        leave=False, unit="sample",
+    )
+    completed: dict[int, tuple[int, int, np.ndarray, NativeGPDTruthResult]] = {}
+    try:
+        if resolution.resolved_workers == 1:
+            for specification in chunks:
+                value = evaluate(specification)
+                completed[value[0]] = value
+                progress.update(len(value[2]))
+        else:
+            with ThreadPoolExecutor(
+                max_workers=resolution.resolved_workers,
+                thread_name_prefix="partons-gpd-truth",
+            ) as executor:
+                futures = [executor.submit(evaluate, specification)
+                           for specification in chunks]
+                for future in as_completed(futures):
+                    value = future.result()
+                    completed[value[0]] = value
+                    progress.update(len(value[2]))
+    finally:
+        progress.close()
+
+    coordinate_count = len(truth_request["coordinates"])
+    values = np.zeros((len(parameters), coordinate_count), dtype=np.float64)
+    status_mask = np.zeros_like(values, dtype=bool)
+    for index in sorted(completed):
+        _, start, chunk, result = completed[index]
+        stop = start + len(chunk)
+        values[start:stop] = result.values
+        status_mask[start:stop] = result.status_mask
+    return ParallelGPDTruthResult(
+        values=values, status_mask=status_mask,
+        worker_resolution=resolution.as_dict(), chunk_size=chunk_size,
+        task_count=len(chunks),
     )
 
 
@@ -2420,6 +2593,49 @@ def train_model(
             "one_rank_per_visible_gpu": distributed_world_size > 1,
         },
     }
+    current_artifact = workspace / "artifacts" / "current.json"
+    if current_artifact.is_file():
+        from extract_dvcs_cff.contracts import (
+            atomic_json, validate_result_bundle_manifest,
+        )
+
+        source_ids = json.loads(current_artifact.read_text(encoding="utf-8"))
+        result_bundle = {
+            "schema_version": 2,
+            "master_corpus_id": source_ids["master_corpus_id"],
+            "selection_id": source_ids["selection_id"],
+            "realization_id": source_ids["realization_id"],
+            "model_view_id": source_ids["model_view_id"],
+            "model_family": "dd_deepsets_maf",
+            "inference_method": "npe",
+            "gpd_inference_representation": "double_distribution_coordinates",
+            "observation_encoder": "deepsets",
+            "density_estimator": "maf",
+            "physics_backend": "partons",
+            "target_transforms": {
+                "identifier": "dd_uniform_probit_plus_nuisance_identity_v1"
+            },
+            "decoder": None,
+            "code_commit": os.environ.get("DVCS_CODE_COMMIT", "unrecorded"),
+            "container_identity": {
+                "image": os.environ.get("DVCS_IMAGE_ID", "unrecorded")
+            },
+            "seeds": deepcopy(config["seeds"]),
+            "hyperparameters": deepcopy(config["network"]),
+            "resource_summary": deepcopy(aggregate["training_runtime"]),
+            "validation": {
+                "selection_metric": aggregate["ensemble_selection_metric"],
+                "active_seeds": list(active_seeds),
+                "locked_outer_test_used_for_tuning": False,
+            },
+            "acceptance": {
+                "status": "training_complete_evaluation_pending",
+                "test_set_evaluated": bool(evaluate_test),
+            },
+        }
+        validate_result_bundle_manifest(result_bundle)
+        atomic_json(output / "result_bundle.json", result_bundle)
+        aggregate["result_bundle_manifest"] = "result_bundle.json"
     write_json(output / "training_summary.json", aggregate)
     finish_distributed_training()
     return aggregate
@@ -2700,13 +2916,13 @@ def stress_width_reference_diagnostic(
 
 def evaluate_model(
     *,
-    bridge: Path,
+    bridge: Path | None = None,
     configuration_path: Path,
     workspace: Path,
     profile: str,
     show_progress: bool | None = None,
 ) -> dict[str, Any]:
-    """Run held-out coverage and exact-native posterior prediction."""
+    """Evaluate saved posterior artifacts; run native physics only if explicit."""
 
     config = load_configuration(configuration_path)
     from extract_dvcs_cff.progress import progress_iter
@@ -2773,6 +2989,49 @@ def evaluate_model(
     evaluation_directory.mkdir(parents=True, exist_ok=True)
     with (evaluation_directory / "posterior_samples.npy").open("wb") as stream:
         np.save(stream, posterior_samples, allow_pickle=False)
+
+    gates = config["frozen_validation_gates"]
+    training = json.loads(
+        (workspace / "training" / "training_summary.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    if bridge is None:
+        checks = {
+            "test_density_generalizes": bool(
+                training["worst_test_minus_validation_negative_log_density"]
+                <= gates["maximum_test_nll_minus_validation_nll"]
+            ),
+            "coverage_calibrated": bool(
+                max_coverage_deviation <= gates["maximum_coverage_standard_error"]
+            ),
+        }
+        record = {
+            "schema_version": 2,
+            "status": "saved_artifact_evaluation_complete",
+            "profile": profile,
+            "native_backend_called": False,
+            "exact_reevaluation_status": "not_requested",
+            "coverage_trial_count": trial_count,
+            "posterior_samples_per_coverage_trial": trial_sample_count,
+            "coverage": coverage,
+            "maximum_coverage_deviation_in_standard_errors": max_coverage_deviation,
+            "test_scores": {
+                "mean_train_negative_log_density": training["mean_train_negative_log_density"],
+                "mean_test_negative_log_density": training["mean_test_negative_log_density"],
+                "worst_test_minus_validation_negative_log_density": training[
+                    "worst_test_minus_validation_negative_log_density"
+                ],
+            },
+            "gate_checks": checks,
+            "passed": bool(all(checks.values())),
+            "real_data_used": False,
+        }
+        write_json(evaluation_directory / "saved_evaluation_metrics.json", record)
+        return record
+
+    from extract_dvcs_cff.native_policy import assert_native_launch_allowed
+    assert_native_launch_allowed("exact_reevaluate")
 
     exact_count = int(settings["exact_reevaluation_sample_count"])
     exact_indices = np.linspace(
@@ -2887,13 +3146,7 @@ def evaluate_model(
     upper = np.quantile(predictive, 0.95, axis=0)
     predictive_coverage = float(np.mean((observed >= lower) & (observed <= upper)))
 
-    gates = config["frozen_validation_gates"]
     stress_prior_widths = shadow_width_diagnostic(posterior_samples)
-    training = json.loads(
-        (workspace / "training" / "training_summary.json").read_text(
-            encoding="utf-8"
-        )
-    )
     checks = {
         "test_density_generalizes": bool(
             training[
@@ -5322,6 +5575,68 @@ def plot_saved_results(
     """
 
     load_configuration(configuration_path)
+    saved_evaluation_path = (
+        workspace / "evaluation" / "saved_evaluation_metrics.json"
+    )
+    exact_evaluation_path = workspace / "evaluation" / "evaluation_metrics.json"
+    if not exact_evaluation_path.is_file() and saved_evaluation_path.is_file():
+        import matplotlib.pyplot as plt
+
+        training_path = workspace / "training" / "training_summary.json"
+        required_saved = (training_path, saved_evaluation_path)
+        missing_saved = [str(path) for path in required_saved if not path.is_file()]
+        if missing_saved:
+            raise RuntimeError(
+                "saved-only plot requires training and evaluate results; missing: "
+                + ", ".join(missing_saved)
+            )
+        evaluation = json.loads(saved_evaluation_path.read_text(encoding="utf-8"))
+        levels = sorted(float(level) for level in evaluation["coverage"])
+        parameter_names = list(evaluation["coverage"][str(levels[0])])
+        differences = np.asarray([
+            [
+                evaluation["coverage"][str(level)][name]["empirical_coverage"]
+                - level
+                for name in parameter_names
+            ]
+            for level in levels
+        ])
+        output = workspace / "plots"
+        output.mkdir(parents=True, exist_ok=True)
+        figure, axis = plt.subplots(figsize=(16, 4), constrained_layout=True)
+        image = axis.imshow(differences, aspect="auto", cmap="coolwarm")
+        axis.set_xticks(np.arange(len(parameter_names)), parameter_names,
+                        rotation=90, fontsize=5)
+        axis.set_yticks(np.arange(len(levels)), [f"{level:.0%}" for level in levels])
+        axis.set(xlabel="posterior coordinate", ylabel="nominal interval",
+                 title="Saved-artifact empirical coverage minus nominal coverage")
+        figure.colorbar(image, ax=axis, label="coverage difference")
+        coverage_path = output / "coverage_calibration_saved.png"
+        figure.savefig(coverage_path, dpi=160)
+        plt.close(figure)
+        record = {
+            "schema_version": 1,
+            "status": "saved_artifact_plots_complete_exact_native_not_requested",
+            "profile": profile,
+            "presentation_only": True,
+            "native_backend_called": False,
+            "neural_inference_called": False,
+            "configuration_sha256": sha256(configuration_path),
+            "input_artifacts": {
+                str(path.relative_to(workspace)): sha256(path)
+                for path in required_saved
+            },
+            "plots": {coverage_path.name: sha256(coverage_path)},
+            "plot_count": 1,
+            "scientific_gate_status": {
+                "saved_evaluation_passed": evaluation.get("passed"),
+                "exact_reevaluation_status": "not_requested",
+                "comparison_status": "not_required_for_saved_only_plot",
+            },
+        }
+        write_json(output / "plot_manifest.json", record)
+        return record
+
     required = (
         workspace / "generated" / "pseudodata.json",
         workspace / "generated" / "native_parameters.npy",
@@ -5331,7 +5646,7 @@ def plot_saved_results(
         workspace / "generated" / "test_indices.npy",
         workspace / "generated" / "covariance_normalized.npy",
         workspace / "training" / "training_summary.json",
-        workspace / "evaluation" / "evaluation_metrics.json",
+        exact_evaluation_path,
         workspace / "comparison" / "comparison_metrics.json",
         workspace / "comparison" / "conventional_posterior_samples.npy",
         workspace / "comparison" / "neural_posterior_samples.npy",

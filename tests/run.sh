@@ -9,14 +9,19 @@ case "${mode}" in
     trap 'rm -rf -- "${static_cache}"' EXIT
     export MPLCONFIGDIR="${static_cache}/matplotlib"
     python3 "${root}/tests/verify_distribution.py"
+    python3 "${root}/tools/validate_container_contract.py" >/dev/null
     python3 "${root}/tests/verify_documentation.py"
     PYTHONPATH="${root}/src" python3 -m unittest \
-      tests.test_reusable_corpus tests.test_result_contract
+      tests.test_reusable_corpus tests.test_result_contract \
+      tests.test_architecture_contracts tests.test_masked_design \
+      tests.test_physical_kinematics
     "${root}/tests/verify_jlab_gpu_launcher.sh"
     "${root}/tests/verify_jlab_batch_submission.sh"
     "${root}/tests/verify_jlab_progress_logging.sh"
     "${root}/tests/verify_jlab_swif2_workflows.sh"
     "${root}/tests/verify_jlab_swif2_submission.sh"
+    bash "${root}/tests/verify_system_package_retry.sh"
+    bash "${root}/tests/verify_apptainer_image_resume.sh"
     [[ ! -x "${root}/tests/verify_schema8_kinematic_envelope.sh" ]] || \
       "${root}/tests/verify_schema8_kinematic_envelope.sh"
     grep -Fx 'log.folder.path = /cache/partons-logs' \
@@ -54,7 +59,8 @@ case "${mode}" in
     export PYTHONPATH="${root}/src" DVCS_INFER_REPOSITORY_ROOT="${root}" DVCS_WORKSPACE_ROOT="${temp}/workspace" DVCS_GPDDATABASE_ROOT="${temp}/no-database" DVCS_ACCELERATOR=cpu DVCS_CPU_THREADS=1 DVCS_NATIVE_WORKERS=1 MPLCONFIGDIR="${temp}/matplotlib"
     "${python_bin}" -m extract_dvcs_cff.cli.user --bridge "${bridge}" init acceptance
     "${python_bin}" -m extract_dvcs_cff.cli.user --bridge "${bridge}" doctor acceptance
-    "${python_bin}" -m extract_dvcs_cff.cli.user --bridge "${bridge}" corpus-create acceptance acceptance-corpus --profile quick
+    "${python_bin}" -m extract_dvcs_cff.cli.user --bridge "${bridge}" corpus-create acceptance acceptance-corpus --profile quick \
+      --gpd-truth-request "${root}/configs/examples/master_corpus_gpd_truth_smoke_v1.json"
     "${python_bin}" -m extract_dvcs_cff.cli.user --bridge "${bridge}" corpus-generate acceptance acceptance-corpus --no-progress
     "${python_bin}" -m extract_dvcs_cff.cli.user --bridge "${bridge}" corpus-verify acceptance-corpus --deep
     ;;

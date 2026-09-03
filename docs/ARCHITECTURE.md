@@ -1,5 +1,11 @@
 # Architecture
 
+Release 0.3 uses five explicit immutable layers. The authoritative summary,
+schema migration, and identity rules are in
+[Artifact architecture and migration](ARTIFACT_ARCHITECTURE_0_3.md). The only
+registered inference paths are DD + DeepSets + MAF and NNGPD-inspired neural
+GPD + DeepSets + MAF; both retain PARTONS as their sole physics backend.
+
 ## Purpose and design constraints
 
 The distribution turns a validated research implementation into a portable,
@@ -161,7 +167,9 @@ never accepted as shards.
 
 The workflow draws 80 GPD-shape coordinates from declared uniform supports,
 asks the bridge for the selected ordered subset of six audited observables at
-every kinematic point, and stores noise-free parameter/CFF/observable shards.
+every kinematic point, and stores noise-free parameter/GPD/CFF/observable
+shards. Canonical GPD values are evaluated at the explicit project request's
+common input-scale coordinates and aligned one-for-one with core groups.
 Covariance, nuisances, noise, and DeepSets contexts are materialized later
 from an immutable group selection. Experiment-constant encoding terms are
 computed once; independently seeded groups fill fixed rows across CPU workers.

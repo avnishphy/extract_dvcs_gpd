@@ -44,7 +44,6 @@ def main() -> None:
         embedding_features=8,
         flow_hidden_features=8,
         num_transforms=2,
-        num_bins=4,
         training_batch_size=3,
     )
     configuration = root / "config.json"

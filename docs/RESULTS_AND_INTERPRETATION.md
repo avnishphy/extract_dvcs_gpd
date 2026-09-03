@@ -1,5 +1,12 @@
 # Physics parameters and result interpretation
 
+DD and neural-function target-space NLLs are not commensurate and must not be
+used as a default ranking. Compare stored-coordinate function RMSE/coverage,
+native CFF/observable residuals, calibration, boundary/constraint residuals,
+seed stability, resources, parameter count, and artifact size. On a
+DD-generated corpus the neural branch supports only a DD-induced closure and
+representation claim.
+
 Read this after [Workflow and physics](WORKFLOW_AND_PHYSICS.md). It explains
 what the files mean and what constitutes a trained, calibrated result.
 

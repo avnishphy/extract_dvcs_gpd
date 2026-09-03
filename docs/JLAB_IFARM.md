@@ -1,5 +1,10 @@
 # JLab ifarm and farm guide
 
+The measured corpus-worker means were 8.39 h on farm25 (8 jobs), 12.74 h on
+farm19 (9), and 17.89 h on farm23 (13). The resulting stage-specific policy is
+farm25 strict, farm19 explicit fallback, and farm23 excluded. Mount the master
+corpus read-only in every downstream architecture job.
+
 ## Execution model
 
 Use an ifarm login host for installation, editing, project setup, and short
@@ -22,6 +27,13 @@ cp jobs/jlab_ifarm/resources.env.example jobs/jlab_ifarm/resources.env
 vi jobs/jlab_ifarm/resources.env
 set -a; source jobs/jlab_ifarm/resources.env; set +a
 ```
+
+Use that ordinary installer command for initial setup, routine verification,
+and recovery. It reuses the accepted SIF and does not rebuild merely because it
+was rerun. `--source-build` is a maintainer operation for image-impacting
+changes; use the [image update and recovery runbook](IMAGE_UPDATE_RUNBOOK.md)
+so the current production image remains available until its replacement is
+fully tested.
 
 No Docker daemon is used on farm nodes. One CUDA-capable SIF serves CPU and GPU
 jobs. CPU jobs omit `--nv`; allocated GPU jobs set `DVCS_ACCELERATOR=cuda`, add
@@ -68,6 +80,10 @@ settings.
 ./dvcs init PROJECT
 ./dvcs show PROJECT
 ./dvcs doctor PROJECT
+source .dvcs/install.env
+cp configs/examples/master_corpus_gpd_truth_smoke_v1.json \
+  "$DVCS_WORKSPACE/PROJECT/gpd_truth.json"
+# Replace the smoke table with the reviewed production coordinates.
 ./dvcs corpus-create PROJECT CORPUS --profile validation --shard-size 16
 ./dvcs corpus-plan PROJECT CORPUS
 ```
@@ -128,8 +144,8 @@ parallel corpus generation, and file movement are in
 - Train initially requests 4 CPUs, 1 GPU, and 32G RAM. Complete generated
   arrays remain memory-mapped on CPU; only minibatches enter GPU memory. Measure
   representative jobs before tuning RAM or batch size.
-- Evaluate uses 1 GPU plus CPUs for exact PARTONS work. CPU-only stages should
-  not request GPU resources.
+- Evaluate uses 1 GPU for saved-model scoring. The separate
+  `exact-reevaluate` stage uses CPUs for PARTONS and requests no GPU.
 - Large corpus production must use independent shard-range workers plus a
   verified merge, not one multi-node process or an oversized CPU request.
 

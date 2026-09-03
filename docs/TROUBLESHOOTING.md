@@ -19,6 +19,23 @@ git status --short
 
 ## Installation failures
 
+### First five-minute installation triage
+
+Do not immediately restart with `--source-build`. Capture the current state:
+
+```bash
+./install.sh --profile jlab_ifarm --accelerator auto --dry-run
+cat .dvcs/install.lock.d/owner 2>/dev/null || true
+ls -lt .dvcs/build-logs/ 2>/dev/null
+find .dvcs -maxdepth 1 -name '*.sif' -o -name '*.sif.partial'
+pgrep -af 'install.sh|apptainer.*build' || true
+```
+
+The dry run says whether the next ordinary invocation will verify a final SIF,
+resume a completed partial, pull, or build. Preserve the newest log, partial,
+final SIF, and lock owner before changing anything. For an intentional image
+change, follow the [image update and recovery runbook](IMAGE_UPDATE_RUNBOOK.md).
+
 ### No Podman or Docker
 
 The local profile found no rootless container engine. Install/configure one
@@ -52,12 +69,56 @@ find "${DVCS_WHEELHOUSE:-${TMPDIR:-/tmp}/extract-dvcs-gpd-wheels-$UID}" -name 'g
 Do not manually place an unverified archive there: checksum failure deletes
 the partial download and fails closed.
 
+An HTTP `503 Service Unavailable` from `snapshot.ubuntu.com` is different: it
+is a transient mirror response, not a checksum or dependency-resolution
+failure. The installer probes the pinned snapshot before a first source build;
+APT then uses three bounded per-object and transaction retries. Build output is
+retained in `.dvcs/build-logs/`.
+
+Rerun the ordinary `install.sh` command without `--source-build`. If Apptainer had
+already produced a complete tag-matched `.sif.partial`, the installer verifies
+that SIF and resumes the test/promotion phase instead of rebuilding it. A
+corrupt or mismatched partial is preserved for diagnosis and requires an
+explicit `--source-build` to replace. Do not add `--fix-missing`, change the
+snapshot timestamp, or substitute unpinned packages.
+
+If no complete partial exists, the ordinary command keeps production on the
+current final SIF. Retry an intentional source build only after the snapshot is
+available and only when the update still requires a new image.
+
 ### Interrupted install
 
 Rerun the same `install.sh` command. Images/data/environment state use partial
 names and atomic moves. If an incomplete final LHAPDF directory exists, point
 `DVCS_CACHE` at a fresh user-owned location or remove the incomplete directory
 yourself only after confirming its exact path and contents.
+
+Installation is serialized with the atomic directory `.dvcs/install.lock.d`,
+which works on the JLab NFSv3 project filesystem. Its `owner` file records the
+host, PID, start time, and command when a genuinely concurrent installer is
+running. The older `.dvcs/install.lock` advisory-lock file is ignored because
+NFS could retain that lock after its process exited.
+
+Read `.dvcs/install.lock.d/owner` and verify the recorded host/PID plus
+`pgrep -af 'install.sh|apptainer.*build'`. Wait if either process is live. Only
+after proving that all related processes are gone, move the lock to a dated
+`.stale.*` name as documented in the image-update runbook. Moving preserves
+evidence; deleting an unexplained lock can start two concurrent builds.
+
+### Build-time PARTONS logger permission failure
+
+If an older definition reports `LoggerManager::update` cannot open a file below
+`/cache/partons-logs` while running the automatic `%test`, update the checkout
+before rebuilding. Apptainer mounts the root filesystem read-only for its
+automatic build test, so directory mode alone cannot make that path writable.
+Current definitions explicitly defer only the native self-test in that phase.
+The installer then reruns `%test` with the user-owned cache bound at `/cache`;
+the native test is mandatory there, and `set -eu` prevents an abort from being
+masked by any later successful test.
+
+The line `native self-test deferred until writable /cache is bound` is expected
+only in the automatic build test. It must not appear as the outcome of the
+installer's later writable-cache test.
 
 ### Database revision mismatch or dirty checkout
 
@@ -428,7 +489,7 @@ Check yourself:
 jq '{status,passed,effective_sample_size,conventional_reference_available,conventional_reference_diagnostics}' workspace/PROJECT/results/PROFILE/comparison/comparison_metrics.json
 ```
 
-Resume from last `project-after-evaluate.tar` with `farm-submit
+Resume from last `project-after-exact-reevaluate.tar` with `farm-submit
 --project-archive ... --from compare --through plot`; see
 [JLab SWIF2 workflows](JLAB_SWIF2.md#resume-from-a-completed-stage).
 

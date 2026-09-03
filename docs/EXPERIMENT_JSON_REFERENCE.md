@@ -121,24 +121,36 @@ fractional responses are specified separately in the uncertainty model.
 
 ### 3.1 Kinematic points
 
-`synthetic_dataset.kinematics` is an array with at least four points. Each
+`synthetic_dataset.kinematics` is a nonempty array of user-selected sites. Each
 point is evaluated for every selected native observable. The default six
 observables therefore turn six kinematic points into 36 DeepSets tokens.
 
 | Path | Type/unit | Enforced range | Meaning |
 |---|---|---|---|
-| `synthetic_dataset.kinematics[].x_b` | finite number | $[0.10,0.50]$ | Bjorken $x_B$; expanded only to the frozen representative fixed-target design envelope. |
-| `synthetic_dataset.kinematics[].t_GeV2` | finite number, GeV$^2$ | $[-0.90,-0.10]$ | Momentum transfer $t=(p'-p)^2$; expanded only to the native-probed representative design envelope. |
-| `synthetic_dataset.kinematics[].Q2_GeV2` | finite number, GeV$^2$ | $[1,80]$ | Datum photon virtuality. The GPD starts at $Q_0^2=1\,\mathrm{GeV}^2$ and is evolved to this value. |
-| `synthetic_dataset.kinematics[].beam_energy_GeV` | finite number, GeV | $[3,200]$ | Incident lepton energy used by the native observable. |
+| `synthetic_dataset.kinematics[].x_b` | finite number | $(0,1)$ | Bjorken $x_B$ selected by the user in `visualize_gpddatabase_dvcs.ipynb`. |
+| `synthetic_dataset.kinematics[].t_GeV2` | finite number, GeV$^2$ | exact coupled DVCS limits | Momentum transfer $t=(p'-p)^2$; no historical fixed envelope is imposed. |
+| `synthetic_dataset.kinematics[].Q2_GeV2` | finite number, GeV$^2$ | $[1,\infty)$ | Positive photon virtuality at or above native input scale $Q_0^2=1\,\mathrm{GeV}^2$. |
+| `synthetic_dataset.kinematics[].beam_energy_GeV` | finite number, GeV | $(0,\infty)$ | Incident lepton energy used by the native observable. |
 | `synthetic_dataset.kinematics[].phi_rad` | finite number, radians | $[0,2\pi]$ | Lepton–hadron plane azimuth. |
 
-The ranges are necessary but not sufficient. Every point must also satisfy
-the fixed-target PARTONS condition
+Notebook-selected points are authoritative. Public loader and native bridge
+reject only non-finite values, native scale violations, or coupled physical
+violations. Every point must satisfy
 
 $$
 0 < y = \frac{Q^2}{2M_p E x_B} < 1,
 \qquad M_p = 0.938272013\ \mathrm{GeV}.
+$$
+
+It must also lie between exact finite-$Q^2$ forward and backward DVCS transfer
+limits
+
+$$
+t_{\rm backward}\le t\le t_{\rm forward},\qquad
+t_{\rm forward/backward}=-Q^2
+\frac{2(1-x_B)(1\mp\sqrt{1+\epsilon^2})+\epsilon^2}
+{4x_B(1-x_B)+\epsilon^2},\quad
+\epsilon^2=\frac{4M_p^2x_B^2}{Q^2}.
 $$
 
 The public loader and native bridge both reject a point outside this domain
@@ -276,7 +288,6 @@ The complete `inference.neural_posterior` object is:
 | `inference.neural_posterior.point_layer_norm` | `false` | Enable/disable layer normalization in the point encoder. |
 | `inference.neural_posterior.flow_hidden_features` | 96 | Hidden width in the conditional flow. |
 | `inference.neural_posterior.num_transforms` | 6 | Number of autoregressive flow transforms. |
-| `inference.neural_posterior.num_bins` | 8 | Retained flow-builder field. Installed `sbi` explicitly ignores it for `zuko_maf`; it affects spline/NSF models only. It is not an active MAF hyperparameter. |
 | `inference.neural_posterior.z_score_theta` | `independent` | **Advanced method control.** `sbi` parameter-standardization mode. |
 | `inference.neural_posterior.z_score_x` | `none` | **Advanced method control.** Context standardization is disabled because the context has explicit scaling/whitening. |
 | `inference.neural_posterior.training_batch_size` | 256 | Training minibatch size. |
@@ -347,7 +358,6 @@ outer test or GK/VGG data.
 | `inference.hyperparameter_optimization.search_space.embedding_features[]` | `[64,96,128]` | Categorical embedding width. |
 | `inference.hyperparameter_optimization.search_space.flow_hidden_features[]` | `[64,96,128,192]` | Categorical flow width. |
 | `inference.hyperparameter_optimization.search_space.num_transforms[]` | `[4,6,8]` | Categorical transform count. |
-| `inference.hyperparameter_optimization.search_space.num_bins[]` | `[6,8,10]` | Retained categorical spline-bin field. It is ignored by the current `zuko_maf`, so varying it does not change the trained MAF. Do not interpret it as an effective optimized dimension in this release. |
 | `inference.hyperparameter_optimization.search_space.training_batch_size[]` | `[128,256,512]` | Categorical minibatch size. |
 | `inference.hyperparameter_optimization.search_space.learning_rate[]` | `[0.0001,0.002]` | Two positive endpoints of a continuous log-uniform search interval, not two categorical choices. |
 
@@ -374,7 +384,7 @@ These entries change saved plots/reevaluations, not the training corpus.
 | Path | Default | Meaning/constraint |
 |---|---:|---|
 | `output_diagnostics.gpd_reference_kinematics.x_b` | 0.2 | Reference Bjorken $x_B$; same $[0.10,0.50]$ kinematic domain. |
-| `output_diagnostics.gpd_reference_kinematics.t_GeV2` | -0.12 | Reference $t$ in GeV$^2$; same $[-0.90,-0.10]$ domain. |
+| `output_diagnostics.gpd_reference_kinematics.t_GeV2` | -0.12 | Reference diagnostic $t$ in GeV$^2$. |
 | `output_diagnostics.gpd_reference_kinematics.Q2_GeV2` | 2.0 | Reference GPD-evaluation scale in GeV$^2$; same $[1,80]$ domain. |
 | `output_diagnostics.gpd_reference_kinematics.beam_energy_GeV` | 12.0 | Reference beam energy in GeV; same $[3,200]$ domain. |
 | `output_diagnostics.gpd_reference_kinematics.phi_rad` | 0.0 | Reference azimuth in radians; same $[0,2\pi]$ domain. |
@@ -479,7 +489,6 @@ inference.neural_posterior.embedding_features
 inference.neural_posterior.point_layer_norm
 inference.neural_posterior.flow_hidden_features
 inference.neural_posterior.num_transforms
-inference.neural_posterior.num_bins
 inference.neural_posterior.z_score_theta
 inference.neural_posterior.z_score_x
 inference.neural_posterior.training_batch_size
@@ -508,7 +517,6 @@ inference.hyperparameter_optimization.search_space.dataset_hidden[]
 inference.hyperparameter_optimization.search_space.embedding_features[]
 inference.hyperparameter_optimization.search_space.flow_hidden_features[]
 inference.hyperparameter_optimization.search_space.num_transforms[]
-inference.hyperparameter_optimization.search_space.num_bins[]
 inference.hyperparameter_optimization.search_space.training_batch_size[]
 inference.hyperparameter_optimization.search_space.learning_rate[]
 output_diagnostics.gpd_reference_kinematics.x_b

@@ -57,6 +57,9 @@ class ReusableCorpusTests(unittest.TestCase):
         self.configuration = self.root / "workflow.json"
         self.configuration.write_text(json.dumps(config), encoding="utf-8")
         (self.root / "physics.json").write_bytes(PHYSICS.read_bytes())
+        self.gpd_truth_request = (
+            REPO / "configs/examples/master_corpus_gpd_truth_smoke_v1.json"
+        )
         self.corpus = self.root / "corpus"
 
     def tearDown(self):
@@ -177,13 +180,19 @@ class ReusableCorpusTests(unittest.TestCase):
     def _create(self, *, corpus=None):
         capabilities = SimpleNamespace(
             returncode=0, stderr="",
-            stdout=json.dumps({"status": "ok", "backend": {"test": True}}),
+            stdout=json.dumps({
+                "status": "ok", "backend": {"test": True},
+                "capabilities": {
+                    "canonical_gpd_truth_v1": {"available": True}
+                },
+            }),
         )
         with patch("extract_dvcs_cff.corpus.subprocess.run", return_value=capabilities):
             create_corpus(
                 corpus=corpus or self.corpus, bridge=self.bridge,
                 configuration_path=self.configuration, profile="quick",
                 shard_size=2,
+                gpd_truth_request_path=self.gpd_truth_request,
             )
 
     def _generate(
@@ -211,12 +220,27 @@ class ReusableCorpusTests(unittest.TestCase):
                 chunk_size=2, task_count=1,
             )
 
+        def fake_gpd_parallel(*, parameters, truth_request, **_kwargs):
+            count = len(parameters)
+            points = len(truth_request["coordinates"])
+            return SimpleNamespace(
+                values=np.arange(count * points, dtype=np.float64).reshape(
+                    count, points
+                ),
+                status_mask=np.ones((count, points), dtype=bool),
+                worker_resolution={"resolved_workers": 1},
+                chunk_size=2, task_count=1,
+            )
+
         with patch(
             "extract_dvcs_cff.corpus.NativeCache.evaluate",
             new=fake_evaluate,
         ), patch(
             "extract_dvcs_cff.corpus._parallel_partitioned_native_evaluation",
             new=fake_parallel,
+        ), patch(
+            "extract_dvcs_cff.corpus._parallel_native_gpd_truth_evaluation",
+            new=fake_gpd_parallel,
         ):
             return generate_corpus(
                 corpus=corpus or self.corpus, bridge=self.bridge,
@@ -241,6 +265,10 @@ class ReusableCorpusTests(unittest.TestCase):
         })
         verified = verify_corpus(corpus=self.corpus, deep=True)
         self.assertEqual(verified["observable_count"], 2)
+        self.assertEqual(verified["gpd_truth_point_count"], 2)
+        self.assertEqual(
+            len(list((self.corpus / "gpd_truth/shards").glob("*.npz"))), 2
+        )
 
         archive = self.root / "portable.tar.gz"
         exported = export_corpus(corpus=self.corpus, archive_path=archive)
@@ -274,14 +302,16 @@ class ReusableCorpusTests(unittest.TestCase):
         outputs = []
         for name, workers in (("run-a", 1), ("run-b", 4)):
             workspace = self.root / name
-            with patch(
+            with patch.dict(
+                os.environ, {"DVCS_DISABLE_NATIVE_EXECUTION": "1"}
+            ), patch(
                 "extract_dvcs_cff.native_parallel.available_affinity_cpus",
                 return_value=(0, 1, 2, 3),
             ):
                 materialized = materialize_selection(
                     corpus=self.corpus, selection_path=selection,
                     configuration_path=self.configuration, workspace=workspace,
-                    profile="quick", bridge=self.bridge, workers=workers,
+                    profile="quick", bridge=None, workers=workers,
                 )
             self.assertEqual(materialized["materialization_workers"], workers)
             progress = json.loads(
@@ -292,7 +322,7 @@ class ReusableCorpusTests(unittest.TestCase):
                 configuration=self.configuration,
                 workspace=workspace,
                 profile="quick",
-                bridge=self.bridge,
+                bridge=None,
             )
             with patch(
                 "extract_dvcs_cff.corpus._load_exact_arrays",
@@ -301,7 +331,7 @@ class ReusableCorpusTests(unittest.TestCase):
                 reused = materialize_selection(
                     corpus=self.corpus, selection_path=selection,
                     configuration_path=self.configuration,
-                    workspace=workspace, profile="quick", bridge=self.bridge,
+                    workspace=workspace, profile="quick", bridge=None,
                 )
             self.assertEqual(reused["status"], "reused")
             progress = json.loads(
@@ -323,6 +353,25 @@ class ReusableCorpusTests(unittest.TestCase):
         shard.write_bytes(payload)
         with self.assertRaisesRegex(RuntimeError, "hash mismatch"):
             verify_corpus(corpus=self.corpus, deep=True)
+
+    def test_new_corpus_requires_explicit_gpd_truth_coordinates(self):
+        capabilities = SimpleNamespace(
+            returncode=0, stderr="",
+            stdout=json.dumps({
+                "status": "ok", "backend": {"test": True},
+                "capabilities": {
+                    "canonical_gpd_truth_v1": {"available": True}
+                },
+            }),
+        )
+        with patch(
+            "extract_dvcs_cff.corpus.subprocess.run", return_value=capabilities
+        ), self.assertRaisesRegex(ValueError, "requires canonical GPD truth"):
+            create_corpus(
+                corpus=self.corpus, bridge=self.bridge,
+                configuration_path=self.configuration, profile="quick",
+                shard_size=2,
+            )
 
     def test_partial_checkpoint_export_import_and_resume(self):
         self._create()

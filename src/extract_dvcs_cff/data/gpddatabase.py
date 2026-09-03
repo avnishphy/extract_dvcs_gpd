@@ -89,21 +89,72 @@ def fixed_target_inelasticity(
     return q2 / (2.0 * PARTONS_PROTON_MASS_GEV * beam_energy * x_b)
 
 
-def require_physical_fixed_target_kinematics(
-    *, x_b: float, Q2_GeV2: float, beam_energy_GeV: float, context: str
-) -> float:
-    """Validate the necessary fixed-target condition 0 < y < 1."""
+def exact_dvcs_t_limits_GeV2(
+    *, x_b: float, Q2_GeV2: float
+) -> tuple[float, float]:
+    """Return exact finite-Q2 ``(t_backward, t_forward)`` DVCS limits."""
 
+    x_b = _finite_number(x_b, "x_b")
+    q2 = _finite_number(Q2_GeV2, "Q2_GeV2")
+    if not 0.0 < x_b < 1.0:
+        raise ValueError("x_b must lie in (0,1)")
+    if q2 <= 0.0:
+        raise ValueError("Q2_GeV2 must be positive")
+    epsilon2 = 4.0 * PARTONS_PROTON_MASS_GEV**2 * x_b**2 / q2
+    root = math.sqrt(1.0 + epsilon2)
+    denominator = 4.0 * x_b * (1.0 - x_b) + epsilon2
+    t_forward = -q2 * (
+        2.0 * (1.0 - x_b) * (1.0 - root) + epsilon2
+    ) / denominator
+    t_backward = -q2 * (
+        2.0 * (1.0 - x_b) * (1.0 + root) + epsilon2
+    ) / denominator
+    return t_backward, t_forward
+
+
+def require_physical_fixed_target_kinematics(
+    *,
+    x_b: float,
+    Q2_GeV2: float,
+    beam_energy_GeV: float,
+    context: str,
+    t_GeV2: float | None = None,
+    phi_rad: float | None = None,
+) -> float:
+    """Validate exact physical fixed-target DVCS kinematics."""
+
+    x_b = _finite_number(x_b, f"{context}.x_b")
+    q2 = _finite_number(Q2_GeV2, f"{context}.Q2_GeV2")
+    beam_energy = _finite_number(
+        beam_energy_GeV, f"{context}.beam_energy_GeV"
+    )
+    if not 0.0 < x_b < 1.0:
+        raise ValueError(f"{context}.x_b must lie in (0,1)")
     y = fixed_target_inelasticity(
         x_b=x_b,
-        Q2_GeV2=Q2_GeV2,
-        beam_energy_GeV=beam_energy_GeV,
+        Q2_GeV2=q2,
+        beam_energy_GeV=beam_energy,
     )
     if not 0.0 < y < 1.0:
         raise ValueError(
             f"{context} is not physical fixed-target DVCS: "
             f"y=Q2/(2*M_p*E*x_b)={y:.12g} must lie in (0,1)"
         )
+    if t_GeV2 is not None:
+        t_value = _finite_number(t_GeV2, f"{context}.t_GeV2")
+        t_backward, t_forward = exact_dvcs_t_limits_GeV2(
+            x_b=x_b, Q2_GeV2=q2
+        )
+        tolerance = 1e-12 * max(1.0, abs(t_backward), abs(t_forward))
+        if t_value < t_backward - tolerance or t_value > t_forward + tolerance:
+            raise ValueError(
+                f"{context}.t_GeV2={t_value:.12g} is outside exact finite-Q2 "
+                f"DVCS limits [{t_backward:.12g},{t_forward:.12g}]"
+            )
+    if phi_rad is not None:
+        phi = _finite_number(phi_rad, f"{context}.phi_rad")
+        if not 0.0 <= phi <= 2.0 * math.pi:
+            raise ValueError(f"{context}.phi_rad must lie in [0,2pi]")
     return y
 
 

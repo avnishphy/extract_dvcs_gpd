@@ -1,5 +1,11 @@
 # Development configuration and testing
 
+Run `tests/test_architecture_contracts.py` for identity, leakage, MAF-only,
+constraint, native-boundary, literature, and comparison contracts. Set
+`DVCS_DISABLE_NATIVE_EXECUTION=1` in downstream integration tests. Validate
+SWIF placement with `tests/verify_jlab_swif2_workflows.sh` and container drift
+with `tools/validate_container_contract.py`.
+
 This page is for contributors and operators who need to verify the checked-in
 implementation. It does not add a second user workflow: the supported
 scientific interface remains `./dvcs` and the editable project
@@ -16,7 +22,7 @@ configs/physics/stage10_pseudodata_systematics_v1.json
 ```
 
 They are implementation templates, not user configuration files. `init`
-copies their supported controls into an isolated schema-8 `experiment.json`;
+copies their supported controls into an isolated schema-9 `experiment.json`;
 the CLI validates that document and regenerates `.engine/workflow.json` and
 `.engine/physics.json` before each action. Edit the project document, not the
 Stage 10 templates or generated `.engine/` files. A template change is a code
@@ -94,7 +100,7 @@ When a public command, project field, artifact, dependency pin, native
 capability, or workflow edge changes, update the corresponding reference page
 and this map where applicable. Then run `./tests/run.sh static` in a supported
 Python environment. It checks local Markdown targets and that the generated
-schema-8 experiment has a documented leaf for every field. Review
+schema-9 experiment has a documented leaf for every field. Review
 `git diff --check`, `git diff -- docs README.md user`, and a case-insensitive
 repository search for experiment-specific names before publishing a change.
 
@@ -102,3 +108,20 @@ Do not use a development checkout, a cluster path, a personal corpus name, or
 an experimental branch as a general documentation example. Use relative paths
 and placeholders such as `PROJECT`, `CORPUS`, and `/path/to/...`; document a
 feature only when it is implemented on `main`.
+
+## Container and installer maintenance
+
+Any change to the container definitions, installer, dependency acquisition,
+native bridge, Python package, or scripts executed inside the image must use
+the [image update and recovery runbook](IMAGE_UPDATE_RUNBOOK.md). In
+particular, preserve the known-good final SIF, run `./tests/run.sh static`
+before building, perform one controlled source build, require the external
+writable-cache Apptainer test, and record the accepted digest. SIF creation by
+itself is not an acceptance result.
+
+When changing `%test`, remember that Apptainer's automatic build test has a
+read-only root filesystem. Tests that write logs or caches belong in the
+installer's second phase with a host cache bound at `/cache`. Keep `set -eu` so
+a native abort cannot be masked by later commands, and update
+`tools/validate_container_contract.py` plus installer regression fixtures when
+the contract changes.

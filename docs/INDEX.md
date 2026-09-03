@@ -28,6 +28,12 @@ references for editing or interpreting a stage.
 - [Corpus and data selection](CORPUS_AND_DATA_SELECTION.md) documents reusable
   sharded PARTONS data, immutable group selections, deterministic
   realizations, observable extension, verification, and transfer.
+- [Canonical GPD truth](CANONICAL_GPD_TRUTH.md) defines the mandatory
+  per-parameter function values, explicit coordinate request, native route,
+  storage layout, masks, and production checks.
+- [Pseudodata kinematic sampling](PSEUDODATA_KINEMATIC_SAMPLING.md) documents
+  the proposed physical, stratified maximin/Sobol design, its diagnostics,
+  scaling, and the gates required before production use.
 - [Resource management](RESOURCE_MANAGEMENT.md) explains CPU affinity,
   isolated PARTONS workers, CUDA selection, and multi-GPU behavior.
 - [Containers](CONTAINERS.md) explains image construction, mounts, non-root
@@ -38,11 +44,16 @@ references for editing or interpreting a stage.
   workflow dispatch, resource overrides, and monitoring.
 - [Troubleshooting](TROUBLESHOOTING.md) maps common failures to checks and
   recovery procedures.
+- [Image update and recovery runbook](IMAGE_UPDATE_RUNBOOK.md) defines when an
+  image rebuild is required, how to preserve the known-good SIF, how to monitor
+  the two Apptainer test phases, and how to recover without restarting blindly.
 
 ## Understanding the implementation
 
 - [Architecture](ARCHITECTURE.md) describes components, trust boundaries,
   control flow, repository layout, and failure policy.
+- [Artifact architecture and 0.3 migration](ARTIFACT_ARCHITECTURE_0_3.md)
+  defines the five immutable layers, identity sensitivity, and native stages.
 - [Native bridge](NATIVE_BRIDGE.md) describes the C++/PARTONS protocol,
   supported operations, caching, relocation, and provenance.
 - [Data contracts](DATA_CONTRACTS.md) describes project, generated corpus,
@@ -53,6 +64,12 @@ references for editing or interpreting a stage.
   behavior, manifests, and what reproducibility does and does not guarantee.
 - [References](REFERENCES.md) lists the primary theory, native-software, and
   simulation-based-inference literature relevant to the implementation.
+- [Literature benchmarks](LITERATURE_BENCHMARKS.md) records reproducible
+  figure-family status, convention gates, and corpus coverage requirements.
+- [Dated progress presentation](presentations/current_progress_2026-08-31/README.md)
+  is the verified one-time 2026-08-31 Beamer snapshot.
+- [Architecture decision records](adr/0001-partons-sole-physics-backend.md)
+  record the backend, artifact, model-scope, and snapshot decisions.
 
 ## Maintainer and assurance material
 
@@ -65,6 +82,8 @@ references for editing or interpreting a stage.
 - [Development configuration and testing](DEVELOPMENT_AND_TESTING.md) maps
   implementation-owned configuration, source components, and available test
   entry points.
+- [Image update and recovery runbook](IMAGE_UPDATE_RUNBOOK.md) is the required
+  checklist for container, installer, dependency, and in-image source changes.
 - [Updating from upstream](UPDATING_FROM_EXTRACT_DVCS_CFF.md) describes the
   allowlisted, conflict-detecting import process.
 - [Dependency lock](../provenance/dependencies.lock.json), [image lock](../provenance/images.lock.json),
@@ -83,7 +102,7 @@ references for editing or interpreting a stage.
 | neural | PyTorch/sbi conditional-density estimation and posterior sampling. |
 | exact | Re-evaluated through the authoritative native bridge, not a Python surrogate. |
 | injected truth | Parameters used to create the displayed synthetic pseudodataset. |
-| reusable corpus | Immutable, verified, noise-free PARTONS parameter/CFF/observable shards. |
+| reusable corpus | Immutable, verified, noise-free PARTONS parameter/GPD/CFF/observable shards. |
 | selection | Immutable group indices assigning corpus rows to training, internal validation, and locked outer test. |
 | realization | Deterministic nuisance/noise tensors materialized from a corpus and selection for one project. |
 | conventional posterior | Exact-bank importance-sampling comparison, not a second truth model. |

@@ -1,18 +1,19 @@
 Bootstrap: docker
 From: ubuntu@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90
 
+%labels
+    org.opencontainers.image.title extract-dvcs-gpd
+    org.opencontainers.image.version 0.3.0
+    org.opencontainers.image.source https://github.com/avnishphy/extract_dvcs_gpd
+    org.opencontainers.image.base.digest sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90
+    org.opencontainers.image.revision recorded-in-/opt/dvcs/app/provenance/build-metadata.json
+
 %files
     . /opt/dvcs/app
 
 %post
     export DEBIAN_FRONTEND=noninteractive
-    # The minimal Ubuntu image has no CA bundle, so bootstrap it from the
-    # signed HTTP archive before enabling the HTTPS snapshot service.
-    apt-get update
-    apt-get install -y --no-install-recommends ca-certificates
-    echo 'APT::Snapshot "20260801T000000Z";' > /etc/apt/apt.conf.d/50snapshot
-    apt-get update
-    apt-get install -y --no-install-recommends curl git build-essential gfortran cmake pkg-config autoconf automake libtool python3 python3-dev python3-venv locales libboost-json1.83-dev libcln-dev libsfml-dev libeigen3-dev libxml2-dev libboost-json1.83.0 libcln6 libsfml-system2.6 libxml2 libgfortran5
+    /bin/sh /opt/dvcs/app/scripts/install-system-packages.sh 20260801T000000Z curl git build-essential gfortran cmake pkg-config autoconf automake libtool python3 python3-dev python3-venv locales libboost-json1.83-dev libcln-dev libsfml-dev libeigen3-dev libxml2-dev libboost-json1.83.0 libcln6 libsfml-system2.6 libxml2 libgfortran5
     echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen
     locale-gen
     rm -rf /var/lib/apt/lists/*
@@ -23,6 +24,7 @@ From: ubuntu@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc709
     mkdir -p /opt/dvcs/share/extract-dvcs-gpd
     dpkg-query -W > /opt/dvcs/share/extract-dvcs-gpd/dpkg-manifest.tsv
     mkdir -p /workspace /results /cache/partons-logs /database
+    chmod 1777 /cache/partons-logs
 
 %environment
     export LANG=en_US.UTF-8
@@ -39,5 +41,20 @@ From: ubuntu@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc709
     exec /opt/dvcs/app/scripts/container-entrypoint.sh "$@"
 
 %test
+    set -eu
     /opt/dvcs/bin/partons_bridge --capabilities >/dev/null
-    /opt/dvcs/venv/bin/python -c 'import extract_dvcs_cff, torch, sbi'
+    if test -w /cache/partons-logs; then
+        /opt/dvcs/bin/partons_bridge --self-test >/dev/null
+        /opt/dvcs/venv/bin/python -c 'import json; from pathlib import Path; root=Path("/opt/dvcs/app/configs/examples"); request=json.load((root/"stage10_batch_evaluate_pseudodata_dvcs.json").open()); truth=json.load((root/"master_corpus_gpd_truth_smoke_v1.json").open()); request["operation"]="batch_evaluate_canonical_gpd_truth"; request["requests"]=request["requests"][:1]; request["coordinates"]=truth["coordinates"]; Path("/tmp/gpd-truth-smoke-request.json").write_text(json.dumps(request))'
+        /opt/dvcs/bin/partons_bridge --input /tmp/gpd-truth-smoke-request.json > /tmp/gpd-truth-smoke-response.json
+        /opt/dvcs/venv/bin/python -c 'import json; response=json.load(open("/tmp/gpd-truth-smoke-response.json")); values=response["evaluations"][0]["result"]["values"]; assert response["status"] == "ok" and len(values) == 2 and all(item["valid"] for item in values)'
+    else
+        echo "native self-test deferred until writable /cache is bound" >&2
+    fi
+    /opt/dvcs/venv/bin/python -c 'import extract_dvcs_cff, numpy, torch, sbi, zuko, yaml'
+    /opt/dvcs/venv/bin/dvcs-infer --help >/dev/null
+    cd /opt/dvcs/app
+    PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/opt/dvcs/app/src \
+      /opt/dvcs/venv/bin/python -m unittest tests.test_architecture_contracts
+    /opt/dvcs/venv/bin/python -c 'import json; json.load(open("configs/examples/master_corpus_gpd_truth_smoke_v1.json"))'
+    /opt/dvcs/venv/bin/python -c 'import torch; print({"cuda_visible": torch.cuda.is_available()})'

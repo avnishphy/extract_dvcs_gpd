@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "registry_id": "dvcs-gpd-literature-benchmarks-v1",
+  "sources": [
+    {
+      "id": "xu_nngpd_2026",
+      "citation": "J. Xu et al., Neural Network Representation of Generalized Parton Distributions (NNGPD), arXiv:2605.06994v1 (2026)",
+      "authoritative_url": "https://arxiv.org/abs/2605.06994",
+      "scope_note": "The repository branch is NNGPD-inspired latent-function NPE, not a reproduction of the paper's BNN loss fit.",
+      "figure_families": [
+        {"reference": "Fig. 2", "quantity": "neural GPD and integral-constraint architecture schematic", "status": "partially_reproduced", "metric": "component-contract comparison"},
+        {"reference": "Fig. 3", "quantity": "training kinematic coverage", "status": "awaiting_compatible_corpus", "metric": "coordinate coverage"},
+        {"reference": "Figs. 4-6", "quantity": "total and component losses for moments, CFF, symmetry, endpoint, smoothness, diversity, and KL", "status": "partially_reproduced", "metric": "constraint residual and training-loss trajectories"},
+        {"reference": "Figs. 7-8", "quantity": "H u charge-parity function closure with uncertainty and ERBL/DGLAP boundaries", "status": "awaiting_compatible_corpus", "metric": "function RMSE and interval coverage"},
+        {"reference": "Fig. 9", "quantity": "epistemic versus noisy-target uncertainty", "status": "partially_reproduced", "metric": "interval-width and coverage comparison"},
+        {"reference": "Figs. 10-11", "quantity": "valence/sea separated GPD closure across kinematics", "status": "awaiting_compatible_corpus", "metric": "channel-resolved function closure"}
+      ]
+    },
+    {
+      "id": "moffat_shadow_2023",
+      "citation": "E. Moffat et al., Shedding light on shadow generalized parton distributions, arXiv:2303.12006v2 (2023)",
+      "authoritative_url": "https://arxiv.org/abs/2303.12006",
+      "scope_note": "Existing Stage-09 checks are fixed shadow stress tests, not a complete reproduction of this identifiability study.",
+      "figure_families": [
+        {"reference": "Fig. 1", "quantity": "input-scale and LO-evolved VGG H/E singlet GPDs", "status": "awaiting_compatible_corpus", "metric": "function evolution comparison"},
+        {"reference": "Fig. 2", "quantity": "type-A/type-B shadow functions before and after evolution", "status": "not_scientifically_comparable", "metric": "shadow-function evolution residual"},
+        {"reference": "Fig. 3", "quantity": "H uncertainty from evolved shadow directions and ImH versus Q2", "status": "awaiting_compatible_corpus", "metric": "GPD interval and CFF residual"},
+        {"reference": "Fig. 4", "quantity": "E uncertainty from type-B shadows and ImE versus Q2", "status": "awaiting_compatible_corpus", "metric": "GPD interval and CFF residual"},
+        {"reference": "Fig. 5", "quantity": "xi and Q2 lever-arm dependence of shadow constraints", "status": "awaiting_compatible_corpus", "metric": "identifiability width versus coverage lever arm"}
+      ]
+    },
+    {
+      "id": "bertone_shadow_2021",
+      "citation": "V. Bertone et al., Shadow generalized parton distributions: a practical approach to the deconvolution problem of DVCS, arXiv:2107.11312 (2021)",
+      "authoritative_url": "https://arxiv.org/abs/2107.11312",
+      "scope_note": "NLO shadow construction is outside the current Stage-09 implementation.",
+      "figure_families": [
+        {"reference": "shadow construction and evolution diagnostics", "quantity": "NLO shadow imprint on DVCS observables", "status": "not_scientifically_comparable", "metric": "native observable imprint after evolution"}
+      ]
+    }
+  ],
+  "benchmark_contracts": [
+    {
+      "id": "nngpd_function_closure",
+      "paper": "xu_nngpd_2026",
+      "figure_section_reference": "Sec. IV; Figs. 7-11",
+      "scientific_quantity": "channel-resolved GPD function truth and posterior intervals",
+      "gpd_flavor_convention": "must be declared and match stored canonical coordinates",
+      "scale_scheme": "must match exactly; no automatic evolution in Python",
+      "perturbative_order": "native corpus declaration",
+      "kinematic_requirements": {"signed_x": true, "xi": true, "t": true, "Q2": true, "erbl_dglap_boundaries": true},
+      "required_artifacts": ["canonical_gpd_truth", "decoded_posterior_functions"],
+      "compatible_model_families": ["dd_deepsets_maf", "neural_gpd_deepsets_maf"],
+      "comparison_metric": ["rmse", "interval_coverage", "boundary_residual"],
+      "implementation_status": "implemented_adapter_awaiting_compatible_corpus",
+      "reason": "current schema-1 DD corpus lacks canonical GPD truth coordinates",
+      "output_path": "results/literature/nngpd_function_closure.json"
+    },
+    {
+      "id": "moffat_evolution_identifiability",
+      "paper": "moffat_shadow_2023",
+      "figure_section_reference": "Sec. III-IV; Figs. 1-5",
+      "scientific_quantity": "shadow-direction GPD and CFF response across xi and Q2 lever arms",
+      "gpd_flavor_convention": "u-quark singlet H/E; exact paper convention required",
+      "scale_scheme": "input mu0=1.27 GeV and declared LO evolution",
+      "perturbative_order": "LO for the Moffat benchmark",
+      "kinematic_requirements": {"xi_values": [0.01, 0.1, 0.5], "Q2_max_GeV2": 100.0, "x_min": 0.01, "x_max": 0.5},
+      "required_artifacts": ["paper-compatible_shadow_basis", "native_evolution", "native_cffs"],
+      "compatible_model_families": [],
+      "comparison_metric": ["function_response", "cff_response", "identifiability_width"],
+      "implementation_status": "not_scientifically_comparable",
+      "reason": "Stage-09 fixed stress direction is not the paper's type-A/type-B shadow basis",
+      "output_path": "results/literature/moffat_evolution_identifiability.json"
+    }
+  ]
+}

@@ -54,10 +54,17 @@ if [[ "${resolved}" == auto ]]; then
     elif command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then resolved=cuda; else resolved=cpu; fi
 fi
 runtime_accelerator="${accelerator}"
+image_accelerator="${resolved}"
 variant="${resolved}"
-[[ "${profile}" == jlab_ifarm ]] && variant=jlab_ifarm
+if [[ "${profile}" == jlab_ifarm ]]; then
+    variant=jlab_ifarm
+    # One JLab tag is shared by CPU and GPU stages. Always build the
+    # CUDA-capable image; CPU stages simply run it without Apptainer --nv.
+    image_accelerator=cuda
+fi
 tag="$(read_image_field "${variant}" tag)"
 digest="$(read_image_field "${variant}" digest)"
+version="$(tr -d '[:space:]' < "${root}/VERSION")"
 registry="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["registry"])' "${root}/provenance/images.lock.json")"
 published="$(python3 -c 'import json,sys; print(str(json.load(open(sys.argv[1]))["published"]).lower())' "${root}/provenance/images.lock.json")"
 
@@ -101,17 +108,23 @@ fi
 if [[ "${dry_run}" == true ]]; then
     if [[ "${published}" == true && -n "${digest}" && "${source_build}" != true ]]; then
         action="pull immutable image ${registry}@${digest}"
+    elif [[ "${profile}" == jlab_ifarm && "${source_build}" != true && \
+            -s "${image}" ]]; then
+        action="verify existing image ${image}"
+    elif [[ "${profile}" == jlab_ifarm && "${source_build}" != true && \
+            -s "${image}.partial" ]]; then
+        action="verify and promote completed partial image ${image}.partial"
     else
         action="build locked ${variant} image from source"
     fi
     log "dry-run only; no files, images, or data will be changed"
-    log "profile=${profile} accelerator=${resolved} engine=${engine}"
+    log "profile=${profile} runtime_accelerator=${resolved} image_accelerator=${image_accelerator} engine=${engine}"
     log "would ${action}"
     log "would verify/install MSTW2008nlo68cl and gpddatabase, then write ${state}/install.env"
     exit 0
 fi
 
-for command_name in curl git sha256sum tar mktemp; do require_command "${command_name}"; done
+for command_name in curl git sha256sum tar mktemp tee; do require_command "${command_name}"; done
 if [[ "${profile}" == local ]]; then
     require_command "${engine}"
     "${engine}" info >/dev/null 2>&1 || die "${engine} is installed but not usable by this user"
@@ -119,7 +132,30 @@ else
     require_command apptainer
 fi
 mkdir -p "${state}" "${workspace}" "${results}" "${cache}/lhapdf" \
-  "${cache}/partons-logs" "${database}"
+  "${cache}/partons-logs" "${database}" "${state}/build-logs"
+cleanup_paths=()
+install_lock="${state}/install.lock.d"
+install_lock_acquired=false
+cleanup_install() {
+    local path
+    for path in "${cleanup_paths[@]}"; do
+        [[ ! -e "${path}" ]] || rm -rf -- "${path}"
+    done
+    if [[ "${install_lock_acquired}" == true ]]; then
+        rm -f -- "${install_lock}/owner"
+        rmdir -- "${install_lock}" 2>/dev/null || true
+    fi
+}
+trap cleanup_install EXIT
+trap 'exit 130' HUP INT TERM
+if ! mkdir "${install_lock}" 2>/dev/null; then
+    lock_owner="$(sed -n '1p' "${install_lock}/owner" 2>/dev/null || echo unknown)"
+    die "another installer is already running for ${root}; lock owner: ${lock_owner}"
+fi
+install_lock_acquired=true
+printf '%s pid=%s started=%s command=%q\n' \
+  "$(hostname -f 2>/dev/null || hostname)" "$$" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$0 $*" \
+  > "${install_lock}/owner"
 
 if [[ "${profile}" == local ]]; then
     log "preparing ${variant} container image with ${engine}"
@@ -152,14 +188,37 @@ else
     log "preparing JLab Apptainer image"
     candidate_image="${image}"
     built_image=false
-    if [[ "${source_build}" == true || ! -s "${image}" ]]; then
+    build_required=false
+    identity_verified=false
+    strict_identity=false
+    if [[ "${source_build}" == true ]]; then
+        build_required=true
+    elif [[ -s "${image}" ]]; then
+        :
+    elif [[ -s "${image}.partial" ]]; then
         candidate_image="${image}.partial"
         built_image=true
+        strict_identity=true
+        if "${root}/scripts/verify-apptainer-image.sh" \
+          apptainer "${candidate_image}" "${version}" \
+          "${root}/containers/apptainer.def"; then
+            identity_verified=true
+            log "resuming verification of completed partial SIF ${candidate_image}"
+        else
+            die "partial SIF is incomplete or belongs to another distribution; preserve it for diagnosis and rerun with --source-build to replace it"
+        fi
+    else
+        build_required=true
+    fi
+    if [[ "${build_required}" == true ]]; then
+        candidate_image="${image}.partial"
+        built_image=true
+        strict_identity=true
         if [[ "${published}" == true && -n "${digest}" && "${source_build}" != true ]]; then
             apptainer pull --force "${candidate_image}" "docker://${registry}@${digest}"
         else
             log "no approved published digest is available; the first locked fakeroot source build can take a while"
-            wheelhouse="${DVCS_WHEELHOUSE:-${TMPDIR:-/tmp}/extract-dvcs-gpd-wheels-${UID}/${resolved}}"
+            wheelhouse="${DVCS_WHEELHOUSE:-${TMPDIR:-/tmp}/extract-dvcs-gpd-wheels-${UID}/${image_accelerator}}"
             mkdir -p "${wheelhouse}"
             prefetch_locked() {
                 local destination="$1" expected="$2"; shift 2
@@ -186,7 +245,7 @@ else
             prefetch_locked "${wheelhouse}/LHAPDF-6.5.6.tar.gz" \
               6b8b7e38dc26a977a24f5a321215b7054c14a4469d04134d70cb93a860eeeea7 \
               'https://lhapdf.hepforge.org/downloads/?f=LHAPDF-6.5.6.tar.gz'
-            if [[ "${resolved}" == cuda ]]; then
+            if [[ "${image_accelerator}" == cuda ]]; then
                 torch_wheel="torch-2.12.1+cu126-cp312-cp312-manylinux_2_28_x86_64.whl"
                 torch_url="https://download.pytorch.org/whl/cu126/torch-2.12.1%2Bcu126-cp312-cp312-manylinux_2_28_x86_64.whl"
                 torch_sha256="fcc3cf2026f15afeb69f51fa3fde7b286ffd7e6d9b8e070021ca8abd95bd220a"
@@ -202,6 +261,14 @@ else
                 echo "${torch_sha256}  ${wheelhouse}/${torch_wheel}.partial" | sha256sum -c -
                 mv "${wheelhouse}/${torch_wheel}.partial" "${wheelhouse}/${torch_wheel}"
             fi
+            snapshot_probe="https://snapshot.ubuntu.com/ubuntu/20260801T000000Z/dists/noble/InRelease"
+            log "checking the pinned Ubuntu snapshot before starting the expensive build"
+            curl --fail --silent --show-error --location --head --http1.1 \
+                --retry 2 --retry-all-errors --connect-timeout 10 --max-time 45 \
+                "${snapshot_probe}" >/dev/null || \
+              die "pinned Ubuntu snapshot is unavailable; no Apptainer build was started"
+            build_log="${state}/build-logs/apptainer-${tag}-$(date -u +%Y%m%dT%H%M%SZ).log"
+            log "recording the source build in ${build_log}"
             (
                 build_context="$(mktemp -d "${TMPDIR:-/tmp}/extract-dvcs-gpd-context.XXXXXX")"
                 trap 'rm -rf -- "${build_context}"' EXIT
@@ -210,21 +277,34 @@ else
                 tar -xf "${build_context}/context.tar" -C "${build_context}"
                 rm -f "${build_context}/context.tar"
                 cd "${build_context}"
-                apptainer build --force --fakeroot \
+                apptainer build --force --fakeroot --notest \
                     --bind "${wheelhouse}:/tmp/dvcs-wheelhouse:ro" \
-                    "${candidate_image}" containers/apptainer.def
-            )
+                    "${candidate_image}" containers/apptainer.def 2>&1
+            ) | tee "${build_log}"
         fi
     fi
-    log "running native and Python installation self-tests"
-    apptainer exec --cleanenv --bind "${cache}:/cache" \
-        "${candidate_image}" /opt/dvcs/bin/partons_bridge --self-test
-    apptainer exec --cleanenv --bind "${cache}:/cache" \
-        "${candidate_image}" /opt/dvcs/venv/bin/python -c \
-        'import matplotlib, numpy, optuna, particle, scipy, sbi, torch, yaml, zuko'
-    apptainer exec --cleanenv --bind "${cache}:/cache" \
-        "${candidate_image}" /opt/dvcs/venv/bin/pip check
+    if [[ "${identity_verified}" != true ]]; then
+        identity_arguments=(apptainer "${candidate_image}" "${version}")
+        if [[ "${strict_identity}" == true ]]; then
+            identity_arguments+=("${root}/containers/apptainer.def")
+        fi
+        "${root}/scripts/verify-apptainer-image.sh" "${identity_arguments[@]}" || \
+          die "candidate SIF identity does not match distribution ${version}"
+    fi
+    log "running the Apptainer definition test suite"
+    apptainer test --bind "${cache}:/cache" "${candidate_image}"
+    log "running final Python dependency and accelerator checks"
+    if [[ "${image_accelerator}" == cuda ]]; then
+        apptainer exec --cleanenv --bind "${cache}:/cache" \
+            "${candidate_image}" sh -lc \
+            '/opt/dvcs/venv/bin/pip check && /opt/dvcs/venv/bin/python -c '\''import torch; assert torch.version.cuda is not None, "JLab SIF lacks the pinned CUDA runtime"'\'''
+    else
+        apptainer exec --cleanenv --bind "${cache}:/cache" \
+            "${candidate_image}" /opt/dvcs/venv/bin/pip check
+    fi
     [[ "${built_image}" == true ]] && mv "${candidate_image}" "${image}"
+    digest="sha256:$(sha256sum "${image}" | awk '{print $1}')"
+    log "verified local SIF digest ${digest}"
     if [[ ! -f "${root}/jobs/jlab_ifarm/resources.env" ]]; then
         cp "${root}/jobs/jlab_ifarm/resources.env.example" "${root}/jobs/jlab_ifarm/resources.env"
     fi
@@ -250,24 +330,24 @@ if [[ -e "${set_dir}" ]]; then
 else
     log "downloading and verifying MSTW2008nlo68cl data"
     temp="$(mktemp -d "${state}/lhapdf.XXXXXX")"
-    trap 'rm -rf -- "${temp}"' EXIT
+    cleanup_paths+=("${temp}")
     curl --fail --location --retry 3 --retry-all-errors --connect-timeout 20 \
         https://lhapdfsets.web.cern.ch/current/MSTW2008nlo68cl.tar.gz -o "${temp}/set.tar.gz"
     echo '98ec0541e80e223785bb6029ebf81e93ca5111da41d6565b3b5c4aa86d59bb5d  '"${temp}/set.tar.gz" | sha256sum -c -
     tar -xzf "${temp}/set.tar.gz" -C "${temp}"
     verify_lhapdf_set "${temp}/MSTW2008nlo68cl" || { echo "downloaded LHAPDF set failed content verification" >&2; exit 65; }
     mv "${temp}/MSTW2008nlo68cl" "${set_dir}"
-    rm -rf -- "${temp}"; trap - EXIT
+    rm -rf -- "${temp}"
 fi
 db_dir="${database}/gpddatabase"
 if [[ ! -e "${db_dir}" ]]; then
     log "cloning pinned gpddatabase data"
     db_temp="$(mktemp -d "${database}/gpddatabase.XXXXXX")"
-    trap 'rm -rf -- "${db_temp}"' EXIT
+    cleanup_paths+=("${db_temp}")
     git clone --filter=blob:none https://github.com/opengpd/gpddatabase.git "${db_temp}/checkout"
     git -C "${db_temp}/checkout" checkout --detach 1e9e97fd417ce1d6d44fc73550bdbf32cca4eeb1
     mv "${db_temp}/checkout" "${db_dir}"
-    rm -rf -- "${db_temp}"; trap - EXIT
+    rm -rf -- "${db_temp}"
 elif [[ -d "${db_dir}/.git" ]]; then
     [[ "$(git -C "${db_dir}" rev-parse HEAD)" == 1e9e97fd417ce1d6d44fc73550bdbf32cca4eeb1 ]] || { echo "database revision mismatch" >&2; exit 65; }
     [[ -z "$(git -C "${db_dir}" status --porcelain)" ]] || { echo "database checkout is dirty; refusing to package it" >&2; exit 65; }

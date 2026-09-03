@@ -1,4 +1,4 @@
-"""Pinned sbi NPE/NSF construction for the Stage 05 baseline."""
+"""Historical Stage-05 DeepSets + conditional-MAF construction."""
 
 from __future__ import annotations
 
@@ -23,10 +23,12 @@ def processed_stage05_prior() -> torch.distributions.Distribution:
 def stage05_density_builder(
     configuration: Mapping[str, Any],
 ):
-    """Build the configured NSF factory with the declared DeepSets encoder."""
+    """Build the configured MAF factory with the declared DeepSets encoder."""
 
     context = configuration["context_contract"]
     network = configuration["network"]
+    if network["flow"] != "zuko_maf" or "num_bins" in network:
+        raise ValueError("Stage-05 migration accepts only zuko_maf without num_bins")
     encoder = DeepSetsDatasetEncoder(
         token_count=int(context["point_count"]),
         feature_count=len(context["point_features"]),
@@ -43,7 +45,6 @@ def stage05_density_builder(
         embedding_net=encoder,
         hidden_features=int(network["flow_hidden_features"]),
         num_transforms=int(network["num_transforms"]),
-        num_bins=int(network["num_bins"]),
         z_score_theta=network["z_score_theta"],
         z_score_x=network["z_score_x"],
     )

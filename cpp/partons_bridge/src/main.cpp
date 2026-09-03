@@ -195,6 +195,20 @@ struct ShadowObservableKinematics {
 double requirePhysicalFixedTargetInelasticity(
         const ShadowObservableKinematics& kinematics,
         const std::string& context) {
+    const double pi = std::acos(-1.0);
+    if (!std::isfinite(kinematics.xB) ||
+            kinematics.xB <= 0.0 || kinematics.xB >= 1.0 ||
+            !std::isfinite(kinematics.q2) || kinematics.q2 <= 0.0 ||
+            !std::isfinite(kinematics.beamEnergy) ||
+            kinematics.beamEnergy <= 0.0 ||
+            !std::isfinite(kinematics.phi) ||
+            kinematics.phi < 0.0 || kinematics.phi > 2.0 * pi ||
+            !std::isfinite(kinematics.t)) {
+        throw BridgeError("unphysical_fixed_target_kinematics",
+            context + " requires 0<x_b<1, Q2>0, beam_energy>0, "
+                      "finite t, and phi in [0,2pi]",
+            kExitValidation);
+    }
     const double y = kinematics.q2 /
         (2.0 * PARTONS::Constant::PROTON_MASS *
             kinematics.beamEnergy * kinematics.xB);
@@ -204,6 +218,30 @@ double requirePhysicalFixedTargetInelasticity(
         message << context << " is not physical fixed-target DVCS: "
                 << "y=Q2/(2*M_p*E*x_b)=" << y
                 << " must lie in (0,1)";
+        throw BridgeError("unphysical_fixed_target_kinematics",
+            message.str(), kExitValidation);
+    }
+    const double epsilon2 = 4.0 *
+        PARTONS::Constant::PROTON_MASS * PARTONS::Constant::PROTON_MASS *
+        kinematics.xB * kinematics.xB / kinematics.q2;
+    const double root = std::sqrt(1.0 + epsilon2);
+    const double denominator =
+        4.0 * kinematics.xB * (1.0 - kinematics.xB) + epsilon2;
+    const double tForward = -kinematics.q2 *
+        (2.0 * (1.0 - kinematics.xB) * (1.0 - root) + epsilon2) /
+        denominator;
+    const double tBackward = -kinematics.q2 *
+        (2.0 * (1.0 - kinematics.xB) * (1.0 + root) + epsilon2) /
+        denominator;
+    const double tolerance = 1e-12 * std::max(
+        {1.0, std::abs(tBackward), std::abs(tForward)});
+    if (kinematics.t < tBackward - tolerance ||
+            kinematics.t > tForward + tolerance) {
+        std::ostringstream message;
+        message.precision(12);
+        message << context << ".t=" << kinematics.t
+                << " GeV2 is outside exact finite-Q2 DVCS limits ["
+                << tBackward << "," << tForward << "]";
         throw BridgeError("unphysical_fixed_target_kinematics",
             message.str(), kExitValidation);
     }
@@ -252,6 +290,15 @@ struct PseudodataValues {
     std::vector<double> observables;
     std::vector<std::string> observableUnits;
     std::vector<PseudodataGPDValues> gpdDiagnostics;
+};
+
+struct CanonicalGPDCoordinate {
+    double x;
+    double xi;
+    double t;
+    std::string gpdType;
+    std::string channel;
+    std::string chargeParity;
 };
 
 struct NativeModelHoldoutEvaluation {
@@ -1152,7 +1199,7 @@ DVCSInference::DDParameters parsePseudodataDD(
 
 PseudodataEvaluation parsePseudodataEvaluation(
         const json::object& object, const std::string& context,
-        bool topLevel = false, bool postTrainingComparison = false) {
+        bool topLevel = false) {
     std::set<std::string> allowed{
         "request_id", "representation", "parameters", "quadrature_order",
         "q0_squared", "observable_kinematics", "evolution_configuration",
@@ -1271,28 +1318,10 @@ PseudodataEvaluation parsePseudodataEvaluation(
             context + ".observable_kinematics"),
         requireParameterQuantity(
             observable, "phi", "rad", context + ".observable_kinematics")};
-    const bool commonDomain =
-        kinematics.q2 >= q0Squared && kinematics.q2 <= 80.0 &&
-        kinematics.phi >= 0.0 &&
-        kinematics.phi <= 2.0 * std::acos(-1.0);
-    if (postTrainingComparison) {
-        if (!commonDomain || kinematics.xB <= 0.0 || kinematics.xB >= 1.0 ||
-                kinematics.t < -1.0 || kinematics.t >= 0.0 ||
-                kinematics.beamEnergy < 3.0 ||
-                kinematics.beamEnergy > 200.0) {
-            throw BridgeError("invalid_kinematics",
-                context + ".observable_kinematics is outside the audited "
-                          "post-training comparison domain",
-                kExitValidation);
-        }
-    } else if (!commonDomain ||
-            kinematics.xB < 0.10 || kinematics.xB > 0.50 ||
-            kinematics.t < -0.90 || kinematics.t > -0.10 ||
-            kinematics.beamEnergy < 3.0 ||
-            kinematics.beamEnergy > 200.0) {
+    if (kinematics.q2 < q0Squared) {
         throw BridgeError("invalid_kinematics",
-            context + ".observable_kinematics is outside the documented "
-                      "schema-8 multi-Q2 domain",
+            context + ".observable_kinematics.Q2 must be at least the native "
+                      "GPD input scale Q0^2=1 GeV2",
             kExitValidation);
     }
     requirePhysicalFixedTargetInelasticity(
@@ -1347,6 +1376,79 @@ PseudodataEvaluation parsePseudodataEvaluation(
     return PseudodataEvaluation{
         requestId, nativeParameters, order, q0Squared, kinematics,
         observableNames, diagnosticX};
+}
+
+std::vector<CanonicalGPDCoordinate> parseCanonicalGPDCoordinates(
+        const json::value& value, const std::string& context) {
+    if (!value.is_array() || value.as_array().empty()) {
+        throw BridgeError("invalid_value",
+            context + " must be a non-empty explicit array", kExitValidation);
+    }
+    const json::array input = value.as_array();
+    std::vector<CanonicalGPDCoordinate> coordinates;
+    coordinates.reserve(input.size());
+    std::set<std::string> seen;
+    for (std::size_t index = 0; index < input.size(); ++index) {
+        const std::string itemContext = context + "[" +
+            std::to_string(index) + "]";
+        const json::object item = requireObject(input[index], itemContext);
+        requireOnlyKeys(item,
+            {"x", "xi", "t_GeV2", "gpd_type", "channel",
+             "charge_parity"}, itemContext);
+        const CanonicalGPDCoordinate coordinate{
+            requireFiniteNumber(item, "x", itemContext),
+            requireFiniteNumber(item, "xi", itemContext),
+            requireFiniteNumber(item, "t_GeV2", itemContext),
+            requireString(item, "gpd_type", itemContext),
+            requireString(item, "channel", itemContext),
+            requireString(item, "charge_parity", itemContext)};
+        if (coordinate.x < -1.0 || coordinate.x > 1.0) {
+            throw BridgeError("outside_support",
+                itemContext + ".x must be in [-1,1]", kExitValidation);
+        }
+        if (coordinate.xi < 0.0 || coordinate.xi >= 1.0) {
+            throw BridgeError("outside_support",
+                itemContext + ".xi must be in [0,1)", kExitValidation);
+        }
+        if (coordinate.t > 0.0) {
+            throw BridgeError("outside_support",
+                itemContext + ".t_GeV2 must be nonpositive", kExitValidation);
+        }
+        if (coordinate.gpdType != "H" && coordinate.gpdType != "E" &&
+                coordinate.gpdType != "Htilde" &&
+                coordinate.gpdType != "Etilde") {
+            throw BridgeError("unsupported_gpd_type",
+                itemContext + ".gpd_type is unsupported", kExitValidation);
+        }
+        const std::set<std::string> nativeChannels{"u", "d", "s"};
+        const std::set<std::string> plusChannels{
+            "u_plus", "d_plus", "s_plus",
+            "charge_squared_weighted_c_even_quark_sum"};
+        const std::set<std::string> minusChannels{
+            "u_minus", "d_minus", "s_minus"};
+        const bool validConvention =
+            (nativeChannels.count(coordinate.channel) != 0U &&
+                coordinate.chargeParity == "native") ||
+            (plusChannels.count(coordinate.channel) != 0U &&
+                coordinate.chargeParity == "plus") ||
+            (minusChannels.count(coordinate.channel) != 0U &&
+                coordinate.chargeParity == "minus") ||
+            (coordinate.channel == "gluon" &&
+                coordinate.chargeParity == "not_applicable");
+        if (!validConvention) {
+            throw BridgeError("invalid_channel_convention",
+                itemContext + " has an unsupported channel/charge_parity pair",
+                kExitValidation);
+        }
+        const std::string key = json::serialize(item);
+        if (!seen.insert(key).second) {
+            throw BridgeError("duplicate_coordinate",
+                itemContext + " duplicates an earlier coordinate",
+                kExitValidation);
+        }
+        coordinates.push_back(coordinate);
+    }
+    return coordinates;
 }
 
 NativeModelHoldoutEvaluation parseNativeModelHoldoutEvaluation(
@@ -2057,6 +2159,133 @@ ShadowValues evaluateShadowDVCS(PARTONS::Partons* partons,
         }
         if (baseline != nullptr) {
             factory->updateModulePointerReference(baseline, nullptr);
+        }
+        throw;
+    }
+}
+
+json::array evaluateCanonicalGPDTruth(PARTONS::Partons* partons,
+        const PseudodataEvaluation& evaluation,
+        const std::vector<CanonicalGPDCoordinate>& coordinates) {
+    PARTONS::ModuleObjectFactory* factory =
+        partons->getModuleObjectFactory();
+    PARTONS::GPDModule* combined = nullptr;
+    PARTONS::GPDModule* dd = nullptr;
+    PARTONS::GPDModule* nativeShadow = nullptr;
+    try {
+        combined = factory->newGPDModule(
+            DVCSInference::PseudodataInputGPD::classId);
+        dd = factory->newGPDModule(
+            DVCSInference::FixedScaleDDGPD::classId);
+        nativeShadow =
+            factory->newGPDModule(PARTONS::GPDBDMMS21::classId);
+        auto* input =
+            dynamic_cast<DVCSInference::PseudodataInputGPD*>(combined);
+        auto* ddInput = dynamic_cast<DVCSInference::FixedScaleDDGPD*>(dd);
+        if (input == nullptr || ddInput == nullptr) {
+            throw BridgeError("backend_type_error",
+                "PARTONS factory did not return canonical-truth input modules",
+                kExitBackend);
+        }
+        input->setDDModule(ddInput);
+        input->setShadowModule(nativeShadow);
+        input->setParameters(evaluation.parameters);
+        input->setQuadratureOrder(evaluation.quadratureOrder);
+        input->setReferenceMuF2(evaluation.q0Squared);
+
+        PARTONS::GPDService* service =
+            partons->getServiceObjectRegistry()->getGPDService();
+        const auto nativeType = [](const std::string& name) {
+            if (name == "H") return PARTONS::GPDType::H;
+            if (name == "E") return PARTONS::GPDType::E;
+            if (name == "Htilde") return PARTONS::GPDType::Ht;
+            return PARTONS::GPDType::Et;
+        };
+        const auto quarkFlavor = [](const std::string& channel) {
+            if (channel.rfind("u", 0) == 0) return PARTONS::QuarkFlavor::UP;
+            if (channel.rfind("d", 0) == 0) return PARTONS::QuarkFlavor::DOWN;
+            return PARTONS::QuarkFlavor::STRANGE;
+        };
+        const auto quarkComponent = [](const PARTONS::QuarkDistribution& value,
+                const std::string& channel) {
+            if (channel.size() >= 5U &&
+                    channel.compare(channel.size() - 5U, 5U, "_plus") == 0) {
+                return value.getQuarkDistributionPlus();
+            }
+            if (channel.size() >= 6U &&
+                    channel.compare(channel.size() - 6U, 6U, "_minus") == 0) {
+                return value.getQuarkDistributionMinus();
+            }
+            return value.getQuarkDistribution();
+        };
+
+        json::array result;
+        result.reserve(coordinates.size());
+        for (std::size_t index = 0; index < coordinates.size(); ++index) {
+            const CanonicalGPDCoordinate& coordinate = coordinates[index];
+            try {
+                const PARTONS::GPDResult native = service->computeSingleKinematic(
+                    PARTONS::GPDKinematic(
+                        coordinate.x, coordinate.xi, coordinate.t,
+                        evaluation.q0Squared, evaluation.q0Squared),
+                    combined);
+                const PARTONS::PartonDistribution& distribution =
+                    native.getPartonDistribution(nativeType(coordinate.gpdType));
+                double value = 0.0;
+                if (coordinate.channel == "gluon") {
+                    value = distribution.getGluonDistribution()
+                        .getGluonDistribution();
+                } else if (coordinate.channel ==
+                        "charge_squared_weighted_c_even_quark_sum") {
+                    value =
+                        (4.0 / 9.0) * distribution.getQuarkDistribution(
+                            PARTONS::QuarkFlavor::UP)
+                            .getQuarkDistributionPlus() +
+                        (1.0 / 9.0) * distribution.getQuarkDistribution(
+                            PARTONS::QuarkFlavor::DOWN)
+                            .getQuarkDistributionPlus() +
+                        (1.0 / 9.0) * distribution.getQuarkDistribution(
+                            PARTONS::QuarkFlavor::STRANGE)
+                            .getQuarkDistributionPlus();
+                } else {
+                    value = quarkComponent(
+                        distribution.getQuarkDistribution(
+                            quarkFlavor(coordinate.channel)),
+                        coordinate.channel);
+                }
+                if (std::isfinite(value)) {
+                    result.emplace_back(json::object{
+                        {"coordinate_index", index}, {"value", value},
+                        {"valid", true}, {"status", "ok"}});
+                } else {
+                    result.emplace_back(json::object{
+                        {"coordinate_index", index}, {"value", nullptr},
+                        {"valid", false}, {"status", "non_finite_output"}});
+                }
+            } catch (const std::exception& error) {
+                result.emplace_back(json::object{
+                    {"coordinate_index", index}, {"value", nullptr},
+                    {"valid", false}, {"status", "native_exception"},
+                    {"message", error.what()}});
+            }
+        }
+
+        factory->updateModulePointerReference(combined, nullptr);
+        combined = nullptr;
+        factory->updateModulePointerReference(dd, nullptr);
+        dd = nullptr;
+        factory->updateModulePointerReference(nativeShadow, nullptr);
+        nativeShadow = nullptr;
+        return result;
+    } catch (...) {
+        if (combined != nullptr) {
+            factory->updateModulePointerReference(combined, nullptr);
+        }
+        if (dd != nullptr) {
+            factory->updateModulePointerReference(dd, nullptr);
+        }
+        if (nativeShadow != nullptr) {
+            factory->updateModulePointerReference(nativeShadow, nullptr);
         }
         throw;
     }
@@ -3421,10 +3650,36 @@ json::object capabilitiesResponse() {
                   "batch_evaluate_shadow_dvcs",
                   "evaluate_pseudodata_dvcs",
                   "batch_evaluate_pseudodata_dvcs",
+                  "batch_evaluate_canonical_gpd_truth",
                   "evaluate_post_training_comparison_dvcs",
                   "batch_evaluate_post_training_comparison_dvcs",
                   "evaluate_native_model_holdout_dvcs",
                   "batch_evaluate_native_model_holdout_dvcs"}},
+             {"canonical_gpd_truth_v1",
+              json::object{
+                  {"available", true},
+                  {"operation", "batch_evaluate_canonical_gpd_truth"},
+                  {"coordinate_convention",
+                   "signed_x_xi_t_at_common_input_scale_v1"},
+                  {"input_scale_squared_GeV2", 1.0},
+                  {"factorization_scheme", "MSbar"},
+                  {"supports_irregular_explicit_coordinates", true},
+                  {"status_mask", true},
+                  {"required_contract",
+                   "configs/schemas/master_native_physics_corpus_v2.schema.json"}}},
+             {"external_neural_gpd_function_v1",
+              json::object{
+                  {"available", false},
+                  {"reason",
+                   "TabulatedPseudodataGPD consumes APFEL++ tables built "
+                   "inside the bridge and has no validated public loader for "
+                   "a frozen external function artifact"},
+                  {"smallest_native_change",
+                   "validate and load neural_gpd_function_artifact_v1, build "
+                   "the input-scale PARTONS GPDModule/APFEL table, and expose "
+                   "an explicit exact-neural-reevaluate request"},
+                  {"required_contract",
+                   "configs/schemas/neural_gpd_function_artifact_v1.schema.json"}}},
              {"evaluate_gpd",
               json::object{
                   {"available", true},
@@ -3655,7 +3910,8 @@ json::object executeRequest(const json::object& request,
             "parton_content", "parameters", "quadrature_order",
             "integration_limit", "evolution_configuration", "input_basis",
             "gpd_diagnostic_kinematics", "observable_kinematics",
-            "theory_configuration", "q0_squared", "gpd_diagnostic_x"},
+            "theory_configuration", "q0_squared", "gpd_diagnostic_x",
+            "coordinates"},
         "request");
     const json::value schema =
         requireField(request, "schema_version", "request");
@@ -4035,9 +4291,53 @@ json::object executeRequest(const json::object& request,
             {"evaluations", std::move(results)}};
     }
 
+    if (operation == "batch_evaluate_canonical_gpd_truth") {
+        requireOnlyKeys(request,
+            {"schema_version", "operation", "coordinates", "requests"},
+            "request");
+        const std::vector<CanonicalGPDCoordinate> coordinates =
+            parseCanonicalGPDCoordinates(
+                requireField(request, "coordinates", "request"),
+                "request.coordinates");
+        const json::value requestsValue =
+            requireField(request, "requests", "request");
+        if (!requestsValue.is_array() || requestsValue.as_array().empty()) {
+            throw BridgeError("invalid_value",
+                "request.requests must be a non-empty array", kExitValidation);
+        }
+        const json::array requests = requestsValue.as_array();
+        std::vector<PseudodataEvaluation> evaluations;
+        evaluations.reserve(requests.size());
+        for (std::size_t index = 0; index < requests.size(); ++index) {
+            const json::object item = requireObject(requests[index],
+                "request.requests[" + std::to_string(index) + "]");
+            evaluations.push_back(parsePseudodataEvaluation(item,
+                "request.requests[" + std::to_string(index) + "]"));
+        }
+        PartonsSession session(executablePath);
+        json::array results;
+        results.reserve(evaluations.size());
+        for (const PseudodataEvaluation& evaluation : evaluations) {
+            results.emplace_back(json::object{
+                {"request_id", evaluation.requestId},
+                {"result", json::object{
+                    {"values", evaluateCanonicalGPDTruth(
+                        session.get(), evaluation, coordinates)},
+                    {"coordinate_count", coordinates.size()}}}});
+        }
+        return json::object{
+            {"schema_version", BRIDGE_SCHEMA_VERSION},
+            {"status", "ok"},
+            {"operation", operation},
+            {"backend", backendProvenance()},
+            {"coordinate_convention",
+             "signed_x_xi_t_at_common_input_scale_v1"},
+            {"evaluations", std::move(results)}};
+    }
+
     if (operation == "evaluate_post_training_comparison_dvcs") {
         const PseudodataEvaluation evaluation =
-            parsePseudodataEvaluation(request, "request", true, true);
+            parsePseudodataEvaluation(request, "request", true);
         PartonsSession session(executablePath);
         return json::object{
             {"schema_version", BRIDGE_SCHEMA_VERSION},
@@ -4076,8 +4376,7 @@ json::object executeRequest(const json::object& request,
             const json::object item = requireObject(requests[index],
                 "request.requests[" + std::to_string(index) + "]");
             evaluations.push_back(parsePseudodataEvaluation(item,
-                "request.requests[" + std::to_string(index) + "]",
-                false, true));
+                "request.requests[" + std::to_string(index) + "]"));
         }
         PartonsSession session(executablePath);
         json::array results;
@@ -4161,6 +4460,7 @@ json::object executeRequest(const json::object& request,
         "'batch_evaluate_shadow_dvcs', "
         "'evaluate_pseudodata_dvcs', or "
         "'batch_evaluate_pseudodata_dvcs', "
+        "'batch_evaluate_canonical_gpd_truth', "
         "'evaluate_post_training_comparison_dvcs', or "
         "'batch_evaluate_post_training_comparison_dvcs', "
         "'evaluate_native_model_holdout_dvcs', or "

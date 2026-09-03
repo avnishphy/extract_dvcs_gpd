@@ -1,5 +1,21 @@
 # Command-line reference
 
+## 0.3 architecture commands
+
+- `corpus-preflight PROJECT [--gpd-truth-request FILE]` validates the explicit
+  coordinate table and reports coverage, work, storage, shards, files, and
+  model compatibility without running PARTONS. With no flag it reads
+  `PROJECT/gpd_truth.json`; a missing file is reported as a required field.
+- `evaluate PROJECT` performs saved-artifact coverage and posterior sampling;
+  it does not resolve or launch the bridge.
+- `exact-reevaluate PROJECT` is the explicit native stage for authoritative
+  posterior GPD/CFF/observable checks.
+- `materialize` is the one-release compatibility wrapper that publishes an
+  architecture-neutral realization plus the DD model view.
+
+Selection, realization/view creation, decoder/MAF work, comparison, plotting,
+literature plots, and presentation generation are saved-artifact-only stages.
+
 ## Invocation model
 
 Run all public actions from the repository root through:
@@ -83,7 +99,10 @@ whether to rerun automatically in a short Slurm GPU allocation. Set
 
 Freezes the expensive native-data identity without running PARTONS. The
 identity includes parameter order/support/count/seed, physics, exact
-kinematics, bridge hash, and requested observables. Shard size must be in
+kinematics, bridge hash, requested observables, and canonical GPD coordinate
+request. Every new schema-2 corpus requires `PROJECT/gpd_truth.json`; use
+`--gpd-truth-request FILE` only to override that default. No coordinate grid is
+invented. Shard size must be in
 `[1,4096]`. The corpus is stored under `$DVCS_WORKSPACE/.corpora/` in the
 packaged runtime and cannot overwrite an existing name.
 
@@ -105,7 +124,10 @@ substantial CPU time.
 ./dvcs corpus-generate PROJECT CORPUS --force-native --no-progress
 ```
 
-Generates missing exact PARTONS core and observable shards. Each shard is
+Generates missing exact PARTONS core, canonical input-scale GPD-truth, and
+observable shards. Each GPD shard contains the core `group_index`, a dense
+`values[group, coordinate]` array, and a same-shape Boolean `status_mask`.
+Each shard is
 written to a same-directory partial file, reopened and checked, atomically
 published, hashed, and committed to the manifest. Rejected candidates are
 retained. Native request evidence is consolidated per shard. Re-running
@@ -234,14 +256,23 @@ test, native holdout, and real-data outputs are unavailable to the objective.
 ```
 
 Requires trained active members. It computes grouped outer-test metrics,
-coverage, posterior-predictive checks, exact posterior reevaluation, and exact
-GPD diagnostics. Native phases use the same isolated affinity-bounded worker
-pool as generation. The command writes `evaluation/evaluation_metrics.json`
-and associated non-pickled arrays.
+coverage, and frozen-posterior samples from saved artifacts. It never launches
+PARTONS and writes `evaluation/saved_evaluation_metrics.json`.
+
+### `exact-reevaluate`
+
+```bash
+./dvcs exact-reevaluate NAME --profile quick
+```
+
+Explicitly requests posterior-predictive, CFF, GPD, and observable evaluation
+through PARTONS. Native work uses the affinity-bounded process pool and writes
+`evaluation/evaluation_metrics.json` plus non-pickled arrays. It is not an
+automatic dependency of training or ordinary evaluation.
 
 On a JLab ifarm login host, sustained interactive evaluation is rejected. A
-managed SWIF2 workflow runs evaluate on a GPU after successful GPU training,
-preserving the saved result contract and explicit dependency chain.
+managed SWIF2 workflow runs saved evaluation on a GPU after successful GPU
+training; exact reevaluation must be an explicit native stage.
 
 ### `farm-submit` (JLab ifarm)
 

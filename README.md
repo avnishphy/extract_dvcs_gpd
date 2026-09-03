@@ -12,6 +12,15 @@ forward-physics implementation. Python coordinates simulations, covariance,
 nuisance sampling, inference, validation, and plots; it does not contain a
 fallback GPD/CFF/observable model.
 
+Release 0.3.0 separates the expensive immutable *master native physics corpus*
+from selection, architecture-neutral pseudodata realizations, model-specific
+views, and result bundles. Downstream architecture or noise changes never
+trigger native generation. The registered families are `dd_deepsets_maf` and
+`neural_gpd_deepsets_maf`; both use DeepSets, neural posterior estimation,
+conditional MAF, and PARTONS physics. The neural-GPD branch is NNGPD-inspired
+latent-function compression, not a claim of full model independence. On a
+DD-generated corpus it tests closure over the DD-induced truth distribution.
+
 ## Five-minute orientation
 
 Choose one execution path. Ordinary Linux can run stages directly. JLab
@@ -25,6 +34,10 @@ cd extract_dvcs_gpd
 ./install.sh --profile local --accelerator auto
 ./dvcs init first-study
 ./dvcs doctor first-study
+source .dvcs/install.env
+cp configs/examples/master_corpus_gpd_truth_smoke_v1.json \
+  "$DVCS_WORKSPACE/first-study/gpd_truth.json"
+# Edit gpd_truth.json: the two-point example is only a smoke-test design.
 ./dvcs corpus-create first-study first-corpus --profile quick
 ./dvcs corpus-plan first-study first-corpus
 ./dvcs corpus-generate first-study first-corpus
@@ -33,6 +46,7 @@ cd extract_dvcs_gpd
 ./dvcs train first-study --profile quick \
   --corpus first-corpus --selection baseline
 ./dvcs evaluate first-study --profile quick
+./dvcs exact-reevaluate first-study --profile quick
 ./dvcs compare first-study --profile quick
 ./dvcs plot first-study --profile quick
 ```
@@ -47,6 +61,10 @@ set -a; source jobs/jlab_ifarm/resources.env; set +a
 ./dvcs init first-study
 ./dvcs show first-study
 ./dvcs doctor first-study
+source .dvcs/install.env
+cp configs/examples/master_corpus_gpd_truth_smoke_v1.json \
+  "$DVCS_WORKSPACE/first-study/gpd_truth.json"
+# Replace the smoke coordinates with the reviewed production table.
 ./dvcs corpus-create first-study first-corpus --profile validation --shard-size 16
 ./dvcs corpus-plan first-study first-corpus
 ./dvcs farm-corpus-submit --project first-study --corpus first-corpus \
@@ -56,6 +74,13 @@ set -a; source jobs/jlab_ifarm/resources.env; set +a
   --profile validation --shard-size 16 --shards-per-worker 32 \
   --workflow first-study-corpus-v1
 ```
+
+The ordinary installer command verifies and reuses the current production SIF.
+Do not add `--source-build` to routine setup or recovery commands. Maintainers
+changing code or dependencies inside the image should follow the
+[image update and recovery runbook](docs/IMAGE_UPDATE_RUNBOOK.md), which keeps
+the known-good SIF available until a replacement passes both Apptainer test
+phases.
 
 After that workflow finishes and reaps its output, submit analysis from
 selection creation through plots:
@@ -111,7 +136,7 @@ ordered nonempty subset of six audited DVCS observables. Synthetic data use a de
 independent, local-correlated, phi-shape, and normalization contributions.
 
 The neural posterior uses a permutation-invariant DeepSets context encoder and
-an sbi conditional normalizing flow. Candidate ensemble members are selected
+an sbi/zuko conditional MAF. Candidate ensemble members are selected
 only with grouped internal validation. Replicates from one native parameter
 vector never cross train/internal-validation/outer-test roles.
 
@@ -141,11 +166,13 @@ change physics, masks, seeds, or result contracts.
 
 ```text
 editable experiment.json
-  -> immutable sharded exact-PARTONS corpus
-  -> immutable train/validation/outer-test selection
-  -> deterministic correlated pseudodata realization
-  -> NPE ensemble training
-  -> outer-test coverage and exact reevaluation
+  -> master native physics corpus (schema 2)
+  -> immutable selection (schema 1)
+  -> architecture-neutral pseudodata realization (schema 3)
+  -> DD or neural-GPD model view (schema 1)
+  -> DeepSets + MAF NPE result bundle (schema 2)
+  -> saved-artifact outer-test coverage
+  -> explicitly requested exact native reevaluation
   -> conventional exact-bank comparison
   -> saved-result plots
   -> optional output-blind native-model holdout
@@ -182,6 +209,7 @@ Start at the [documentation map](docs/INDEX.md). The primary guides are:
 - [CLI reference](docs/CLI_REFERENCE.md)
 - [Experiment JSON reference](docs/EXPERIMENT_JSON_REFERENCE.md)
 - [Corpus and data selection](docs/CORPUS_AND_DATA_SELECTION.md)
+- [Canonical GPD truth](docs/CANONICAL_GPD_TRUTH.md)
 - [Workflow and physics](docs/WORKFLOW_AND_PHYSICS.md)
 - [Results and interpretation](docs/RESULTS_AND_INTERPRETATION.md)
 - [Architecture](docs/ARCHITECTURE.md)
@@ -191,6 +219,7 @@ Start at the [documentation map](docs/INDEX.md). The primary guides are:
 - [JLab SWIF2](docs/JLAB_SWIF2.md)
 - [Resource management](docs/RESOURCE_MANAGEMENT.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Image update and recovery runbook](docs/IMAGE_UPDATE_RUNBOOK.md)
 - [Development configuration and testing](docs/DEVELOPMENT_AND_TESTING.md)
 
 ## Verification status

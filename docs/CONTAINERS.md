@@ -38,7 +38,7 @@ podman build \
   -f containers/Dockerfile \
   --target runtime \
   --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu \
-  -t localhost/extract-dvcs-gpd:0.2.0-cpu .
+  -t localhost/extract-dvcs-gpd:0.3.0-cpu .
 ```
 
 Docker CUDA:
@@ -48,18 +48,34 @@ docker build \
   -f containers/Dockerfile \
   --target runtime \
   --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu126 \
-  -t localhost/extract-dvcs-gpd:0.2.0-cuda12.6 .
+  -t localhost/extract-dvcs-gpd:0.3.0-cuda12.6 .
 ```
 
-Apptainer source build:
+Supported Apptainer source build and retest:
 
 ```bash
-apptainer build --fakeroot extract-dvcs-gpd.sif containers/apptainer.def
-apptainer test extract-dvcs-gpd.sif
+./install.sh --profile jlab_ifarm --accelerator auto --source-build
+source .dvcs/install.env
+apptainer test --bind "$DVCS_CACHE:/cache" "$DVCS_IMAGE"
 ```
 
 Normal users should prefer `install.sh`, which selects exact names and
-transactional output paths.
+transactional output paths. For the JLab profile it prefetches and checksums
+fragile source archives and the pinned CUDA PyTorch wheel on the host, binds
+that cache read-only into the fakeroot build, runs `apptainer test` plus
+runtime checks, atomically activates the SIF, and records its actual SHA-256.
+A manual `apptainer build` is a maintainer diagnostic, not the normal
+installation path.
+
+The installer supplies the checksum-verified source/wheel cache required by the
+definition; a bare manual `apptainer build` omits that contract. The build-time
+automatic `%test` sees a read-only root filesystem and therefore defers only
+the PARTONS logger-writing self-test. The final command above binds writable
+host cache and makes that native test mandatory. A bare
+`apptainer test IMAGE.sif` is not complete acceptance. Container and installer
+changes must follow the [image update and recovery
+runbook](IMAGE_UPDATE_RUNBOOK.md), including strict embedded-definition and
+digest verification before promotion.
 
 ## Runtime identity and privileges
 

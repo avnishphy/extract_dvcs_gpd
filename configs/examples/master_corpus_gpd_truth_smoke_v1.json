@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "coordinate_convention": "signed_x_xi_t_at_common_input_scale_v1",
+  "gpd_flavor_basis": "PARTONS_physical_u_d_s_gluon_and_charge_parity_v1",
+  "scale": {"kind": "input_scale", "Q0_squared_GeV2": 1.0},
+  "scheme": "MSbar",
+  "generator_representation": "declared_by_master_corpus",
+  "interpolation_policy": "exact_coordinates_only",
+  "dtype": "float32",
+  "compression": "npz_deflate",
+  "coordinates": [
+    {"x": -0.2, "xi": 0.1, "t_GeV2": -0.2, "gpd_type": "H", "channel": "u", "charge_parity": "native"},
+    {"x": 0.2, "xi": 0.1, "t_GeV2": -0.2, "gpd_type": "E", "channel": "d_plus", "charge_parity": "plus"}
+  ]
+}

@@ -34,6 +34,11 @@ On JLab use `--profile jlab_ifarm`; initialize and inspect projects on ifarm,
 but submit sustained generation, training, and evaluation through SWIF2. The
 complete JLab sequence is in [JLab ifarm](JLAB_IFARM.md).
 
+The ordinary installer is safe to rerun and reuses the accepted image. Users
+should not add `--source-build` when retrying installation; maintainers use the
+[image update and recovery runbook](IMAGE_UPDATE_RUNBOOK.md) when image
+contents intentionally change.
+
 `init` creates the project and, when the pinned database is installed,
 borrows only kinematics and metadata from its read-only catalog. It never uses
 measured values or uncertainties to generate pseudodata.
@@ -128,6 +133,11 @@ your claim. Never infer adequacy from the word `validation` alone.
 ## Create one reusable native corpus
 
 ```bash
+source .dvcs/install.env
+cp configs/examples/master_corpus_gpd_truth_smoke_v1.json \
+  "$DVCS_WORKSPACE/tutorial/gpd_truth.json"
+# Replace the smoke table with the production coordinate table.
+./dvcs corpus-preflight tutorial
 ./dvcs corpus-create tutorial tutorial-corpus --profile quick --shard-size 256
 ./dvcs corpus-plan tutorial tutorial-corpus
 ```
@@ -140,8 +150,9 @@ and deeply verify the expensive, noise-free PARTONS data:
 ./dvcs corpus-verify tutorial-corpus --deep
 ```
 
-The corpus stores immutable parameter vectors, CFFs, and each selected
-observable in independent atomic shards. It does not store neural
+The corpus stores immutable parameter vectors, canonical GPD values and
+validity masks at the requested input-scale coordinates, CFFs, and each
+selected observable in independent atomic shards. It does not store neural
 architecture, train/test roles, nuisances, or measurement noise. Those can
 change later without repeating compatible PARTONS calculations.
 
@@ -152,12 +163,13 @@ Create one immutable group assignment and run inference:
 ./dvcs train tutorial --profile quick \
   --corpus tutorial-corpus --selection baseline
 ./dvcs evaluate tutorial --profile quick
+./dvcs exact-reevaluate tutorial --profile quick
 ./dvcs compare tutorial --profile quick
 ./dvcs plot tutorial --profile quick
 ```
 
-Stepwise execution is recommended because native generation/evaluation are
-CPU-heavy while neural training benefits from GPUs. It also makes failures and
+Stepwise execution is recommended because native generation/exact reevaluation
+are CPU-heavy while neural training benefits from GPUs. It also makes failures and
 resumption easier to understand. The former project-local `generate` and
 all-in-one `run` actions are intentionally no longer public: explicit corpus
 and selection names prevent accidental recomputation and split drift.

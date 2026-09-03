@@ -23,10 +23,27 @@ from typing import Any
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 ANALYSIS_ORDER = (
     "selection", "materialize", "optimize", "train", "evaluate",
-    "compare", "holdout", "plot",
+    "exact-reevaluate", "compare", "holdout", "plot",
 )
 GPU_STAGES = {"optimize", "train", "evaluate"}
 CORPUS_STAGES = {"selection", "materialize"}
+PLACEMENT_PROFILES = {
+    "farm25_strict": {
+        "corpus_worker_constraint": "el9,farm25",
+        "description": "production PARTONS workers only on the farm25 family",
+        "fallback": None,
+    },
+    "farm19_fallback": {
+        "corpus_worker_constraint": "el9,farm19",
+        "description": "explicit user-selected slower farm19 fallback",
+        "fallback": "explicit",
+    },
+    "portable": {
+        "corpus_worker_constraint": "el9",
+        "description": "portable development placement without a node-family preference",
+        "fallback": None,
+    },
+}
 
 ANALYSIS_DEFAULTS = {
     "selection": (1, "4G", "8G", "30min", 0, "production"),
@@ -34,6 +51,7 @@ ANALYSIS_DEFAULTS = {
     "optimize": (8, "32G", "48G", "12h", 1, "gpu"),
     "train": (4, "32G", "48G", "12h", 1, "gpu"),
     "evaluate": (8, "16G", "48G", "12h", 1, "gpu"),
+    "exact-reevaluate": (8, "16G", "48G", "12h", 0, "production"),
     "compare": (2, "12G", "32G", "4h", 0, "production"),
     "holdout": (4, "20G", "48G", "24h", 0, "production"),
     "holdout_worker": (4, "20G", "48G", "12h", 0, "production"),
@@ -57,6 +75,22 @@ def checked_name(value: str, label: str) -> str:
     if not NAME.fullmatch(value):
         fail(f"{label} must contain only letters, digits, dot, underscore, or hyphen")
     return value
+
+
+def non_worker_constraint(value: str) -> str:
+    """Strip legacy corpus-family placement from generic/lightweight jobs."""
+    tokens = [token.strip() for token in value.split(",") if token.strip()]
+    family = {"farm19", "farm23", "farm25"}
+    legacy = [token for token in tokens if token.lower() in family]
+    if legacy:
+        print(
+            "warning: node-family tokens in --constraint/SWIF_CONSTRAINT apply "
+            "only as a deprecated compatibility input and are ignored for "
+            "non-corpus-worker stages; use --placement-profile",
+            file=sys.stderr,
+        )
+    retained = [token for token in tokens if token.lower() not in family]
+    return ",".join(retained) or "el9"
 
 
 def sha256(path: Path) -> str:
@@ -111,7 +145,8 @@ def time_seconds(value: str) -> int:
 
 
 def env_resource(stage: str, field: str, default: Any) -> Any:
-    value = os.environ.get(f"SWIF_{stage.upper()}_{field}")
+    env_stage = stage.upper().replace("-", "_")
+    value = os.environ.get(f"SWIF_{env_stage}_{field}")
     return default if value in (None, "") else value
 
 
@@ -213,6 +248,7 @@ def analysis_workflow(args: argparse.Namespace) -> dict[str, Any]:
     result_root = Path(args.result_root).expanduser().resolve()
     log_root = Path(args.log_root).expanduser().resolve()
     stages = select_stages(args)
+    generic_constraint = non_worker_constraint(args.constraint)
 
     image_name, image_input = staged(image, "dvcs-image")
     database_name, database_input = staged(database, "gpddatabase")
@@ -259,7 +295,7 @@ def analysis_workflow(args: argparse.Namespace) -> dict[str, Any]:
                 model_samples = f"performance-holdout-{model}.jsonl"
                 job = job_base(
                     name=model_job_name, account=args.account,
-                    constraint=args.constraint, resources=resource("holdout_worker"),
+                    constraint=generic_constraint, resources=resource("holdout_worker"),
                     log_root=log_root, workflow=workflow,
                     stage=f"holdout-{model}",
                 )
@@ -295,7 +331,7 @@ def analysis_workflow(args: argparse.Namespace) -> dict[str, Any]:
             samples_local = "performance-holdout-merge.jsonl"
             merge = job_base(
                 name="dvcs-holdout-merge", account=args.account,
-                constraint=args.constraint, resources=resource("holdout_merge"),
+                constraint=generic_constraint, resources=resource("holdout_merge"),
                 log_root=log_root, workflow=workflow, stage="holdout-merge",
             )
             merge["antecedents"] = model_jobs
@@ -331,7 +367,7 @@ def analysis_workflow(args: argparse.Namespace) -> dict[str, Any]:
         output_remote = result_root / "state" / f"{workflow}-{output_local}"
         summary_remote = result_root / "summaries" / f"{workflow}-{summary_local}"
         job = job_base(
-            name=name, account=args.account, constraint=args.constraint,
+            name=name, account=args.account, constraint=generic_constraint,
             resources=resources, log_root=log_root, workflow=workflow, stage=stage,
         )
         if prior_job:
@@ -394,6 +430,9 @@ def corpus_workflow(args: argparse.Namespace) -> dict[str, Any]:
     image = checked_file(args.image, "image")
     database = checked_file(args.database, "database archive")
     experiment = checked_file(args.experiment, "experiment")
+    gpd_truth_request = checked_file(
+        args.gpd_truth_request, "GPD truth request"
+    )
     worker = checked_file(args.worker, "corpus worker")
     merger = checked_file(args.merger, "corpus merger")
     collector = checked_file(args.collector, "performance collector")
@@ -410,10 +449,18 @@ def corpus_workflow(args: argparse.Namespace) -> dict[str, Any]:
     worker_count = math.ceil(shard_count / shards_per_worker)
     result_root = Path(args.result_root).expanduser().resolve()
     log_root = Path(args.log_root).expanduser().resolve()
+    placement = PLACEMENT_PROFILES[args.placement_profile]
+    generic_constraint = non_worker_constraint(args.constraint)
+    worker_constraint = placement["corpus_worker_constraint"]
+    if "farm23" in worker_constraint.split(","):
+        fail("farm23 is excluded from every corpus-worker placement profile")
 
     image_name, image_input = staged(image, "dvcs-image")
     database_name, database_input = staged(database, "gpddatabase")
     experiment_name, experiment_input = staged(experiment, "experiment")
+    gpd_truth_name, gpd_truth_input = staged(
+        gpd_truth_request, "gpd-truth-request"
+    )
     worker_name, worker_input = staged(worker, "corpus-worker")
     merger_name, merger_input = staged(merger, "corpus-merger")
     collector_name, collector_input = staged(collector, "performance-collector")
@@ -433,8 +480,10 @@ def corpus_workflow(args: argparse.Namespace) -> dict[str, Any]:
         "gpus": 0,
         "partition": str(env_resource("corpus_merge", "PARTITION", "production")),
     }
-    if worker_resources["cpu_cores"] < 1 or merge_resources["cpu_cores"] < 1:
-        fail("corpus worker/merge core requests must be positive")
+    if worker_resources["cpu_cores"] != 16:
+        fail("PARTONS corpus workers must request exactly 16 CPUs")
+    if merge_resources["cpu_cores"] < 1:
+        fail("corpus merge core request must be positive")
     jobs: list[dict[str, Any]] = []
     batch_outputs: list[tuple[str, Path]] = []
     for batch in range(worker_count):
@@ -448,12 +497,20 @@ def corpus_workflow(args: argparse.Namespace) -> dict[str, Any]:
         archive_remote = result_root / "batches" / archive_local
         summary_remote = result_root / "summaries" / summary_local
         job = job_base(
-            name=name, account=args.account, constraint=args.constraint,
+            name=name, account=args.account, constraint=worker_constraint,
             resources=worker_resources, log_root=log_root,
             workflow=workflow, stage="corpus-worker",
         )
+        job["placement"] = {
+            "profile": args.placement_profile, "node_family": (
+                "farm25" if args.placement_profile == "farm25_strict" else
+                "farm19" if args.placement_profile == "farm19_fallback" else None
+            ), "constraint": worker_constraint,
+            "farm23_excluded": True, "worker_cpus_fixed": 16,
+        }
         job["inputs"] = [
-            image_input, database_input, experiment_input, worker_input,
+            image_input, database_input, experiment_input, gpd_truth_input,
+            worker_input,
             collector_input,
         ]
         job["outputs"] = [
@@ -464,7 +521,8 @@ def corpus_workflow(args: argparse.Namespace) -> dict[str, Any]:
         ]
         job["command"] = command(
             "/bin/bash", worker_name, project, profile, corpus, image_name,
-            database_name, experiment_name, str(shard_size), str(start),
+            database_name, experiment_name, gpd_truth_name,
+            str(shard_size), str(start),
             str(count), archive_local, summary_local,
             str(args.heartbeat_seconds),
             collector_name, performance_local, samples_local,
@@ -480,9 +538,13 @@ def corpus_workflow(args: argparse.Namespace) -> dict[str, Any]:
     merge_samples = "performance-corpus-merge.jsonl"
     merge = job_base(
         name="dvcs-corpus-merge", account=args.account,
-        constraint=args.constraint, resources=merge_resources,
+        constraint=generic_constraint, resources=merge_resources,
         log_root=log_root, workflow=workflow, stage="corpus-merge",
     )
+    merge["placement"] = {
+        "profile": "portable_merge", "node_family": None,
+        "constraint": generic_constraint, "inherits_corpus_worker_placement": False,
+    }
     merge["antecedents"] = [str(job["name"]) for job in jobs]
     merge["inputs"] = [image_input, merger_input, collector_input] + [
         transfer(local, remote) for local, remote in batch_outputs
@@ -506,6 +568,17 @@ def corpus_workflow(args: argparse.Namespace) -> dict[str, Any]:
         "site_name": args.site,
         "max_problems": 1,
         "max_dispatched": max(1, int(args.max_dispatched)),
+        "placement_policy": {
+            "schema_version": 1, "profile": args.placement_profile,
+            "corpus_worker": placement,
+            "corpus_merge_constraint": generic_constraint,
+            "farm23_implicit_fallback": False,
+            "telemetry_basis": {
+                "farm25": {"completed_jobs": 8, "mean_hours": 8.39, "range_hours": [7.96, 9.17]},
+                "farm19": {"completed_jobs": 9, "mean_hours": 12.74, "range_hours": [11.34, 13.81]},
+                "farm23": {"completed_jobs": 13, "mean_hours": 17.89, "range_hours": [14.74, 19.97]}
+            },
+        },
         "jobs": jobs,
     }
 
@@ -557,9 +630,15 @@ def parser() -> argparse.ArgumentParser:
     corpus.add_argument("--profile", default="validation")
     corpus.add_argument("--corpus", required=True)
     corpus.add_argument("--experiment", required=True)
+    corpus.add_argument("--gpd-truth-request", required=True)
     corpus.add_argument("--shard-size", type=int, default=16)
     corpus.add_argument("--shards-per-worker", type=int, default=32)
     corpus.add_argument("--heartbeat-seconds", type=int, default=300)
+    corpus.add_argument(
+        "--placement-profile", choices=tuple(PLACEMENT_PROFILES),
+        default=os.environ.get("SWIF_CORPUS_PLACEMENT_PROFILE", "farm25_strict"),
+        help="stage-specific corpus-worker node-family policy",
+    )
     corpus.add_argument(
         "--worker", default=str(Path(__file__).with_name("run_swif2_corpus_worker.sh"))
     )

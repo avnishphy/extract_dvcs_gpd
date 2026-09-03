@@ -54,7 +54,6 @@
     "point_layer_norm": false,
     "flow_hidden_features": 64,
     "num_transforms": 5,
-    "num_bins": 8,
     "z_score_theta": "independent",
     "z_score_x": "none",
     "training_batch_size": 256,

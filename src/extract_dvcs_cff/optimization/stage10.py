@@ -81,7 +81,6 @@ def optimize_hyperparameters(
             "embedding_features",
             "flow_hidden_features",
             "num_transforms",
-            "num_bins",
             "training_batch_size",
         ):
             network[key] = trial.suggest_categorical(key, search[key])

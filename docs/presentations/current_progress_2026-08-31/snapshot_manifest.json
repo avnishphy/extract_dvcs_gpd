@@ -1,0 +1,201 @@
+{
+  "artifact_ids": {
+    "bridge_sha256": "72a0edb1225de1423e01583a70435750e634f097d4a977b20f1c2dd2b7d868d7",
+    "corpus_manifest_sha256": "ae992508ea603ad4dbe15abaf867d023406664c2ded77d8c6ebf3d59cd7ac222",
+    "realization_array_manifest_sha256": "0ff6e391d345aadcab5ffb91319bafcd7d5f63a9cb5866e54cd25d4c9a51b1d4",
+    "selection_manifest_sha256": "8ba9ea0586e5eab59694781f8443f8b67c9d18e0534fe7667c550bb9f96c8b7c"
+  },
+  "assets": [
+    {
+      "bytes": 318860,
+      "path": "assets/current_plots/cff_real_imaginary.png",
+      "sha256": "8cff50c21889288deb7be1f39476c117056a054b937f7980da3cbf91872f0ceb"
+    },
+    {
+      "bytes": 154444,
+      "path": "assets/current_plots/coverage_calibration.png",
+      "sha256": "00659833cac6825f0a222211ee3e84a0a2831682f31de3f9357580368a00db63"
+    },
+    {
+      "bytes": 689074,
+      "path": "assets/current_plots/dd_train_validation_test_split.png",
+      "sha256": "18d67c2479d224a3b63bdda6ebd75b20284583a2e744827a0a549ea4d268fa46"
+    },
+    {
+      "bytes": 276230,
+      "path": "assets/current_plots/gpd_charge_weighted_c_even_sum.png",
+      "sha256": "84e172f90c0d70870e682d7aecaba2c005b2f7620acc52ed6939d89bbc8dee5f"
+    },
+    {
+      "bytes": 351058,
+      "path": "assets/current_plots/gpd_d_components.png",
+      "sha256": "ca885bd742f7330d1d6156180c9c5c96322337a22e6949a559428a9be4dd3f0b"
+    },
+    {
+      "bytes": 229582,
+      "path": "assets/current_plots/gpd_gluon_components.png",
+      "sha256": "0b2c103949e1e9f6bd47444202c06930b51b10b531729af127806f012d2ae104"
+    },
+    {
+      "bytes": 618714,
+      "path": "assets/current_plots/gpd_posterior_predictions.png",
+      "sha256": "ec3ddcb6442066bc8cbbcf2796d19d78277108acafb9a78276c856bbf6d04d02"
+    },
+    {
+      "bytes": 354650,
+      "path": "assets/current_plots/gpd_s_components.png",
+      "sha256": "5bacc5d1b3be9176e00a7f7d92a4dffdd771ab4674fb87f911ffa0667b319fc4"
+    },
+    {
+      "bytes": 438848,
+      "path": "assets/current_plots/gpd_u_components.png",
+      "sha256": "18170a47fc5d22b04bed0c53a0ed79881113a8603253c4870fbe13b9fd49614b"
+    },
+    {
+      "bytes": 62388,
+      "path": "assets/current_plots/posterior_comparison.png",
+      "sha256": "3c09b71a5fac31a6e22d78c5e468105fe96b6f5a13b036fb4793a3fe843841b9"
+    },
+    {
+      "bytes": 287969,
+      "path": "assets/current_plots/posterior_correlations.png",
+      "sha256": "169353f70c6a00fb134194fcff25b2cc40a9f66bb8e197da6b14dd1a2ca0c7a9"
+    },
+    {
+      "bytes": 245843,
+      "path": "assets/current_plots/posterior_marginals_E.png",
+      "sha256": "0c48bb79363b73ce8625f0fbaeae43519365a2e4944046085414d41e2af39d86"
+    },
+    {
+      "bytes": 247484,
+      "path": "assets/current_plots/posterior_marginals_Etilde.png",
+      "sha256": "9568741ff0301619650f265efe83e610474f709d84ae1bcc334dfaed86fa50b6"
+    },
+    {
+      "bytes": 253675,
+      "path": "assets/current_plots/posterior_marginals_H.png",
+      "sha256": "a052b2b0b0ea66563203003e269816abfd3694b4489108ddfb0e54b2eefdaa52"
+    },
+    {
+      "bytes": 262751,
+      "path": "assets/current_plots/posterior_marginals_Htilde.png",
+      "sha256": "2fe4146a3da6006ad49324faf600859c7337bdc17deb646a70778341509ba171"
+    },
+    {
+      "bytes": 459905,
+      "path": "assets/current_plots/posterior_predictive.png",
+      "sha256": "eb1b04a8ac90b7b1767e04b9bb02fd99f11c107fa9a4101ca80a4a787b97b596"
+    },
+    {
+      "bytes": 339006,
+      "path": "assets/current_plots/posterior_predictive_pulls.png",
+      "sha256": "8fbf41515cd236ad2324cced39e5ca7028a32f4880511b091bbc45839d718d7c"
+    },
+    {
+      "bytes": 121149,
+      "path": "assets/current_plots/real_catalog_vs_pseudodata_kinematics.png",
+      "sha256": "069e5aa1c6459a99f70829d4764172656806b4792ade7a073b9e57e79b17d4fc"
+    },
+    {
+      "bytes": 168242,
+      "path": "assets/current_plots/training_validation_nll.png",
+      "sha256": "2f9fc9bbe3391ef1ff6e4b83380118b0994e181d0c5432720fb5f8b09fd261c8"
+    },
+    {
+      "bytes": 388020,
+      "path": "assets/holdouts_same96/josh-same-design-96/GPDGK11/plots/cff_truth_vs_extraction.png",
+      "sha256": "f80efb111e3cf67213d42c355ba8c9a5cb241291e43a99f1df5921448587f02e"
+    },
+    {
+      "bytes": 463228,
+      "path": "assets/holdouts_same96/josh-same-design-96/GPDGK11/plots/gpd_truth_vs_extraction.png",
+      "sha256": "3a640f1fc562135cebb2fb9dcaaba34bb0ce844357c7de5a413609ec67bd860c"
+    },
+    {
+      "bytes": 399725,
+      "path": "assets/holdouts_same96/josh-same-design-96/GPDGK11/plots/observable_truth_vs_extraction.png",
+      "sha256": "04e39ef7216da2727278db7da18e96b0c091ba9ba059ff6179231c34d42f1fa2"
+    },
+    {
+      "bytes": 359689,
+      "path": "assets/holdouts_same96/josh-same-design-96/GPDGK16/plots/cff_truth_vs_extraction.png",
+      "sha256": "ef9495a1152ee1adbf9cb502ee51a76d9307413391158d4bd72db2f738ac1275"
+    },
+    {
+      "bytes": 450172,
+      "path": "assets/holdouts_same96/josh-same-design-96/GPDGK16/plots/gpd_truth_vs_extraction.png",
+      "sha256": "1cce364b761b54abc60e43b898b1e1676f99d32e8f774189b21cd90f7019cdfe"
+    },
+    {
+      "bytes": 393817,
+      "path": "assets/holdouts_same96/josh-same-design-96/GPDGK16/plots/observable_truth_vs_extraction.png",
+      "sha256": "b725262c57bd059d9ba2a2ac78fe4e4af1e9ddaf4833521399b31e80cd0672ae"
+    },
+    {
+      "bytes": 359503,
+      "path": "assets/holdouts_same96/josh-same-design-96/GPDGK19/plots/cff_truth_vs_extraction.png",
+      "sha256": "0a19827368aa486bd6ae81e763296fb6766f0c6aa535bf38d590f66cf7d4f4e0"
+    },
+    {
+      "bytes": 433818,
+      "path": "assets/holdouts_same96/josh-same-design-96/GPDGK19/plots/gpd_truth_vs_extraction.png",
+      "sha256": "8a1cb3cb3a5d8bf00b247f9a894d85e712f46d8939e80e890214947db323cf00"
+    },
+    {
+      "bytes": 395789,
+      "path": "assets/holdouts_same96/josh-same-design-96/GPDGK19/plots/observable_truth_vs_extraction.png",
+      "sha256": "e6fbee21a3de78eaef9b510c130b8e750e873db0617adfaf89ad94356e5183fa"
+    },
+    {
+      "bytes": 367433,
+      "path": "assets/holdouts_same96/josh-same-design-96/GPDVGG99/plots/cff_truth_vs_extraction.png",
+      "sha256": "c0e1553ef66e36605f4931aa12408e09ca367a72df00c8ca075f63916994b13d"
+    },
+    {
+      "bytes": 432882,
+      "path": "assets/holdouts_same96/josh-same-design-96/GPDVGG99/plots/gpd_truth_vs_extraction.png",
+      "sha256": "d5ad75ae02b5ac18db90a9797f4ffaffbf975e2a7ce233f85612426a4a827ecf"
+    },
+    {
+      "bytes": 402689,
+      "path": "assets/holdouts_same96/josh-same-design-96/GPDVGG99/plots/observable_truth_vs_extraction.png",
+      "sha256": "254f68271b6b6d23597e7c96835a87aaece3c9dd0aab0cd52bc0da3a17c45e69"
+    },
+    {
+      "bytes": 10668685,
+      "path": "assets/josh-holdout-same96-v22-vs-fresh96-v23.pdf",
+      "sha256": "b825eddafd49d8557d775a013da6b3332fa5cd01947b6c26c3b21e808eb8a3b2"
+    }
+  ],
+  "bibliography_sources": [
+    "https://arxiv.org/abs/2605.06994",
+    "https://arxiv.org/abs/2303.12006",
+    "https://arxiv.org/abs/2107.11312"
+  ],
+  "build_toolchain": {
+    "bibtex": "BibTeX 0.99d (TeX Live 2020)",
+    "pdflatex": "pdfTeX 3.14159265-2.6-1.40.21 (TeX Live 2020)"
+  },
+  "framework": {
+    "repository": "https://github.com/avnishphy/extract_dvcs_gpd",
+    "snapshot_state": "working tree implementation snapshot; see git status",
+    "starting_commit": "e77b71210ce79e0fdd3d9a13006131401bd981e0"
+  },
+  "presentation_date": "2026-08-31",
+  "result_bundle": {
+    "comparison_metrics_sha256": "e3ebe6c36f07f80bfce42d257e79b27ef8333907f3c64d5da8232050108554c9",
+    "evaluation_metrics_sha256": "312d8d75f5b43e3f4bceefae9897469c4be00c0cdb354a61a051c4be1f290a0b",
+    "holdout_summary_sha256": "53b78583492a29a0b42bb3f20e2a80447f528d970f3c8b2de952523759861e02",
+    "plot_manifest_sha256": "940a8ee7b13267796a5bef525c9d84dbfd16bbe646584de37403fed2ec882271",
+    "source_archive": "results/swif2/experiment-josh-validation-same96-v22/state/experiment-josh-validation-same96-v22-project-after-plot.tar",
+    "training_summary_sha256": "fea7166166706bf90c64f0fd4348bc76fca3af81eaaca2d1f91f8e3ad982eab8",
+    "workflow": "experiment-josh-validation-same96-v22"
+  },
+  "schema_version": 1,
+  "snapshot_policy": "one_time_static_no_automatic_regeneration",
+  "unavailable_expected_assets": [
+    "no completed neural-GPD architecture result exists",
+    "no valid conventional-posterior comparison exists",
+    "no production schema-2 canonical-GPD-truth corpus exists"
+  ]
+}

@@ -41,12 +41,28 @@ assert images["published"] is False
 assert all(item["digest"] is None for item in images["images"].values())
 version = (ROOT / "VERSION").read_text().strip()
 compatibility = json.loads((ROOT / "COMPATIBILITY.json").read_text())
-assert version == "0.2.0"
+assert version == "0.3.0"
 assert compatibility["distribution_version"] == version
-assert compatibility["experiment_schema"] == 8
-assert compatibility["compatible_experiment_schemas"] == [7, 8]
+assert compatibility["experiment_schema"] == 9
+assert compatibility["compatible_experiment_schemas"] == [7, 8, 9]
+assert compatibility["master_corpus_schema"] == 2
+assert compatibility["compatible_master_corpus_schemas"] == [1, 2]
+assert compatibility["pseudodata_realization_schema"] == 3
+assert compatibility["model_view_schema"] == 1
+assert compatibility["result_bundle_schema"] == 2
 assert compatibility["upstream_commit"] == state["upstream_commit"]
 assert all(version in item["tag"] for item in images["images"].values())
+
+installer = (ROOT / "install.sh").read_text()
+for token in (
+    "image_accelerator=cuda",
+    "apptainer test --bind",
+    "JLab SIF lacks the pinned CUDA runtime",
+    'digest="sha256:$(sha256sum',
+    'candidate_image="${image}.partial"',
+    "DVCS_WHEELHOUSE",
+):
+    assert token in installer, f"JLab installer contract missing {token!r}"
 
 sys.path.insert(0, str(ROOT / "src"))
 from extract_dvcs_cff.native_parallel import resolve_native_workers

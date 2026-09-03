@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/extract_dvcs_gpd/neural_gpd_function_artifact_v1.schema.json",
+  "title": "Frozen neural-GPD function artifact for native consumption v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "coordinate_table_sha256", "coordinates", "values", "input_scale_Q0_squared_GeV2", "scheme", "channels", "interpolation_policy", "support_policy", "decoder_checkpoint_sha256", "native_adapter_capability"],
+  "properties": {
+    "schema_version": {"const": 1}, "status": {"const": "frozen"},
+    "coordinate_table_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "coordinates": {"type": "object"}, "values": {"type": "object"},
+    "input_scale_Q0_squared_GeV2": {"type": "number", "exclusiveMinimum": 0}, "scheme": {"type": "string"}, "channels": {"type": "array", "minItems": 1},
+    "interpolation_policy": {"enum": ["exact_coordinates_only", "linear_inside_stored_hull"]}, "support_policy": {"const": "fail_outside_stored_support"},
+    "decoder_checkpoint_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "native_adapter_capability": {"const": "external_neural_gpd_function_v1"}
+  }
+}

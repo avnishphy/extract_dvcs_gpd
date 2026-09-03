@@ -50,7 +50,7 @@ STAGE10_POINT_FEATURE_NAMES = (
 )
 
 STAGE10_GLOBAL_FEATURE_NAMES = (
-    "representation_is_full_independent_four_gpd_flavor_dd",
+    "physics_backend_is_partons",
     "q0_squared_GeV2_over_1",
     "coefficient_function_is_lo",
     "evolution_is_configured",
@@ -431,10 +431,15 @@ def build_stage10_context(
 
 
 def stage10_density_builder(configuration: Mapping[str, Any]):
-    """Construct the configured DeepSets-conditioned Zuko flow factory."""
+    """Construct the sole supported DeepSets-conditioned conditional MAF."""
 
     context = configuration["context_contract"]
     network = configuration["network"]
+    if network["flow"] != "zuko_maf" or "num_bins" in network:
+        raise ValueError(
+            "MAF is the only active density estimator; num_bins/NSF fields "
+            "must be explicitly migrated"
+        )
     point_count = len(configuration["kinematics"]) * len(
         configuration["observables"]
     )
@@ -458,7 +463,6 @@ def stage10_density_builder(configuration: Mapping[str, Any]):
         embedding_net=encoder,
         hidden_features=int(network["flow_hidden_features"]),
         num_transforms=int(network["num_transforms"]),
-        num_bins=int(network["num_bins"]),
         z_score_theta=network["z_score_theta"],
         z_score_x=network["z_score_x"],
     )

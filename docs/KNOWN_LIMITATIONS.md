@@ -1,12 +1,28 @@
 # Known limitations and claim boundary
 
+- Canonical native GPD-truth storage is now mandatory for newly created
+  schema-2 corpora, but no reviewed production coordinate table or completed
+  production corpus is claimed yet. The bundled two-point table is only a
+  runtime smoke test.
+- Exact neural posterior reevaluation awaits the native external-function
+  loader described in [Native bridge](NATIVE_BRIDGE.md); no Python fallback is
+  permitted.
+- Stage-09 remains a fixed shadow stress test, not a complete Moffat-style
+  shadow-identifiability analysis.
+
 ## Packaging and deployment
 
 - No OCI image has been published. `provenance/images.lock.json` intentionally
   has null digests, so source build is the only verified installer decision.
-- Docker/Podman, Apptainer, Slurm, and usable GPU hardware were absent from the
-  packaging machine. Definitions, launchers, syntax, and propagation were
-  tested, but actual runtime acceptance remains outstanding.
+- Apptainer 1.5.2 and the JLab Slurm/SWIF2 tools were available; usable CUDA
+  hardware was not. The clean 0.3.0 Apptainer build compiled the native stack
+  but failed while retrieving pinned PyTorch metadata after repeated
+  `download-r2.pytorch.org` connection resets, so no 0.3.0 SIF or GPU runtime
+  acceptance is claimed. The pre-existing pinned 0.2.0 SIF ran the complete
+  static suite against the 0.3.0 source tree. See the dated
+  [container verification record](../provenance/container-verification-2026-08-31.json).
+  Normal installation uses `install.sh`, whose host-prefetched, checksum-bound
+  wheel path avoids the failed manual-build download route.
 - The Ubuntu base digest and APT snapshot plus direct/transitive Python
   versions are pinned, but wheel hashes are not; bit-for-bit Python rebuilds
   are not claimed.

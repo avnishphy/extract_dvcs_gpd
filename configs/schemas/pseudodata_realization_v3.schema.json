@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/extract_dvcs_gpd/pseudodata_realization_v3.schema.json",
+  "title": "Architecture-neutral pseudodata realization v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "realization_id", "identity", "master_corpus_id", "selection_id", "synthetic", "architecture_neutral", "observation_encoder", "density_estimator", "arrays", "truth_sidecar", "legacy_source_manifest_sha256"],
+  "properties": {
+    "schema_version": {"const": 3},
+    "realization_id": {"type": "string", "pattern": "^realization-[0-9a-f]{64}$"},
+    "identity": {"type": "object"},
+    "master_corpus_id": {"type": "string"},
+    "selection_id": {"type": "string"},
+    "synthetic": {"const": true},
+    "architecture_neutral": {"const": true},
+    "observation_encoder": {"type": "null"},
+    "density_estimator": {"type": "null"},
+    "arrays": {"type": "object"},
+    "truth_sidecar": {"type": "object", "required": ["path", "observation_encoder_access"], "properties": {"path": {"type": "string"}, "observation_encoder_access": {"const": false}}},
+    "legacy_source_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

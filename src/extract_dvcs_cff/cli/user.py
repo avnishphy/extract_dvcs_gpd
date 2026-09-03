@@ -22,6 +22,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import warnings
 from typing import Any, Mapping
 
 from extract_dvcs_cff.workflows.pseudodata import (
@@ -519,6 +520,9 @@ Run commands from the repository root:
 
 ```bash
 ./dvcs doctor {name}
+source .dvcs/install.env
+cp configs/examples/master_corpus_gpd_truth_smoke_v1.json "$DVCS_WORKSPACE/{name}/gpd_truth.json"
+# Replace the two-point smoke table with the reviewed production coordinates.
 ./dvcs corpus-create {name} {name}-corpus --profile quick
 ./dvcs corpus-plan {name} {name}-corpus
 ./dvcs corpus-generate {name} {name}-corpus
@@ -531,7 +535,8 @@ Run commands from the repository root:
 ./dvcs plot {name} --profile quick
 ```
 
-Read `docs/CORPUS_AND_DATA_SELECTION.md` in the distribution checkout before
+Read `docs/CANONICAL_GPD_TRUTH.md` and
+`docs/CORPUS_AND_DATA_SELECTION.md` in the distribution checkout before
 the expensive
 generation command. It defines atomic shards, immutable group splits,
 deterministic noise replicas, safe observable extension, verification, and
@@ -796,7 +801,14 @@ def _load_experiment(project: Path) -> dict[str, Any]:
                 raise ValueError("unsupported kinematics_source.mode")
         _exact_keys(
             value["inference"],
-            INFERENCE_KEYS_V9 if public_schema == 9 else INFERENCE_KEYS,
+            (
+                INFERENCE_KEYS_V9
+                if public_schema == 9 or (
+                    public_schema in {7, 8}
+                    and "observation_design_training" in value["inference"]
+                )
+                else INFERENCE_KEYS
+            ),
             "inference",
         )
         if public_schema == 9:
@@ -939,6 +951,25 @@ def _load_experiment(project: Path) -> dict[str, Any]:
         )
     else:
         raise ValueError("unsupported experiment schema_version")
+    if "num_bins" in normalized["network"]:
+        normalized["network"] = dict(normalized["network"])
+        normalized["network"].pop("num_bins")
+        warnings.warn(
+            "migrated retired inference.neural_posterior.num_bins: MAF has no "
+            "spline bins; save a new schema-9 project without this field",
+            FutureWarning,
+            stacklevel=2,
+        )
+    search = normalized.get("optimization", {}).get("search_space")
+    if isinstance(search, dict) and "num_bins" in search:
+        normalized["optimization"] = deepcopy(normalized["optimization"])
+        normalized["optimization"]["search_space"].pop("num_bins")
+        warnings.warn(
+            "migrated retired hyperparameter search_space.num_bins; only MAF "
+            "hyperparameters remain active",
+            FutureWarning,
+            stacklevel=2,
+        )
     accelerator_override = os.environ.get("DVCS_ACCELERATOR")
     threads_override = os.environ.get("DVCS_CPU_THREADS")
     workers_override = os.environ.get("DVCS_NATIVE_WORKERS")
@@ -956,33 +987,26 @@ def _load_experiment(project: Path) -> dict[str, Any]:
     _exact_keys(
         normalized["uncertainties"], UNCERTAINTY_KEYS, "uncertainties"
     )
-    if len(normalized["kinematics"]) < 4:
-        raise ValueError("at least four kinematics are required")
+    if not isinstance(normalized["kinematics"], list) or not normalized["kinematics"]:
+        raise ValueError("at least one kinematic site is required")
     for index, point in enumerate(normalized["kinematics"]):
         _exact_keys(point, KINEMATIC_KEYS, f"kinematics[{index}]")
         for key, item in point.items():
             if not isinstance(item, (int, float)) or not math.isfinite(item):
                 raise ValueError(f"kinematics[{index}].{key} must be finite")
-        if not 0.10 <= float(point["x_b"]) <= 0.50:
-            raise ValueError(f"kinematics[{index}].x_b is outside [0.10,0.50]")
-        if not -0.90 <= float(point["t_GeV2"]) <= -0.10:
+        if float(point["Q2_GeV2"]) < 1.0:
             raise ValueError(
-                f"kinematics[{index}].t_GeV2 is outside [-0.90,-0.10]"
-            )
-        if not 1.0 <= float(point["Q2_GeV2"]) <= 80.0:
-            raise ValueError("Q2_GeV2 must lie in [1,80]")
-        if not 3.0 <= float(point["beam_energy_GeV"]) <= 200.0:
-            raise ValueError(
-                "beam_energy_GeV must lie in [3,200]"
+                f"kinematics[{index}].Q2_GeV2 must be at least the native "
+                "GPD input scale Q0^2=1 GeV2"
             )
         require_physical_fixed_target_kinematics(
             x_b=float(point["x_b"]),
             Q2_GeV2=float(point["Q2_GeV2"]),
             beam_energy_GeV=float(point["beam_energy_GeV"]),
+            t_GeV2=float(point["t_GeV2"]),
+            phi_rad=float(point["phi_rad"]),
             context=f"kinematics[{index}]",
         )
-        if not 0.0 <= float(point["phi_rad"]) <= 2.0 * math.pi:
-            raise ValueError(f"kinematics[{index}].phi_rad is outside [0,2pi]")
     truth = normalized["truth"]
     for gpd_type in ("H", "E", "Htilde", "Etilde"):
         for channel, shape in normalized["gpd_shapes"][gpd_type].items():
@@ -1217,7 +1241,7 @@ def assert_result_contract(
     configuration: Path,
     workspace: Path,
     profile: str,
-    bridge: Path,
+    bridge: Path | None = None,
 ) -> None:
     """Refuse stepwise reuse after any experiment/profile/backend change.
 
@@ -1252,7 +1276,10 @@ def assert_result_contract(
             configuration
         ),
         "profile": profile,
-        "bridge_sha256": sha256(bridge.resolve(strict=True)),
+        "bridge_sha256": (
+            sha256(bridge.resolve(strict=True))
+            if bridge is not None else observed.get("bridge_sha256")
+        ),
         "real_data": False,
         "synthetic_split_policy": (
             "native_parameter_grouped_train_validation_test_v1"
@@ -1336,7 +1363,7 @@ def _public_result(
             / "optimization"
             / "optimization_summary.json"
         )
-    elif command == "evaluate":
+    elif command in {"evaluate", "exact-reevaluate"}:
         public["gate_checks"] = result["gate_checks"]
     elif command == "compare":
         # A completed comparison can legitimately fail a scientific gate.
@@ -1361,12 +1388,11 @@ def _public_result(
         public["plot_directory"] = str(
             project / "results" / str(profile) / "plots"
         )
-        public["evaluation_passed"] = result["scientific_gate_status"][
-            "evaluation_passed"
-        ]
-        public["comparison_passed"] = result["scientific_gate_status"][
-            "comparison_passed"
-        ]
+        gates = result["scientific_gate_status"]
+        public["evaluation_passed"] = gates.get(
+            "evaluation_passed", gates.get("saved_evaluation_passed")
+        )
+        public["comparison_passed"] = gates.get("comparison_passed")
     elif command == "compare-real":
         public["diagnostic_only"] = True
         public["synthetic_posterior_gate_passed"] = result[
@@ -1457,6 +1483,22 @@ def _parser() -> argparse.ArgumentParser:
     corpus_create.add_argument("corpus")
     corpus_create.add_argument("--profile", choices=("quick", "validation"), default="quick")
     corpus_create.add_argument("--shard-size", type=int, default=256)
+    corpus_create.add_argument(
+        "--gpd-truth-request", type=Path,
+        help=("canonical input-scale GPD coordinate table; defaults to "
+              "PROJECT/gpd_truth.json and is required for every new corpus"),
+    )
+    corpus_preflight = commands.add_parser(
+        "corpus-preflight",
+        help="validate coverage and estimate master-corpus storage without PARTONS",
+    )
+    corpus_preflight.add_argument("project")
+    corpus_preflight.add_argument("--profile", choices=("quick", "validation"), default="quick")
+    corpus_preflight.add_argument("--shard-size", type=int, default=256)
+    corpus_preflight.add_argument(
+        "--gpd-truth-request", type=Path,
+        help="defaults to PROJECT/gpd_truth.json when that file exists",
+    )
     corpus_plan = commands.add_parser(
         "corpus-plan", help="show native work missing from a corpus"
     )
@@ -1529,7 +1571,11 @@ def _parser() -> argparse.ArgumentParser:
         ),
         ("train", "train or resume the neural posterior ensemble"),
         ("optimize", "tune neural hyperparameters on validation NLL"),
-        ("evaluate", "run coverage and exact-predictive checks"),
+        ("evaluate", "run saved-artifact coverage without PARTONS"),
+        (
+            "exact-reevaluate",
+            "explicitly reevaluate frozen posterior samples through PARTONS",
+        ),
         ("compare", "compare neural and conventional posteriors"),
         ("plot", "plot compatible saved results without rerunning inference"),
         (
@@ -1672,23 +1718,57 @@ def main() -> int:
                 ),
                 consume_sources=args.consume_sources,
             )
+        elif args.command == "corpus-preflight":
+            from extract_dvcs_cff.contracts import preflight_master_corpus
+
+            project = _project_path(repository, args.project, existing=True)
+            configuration, _experiment = prepare_engine(repository, project)
+            config = load_configuration(configuration)
+            truth_path = args.gpd_truth_request
+            if truth_path is None and (project / "gpd_truth.json").is_file():
+                truth_path = project / "gpd_truth.json"
+            request = (
+                json.loads(truth_path.resolve(strict=True).read_text(
+                    encoding="utf-8"
+                )) if truth_path is not None else None
+            )
+            result = preflight_master_corpus(
+                native_group_count=int(
+                    config["profiles"][args.profile]["native_parameter_count"]
+                ), observable_kinematic_count=len(config["kinematics"]),
+                observable_count=len(config["observables"]),
+                shard_size=args.shard_size, gpd_truth_request=request,
+                declared_kinematic_coverage={
+                    "kinematics": config["kinematics"],
+                    "observables": [item["id"] for item in config["observables"]],
+                    "source": config["data_provenance"],
+                },
+            )
         elif args.command in {
             "corpus-create", "corpus-plan", "corpus-generate",
             "selection-create",
         }:
             project = _project_path(repository, args.project, existing=True)
             configuration, experiment = prepare_engine(repository, project)
-            bridge = _bridge_path(repository, args.bridge)
+            bridge = (
+                _bridge_path(repository, args.bridge)
+                if args.command in {"corpus-create", "corpus-generate"}
+                else None
+            )
             if args.command == "corpus-create":
                 corpus_path = _corpus_path(
                     repository, args.corpus, existing=False
                 )
+                truth_path = args.gpd_truth_request
+                if truth_path is None and (project / "gpd_truth.json").is_file():
+                    truth_path = project / "gpd_truth.json"
                 created = create_corpus(
                     corpus=corpus_path,
                     bridge=bridge,
                     configuration_path=configuration,
                     profile=args.profile,
                     shard_size=args.shard_size,
+                    gpd_truth_request_path=truth_path,
                 )
                 result = {
                     "status": "planned",
@@ -1766,7 +1846,13 @@ def main() -> int:
                     "synthetic_only": True,
                 }
             else:
-                bridge = _bridge_path(repository, args.bridge)
+                bridge = (
+                    _bridge_path(repository, args.bridge)
+                    if args.command in {
+                        "doctor", "exact-reevaluate", "compare-real", "holdout"
+                    }
+                    else None
+                )
                 if args.command == "doctor":
                     internal = doctor(
                         bridge=bridge,
@@ -1804,7 +1890,7 @@ def main() -> int:
                             assert_corpus_compatible(
                                 corpus=corpus,
                                 configuration_path=configuration,
-                                bridge=bridge,
+                                bridge=None,
                             )
                             worker_request: int | str = getattr(
                                 args, "workers", "all_available"
@@ -1825,7 +1911,7 @@ def main() -> int:
                                 configuration_path=configuration,
                                 workspace=workspace,
                                 profile=profile,
-                                bridge=bridge,
+                                bridge=None,
                                 workers=worker_request,
                                 show_progress=common["show_progress"],
                             )
@@ -1834,6 +1920,7 @@ def main() -> int:
                         "train",
                         "optimize",
                         "evaluate",
+                        "exact-reevaluate",
                         "compare",
                         "plot",
                         "compare-real",
@@ -1858,9 +1945,9 @@ def main() -> int:
                             n_trials=args.trials, **common
                         )
                     elif args.command == "evaluate":
-                        internal = evaluate_model(
-                            bridge=bridge, **common
-                        )
+                        internal = evaluate_model(**common)
+                    elif args.command == "exact-reevaluate":
+                        internal = evaluate_model(bridge=bridge, **common)
                     elif args.command == "compare":
                         internal = compare_posteriors(**common)
                     elif args.command == "plot":

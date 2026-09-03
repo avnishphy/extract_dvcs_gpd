@@ -7,6 +7,9 @@
 ./install.sh --profile local --accelerator cpu
 ./dvcs init acceptance
 ./dvcs doctor acceptance
+source .dvcs/install.env
+cp configs/examples/master_corpus_gpd_truth_smoke_v1.json \
+  "$DVCS_WORKSPACE/acceptance/gpd_truth.json"
 ./dvcs corpus-create acceptance acceptance-corpus --profile quick
 ./dvcs corpus-plan acceptance acceptance-corpus
 ./dvcs corpus-generate acceptance acceptance-corpus
@@ -15,6 +18,7 @@
 ./dvcs train acceptance --profile quick \
   --corpus acceptance-corpus --selection baseline
 ./dvcs evaluate acceptance --profile quick
+./dvcs exact-reevaluate acceptance --profile quick
 ./dvcs plot acceptance --profile quick
 ./tests/run.sh offline
 ```
@@ -25,6 +29,9 @@
 ./install.sh --profile local --accelerator cuda
 ./dvcs init acceptance-cuda
 ./dvcs doctor acceptance-cuda
+source .dvcs/install.env
+cp configs/examples/master_corpus_gpd_truth_smoke_v1.json \
+  "$DVCS_WORKSPACE/acceptance-cuda/gpd_truth.json"
 ./dvcs corpus-create acceptance-cuda acceptance-cuda-corpus --profile quick
 ./dvcs corpus-plan acceptance-cuda acceptance-cuda-corpus
 ./dvcs corpus-generate acceptance-cuda acceptance-cuda-corpus
@@ -49,7 +56,13 @@ vi jobs/jlab_ifarm/resources.env
 set -a; source jobs/jlab_ifarm/resources.env; set +a
 ./dvcs init ifarm-acceptance
 apptainer inspect .dvcs/*.sif
+source .dvcs/install.env
+./scripts/verify-apptainer-image.sh \
+  apptainer "$DVCS_IMAGE" 0.3.0 containers/apptainer.def
+apptainer test --bind "$DVCS_CACHE:/cache" "$DVCS_IMAGE"
 ./dvcs doctor ifarm-acceptance
+cp configs/examples/master_corpus_gpd_truth_smoke_v1.json \
+  "$DVCS_WORKSPACE/ifarm-acceptance/gpd_truth.json"
 ./dvcs corpus-create ifarm-acceptance ifarm-acceptance-corpus --profile validation --shard-size 16
 ./dvcs corpus-plan ifarm-acceptance ifarm-acceptance-corpus
 sinfo -o '%P %G %c %m %l %f'

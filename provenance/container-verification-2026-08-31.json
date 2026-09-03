@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-31",
+  "definition": "containers/apptainer.def",
+  "target": ".dvcs/extract-dvcs-gpd-jlab_ifarm-0.3.0.sif",
+  "static_contract_validation": "passed",
+  "existing_pinned_image_static_suite": "passed: 38 unit tests plus distribution, documentation, shell, installer, GPU launcher, batch, progress, SWIF2 workflow/submission, and kinematic-envelope checks",
+  "fresh_build": {
+    "status": "passed_full_source_build",
+    "native_stack_and_modified_bridge_compiled": true,
+    "initial_failures": [
+      "connection reset by peer while fetching torch 2.12.1+cu126 metadata from download-r2.pytorch.org",
+      "HTTP 503 responses from snapshot.ubuntu.com package objects",
+      "automatic Apptainer test root filesystem is read-only, so the native logger cannot write to image-internal /cache"
+    ],
+    "sif_produced": true,
+    "validated_date": "2026-09-01",
+    "recovery": "install.sh completed a fresh source build, deferred the logger-writing native check only during the read-only automatic test, reran it with a writable host cache bind, and atomically promoted the verified SIF",
+    "sha256": "c850f82c4fb10088670aa10dcad16c943aaa3222ce30d5cd074331921aab5c76",
+    "apptainer_definition_tests": "passed: 18 tests",
+    "native_self_test": "passed",
+    "python_dependency_check": "passed",
+    "cuda_runtime": "12.6"
+  },
+  "modified_native_bridge": {
+    "standalone_compile_against_pinned_image": "passed",
+    "capabilities": "passed",
+    "self_test": "passed",
+    "native_regression_executables": "passed",
+    "ctest_note": "the CMake project registers no CTest tests; five regression executables were run directly"
+  },
+  "retry_command": "./install.sh --profile jlab_ifarm --accelerator auto",
+  "sif_committed": false
+}

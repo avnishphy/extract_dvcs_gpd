@@ -41,10 +41,13 @@ workflow_json="${job_dir}/swif-${workflow}.json"
 python3 "${job_dir}/write_swif2_workflow.py" corpus \
     --workflow "${workflow}" --account "${JLAB_ACCOUNT}" \
     --site "${SWIF_SITE_NAME:-jlab/enp}" --constraint "${SWIF_CONSTRAINT:-el9}" \
+    --placement-profile "${SWIF_CORPUS_PLACEMENT_PROFILE:-farm25_strict}" \
     --result-root "${result_root}" --log-root "${log_root}" \
     --image "${SWIF_IMAGE}" --database "${SWIF_DATABASE_ARCHIVE}" \
     --project "${project}" --profile "${profile}" --corpus "${corpus}" \
-    --experiment "${SWIF_EXPERIMENT}" --shard-size "${shard_size}" \
+    --experiment "${SWIF_EXPERIMENT}" \
+    --gpd-truth-request "${SWIF_GPD_TRUTH_REQUEST}" \
+    --shard-size "${shard_size}" \
     --shards-per-worker "${shards_per_worker}" \
     --heartbeat-seconds "${SWIF_HEARTBEAT_SECONDS:-300}" \
     --performance-interval-seconds "${SWIF_METRICS_INTERVAL_SECONDS:-30}" \

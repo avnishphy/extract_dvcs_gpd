@@ -13,6 +13,10 @@ From the repository root:
 ./install.sh --profile local --accelerator auto
 ./dvcs init my-study
 ./dvcs doctor my-study
+source .dvcs/install.env
+cp configs/examples/master_corpus_gpd_truth_smoke_v1.json \
+  "$DVCS_WORKSPACE/my-study/gpd_truth.json"
+# Edit gpd_truth.json; the supplied two points are for smoke testing only.
 ./dvcs corpus-create my-study my-corpus --profile quick
 ./dvcs corpus-plan my-study my-corpus
 ```
@@ -31,6 +35,12 @@ thread safety is not established. The separate `cpu_threads` setting controls
 Torch's CPU fallback only; it does not cap PARTONS workers. Run `./dvcs doctor
 my-study` to see requested and resolved counts in the current allocation.
 
+Rerunning the ordinary installer verifies and reuses the accepted image. Do
+not add `--source-build` to routine setup or retry commands; that option is for
+maintainers intentionally replacing image contents. See [Installation](../docs/INSTALLATION.md)
+for recovery and the [image update runbook](../docs/IMAGE_UPDATE_RUNBOOK.md)
+for maintained runtime changes.
+
 `quick` checks plumbing. It is not a calibrated 82-dimensional scientific
 campaign. The larger `validation` profile is also only a starting default;
 you must judge closure/SBC/coverage results rather than infer adequacy from
@@ -38,7 +48,7 @@ the profile name.
 
 The frozen default encoder/flow is: three 128-wide point layers, two 128-wide
 dataset layers, a 96-feature embedding, zuko MAF with 96 hidden features, six
-transforms and eight bins, batch size 256, learning rate `5e-4`, and 10%
+MAF transforms, batch size 256, learning rate `5e-4`, and 10%
 internal-validation fraction. `quick` uses 2,048 native parameter groups × 2
 noise replicas and at most 100 epochs; `validation` uses 4,096 × 4 and at most
 200 epochs. These are editable defaults in a new project's `experiment.json`,
@@ -46,7 +56,7 @@ not validated adequate sample sizes for an 82-dimensional posterior.
 
 ## What a project contains
 
-`experiment.json` is readable, four-space-indented JSON. Public schema 8 has:
+`experiment.json` is readable, four-space-indented JSON. Public schema 9 has:
 
 - `injected_truth.gpd_parameters`: independent H, E, Htilde, and Etilde
   shapes for u, d, s, and gluon;
@@ -98,6 +108,7 @@ train/validation/outer-test membership separately, and adds nuisance/noise
 replicas only when training tensors are materialized.
 
 ```bash
+test -s "$DVCS_WORKSPACE/my-study/gpd_truth.json"
 ./dvcs corpus-create my-study my-corpus --profile quick
 ./dvcs corpus-plan my-study my-corpus
 ./dvcs corpus-generate my-study my-corpus
@@ -106,6 +117,7 @@ replicas only when training tensors are materialized.
 ./dvcs train my-study --profile quick \
   --corpus my-corpus --selection baseline
 ./dvcs evaluate my-study --profile quick
+./dvcs exact-reevaluate my-study --profile quick
 ./dvcs compare my-study --profile quick
 ./dvcs plot my-study --profile quick
 ```
@@ -233,3 +245,5 @@ No real-fit command is enabled in this release.
   plot interpretation, gates, and troubleshooting.
 - [../docs/NATIVE_BRIDGE.md](../docs/NATIVE_BRIDGE.md): native operations,
   provenance, cache, and exact limitations.
+- [../docs/CANONICAL_GPD_TRUTH.md](../docs/CANONICAL_GPD_TRUTH.md): mandatory
+  per-group function truth, coordinate contract, storage, and verification.

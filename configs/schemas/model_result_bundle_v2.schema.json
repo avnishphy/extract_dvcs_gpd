@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/extract_dvcs_gpd/model_result_bundle_v2.schema.json",
+  "title": "Model result bundle v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "master_corpus_id", "selection_id", "realization_id", "model_view_id", "model_family", "inference_method", "gpd_inference_representation", "observation_encoder", "density_estimator", "physics_backend", "target_transforms", "decoder", "code_commit", "container_identity", "seeds", "hyperparameters", "resource_summary", "validation", "acceptance"],
+  "properties": {
+    "schema_version": {"const": 2},
+    "master_corpus_id": {"type": "string"}, "selection_id": {"type": "string"}, "realization_id": {"type": "string"}, "model_view_id": {"type": "string"},
+    "model_family": {"enum": ["dd_deepsets_maf", "neural_gpd_deepsets_maf"]},
+    "inference_method": {"const": "npe"}, "gpd_inference_representation": {"type": "string"},
+    "observation_encoder": {"const": "deepsets"}, "density_estimator": {"const": "maf"}, "physics_backend": {"const": "partons"},
+    "target_transforms": {"type": "object"}, "decoder": {"type": ["object", "null"]}, "code_commit": {"type": "string"}, "container_identity": {"type": ["object", "null"]},
+    "seeds": {"type": "object"}, "hyperparameters": {"type": "object"}, "resource_summary": {"type": "object"}, "validation": {"type": "object"}, "acceptance": {"type": "object"}
+  }
+}

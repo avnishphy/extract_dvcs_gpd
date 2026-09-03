@@ -10,6 +10,7 @@ import math
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import signal
 import statistics
@@ -93,6 +94,11 @@ def number(value: str) -> float | None:
     value = value.strip()
     if value in {"", "N/A", "[N/A]", "Not Supported"}:
         return None
+
+
+def node_family(hostname: str) -> str:
+    match = re.match(r"(farm(?:19|23|25)|sciml[0-9]+)", hostname.lower())
+    return match.group(1) if match else "other"
     try:
         parsed = float(value)
     except ValueError:
@@ -233,14 +239,34 @@ def aggregate(
         "schema_version": 1,
         "status": "complete" if complete else "running",
         "stage": args.stage,
+        "workflow": args.workflow,
+        "campaign": args.campaign,
         "accelerator": args.accelerator,
         "hostname": platform.node(),
+        "node_family": node_family(platform.node()),
+        "submission_time": os.environ.get("SWIF_JOB_SUBMISSION_TIME"),
+        "start_time": os.environ.get("SWIF_JOB_START_TIME"),
+        "queue_wait_seconds": None,
+        "attempt_number": args.attempt_number,
+        "retry_or_failure_reason": args.retry_or_failure_reason,
         "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
         "swif_job_id": os.environ.get("SWIF_JOB_ID"),
         "swif_job_attempt_id": os.environ.get("SWIF_JOB_ATTEMPT_ID"),
         "sample_interval_seconds": args.interval,
         "sample_count": len(samples),
         "wall_seconds_sampled": wall,
+        "throughput": {
+            "shard_count": args.shard_count,
+            "group_count": args.group_count,
+            "shards_per_hour": (
+                args.shard_count * 3600.0 / wall
+                if args.shard_count is not None and wall > 0 else None
+            ),
+            "groups_per_hour": (
+                args.group_count * 3600.0 / wall
+                if args.group_count is not None and wall > 0 else None
+            ),
+        },
         "allocation": {
             "cpus": allocated_cpus,
             "affinity_cpus": len(os.sched_getaffinity(0)),
@@ -282,6 +308,12 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--stage", required=True)
     result.add_argument("--accelerator", choices=("cpu", "cuda"), required=True)
     result.add_argument("--interval", type=float, default=30.0)
+    result.add_argument("--workflow")
+    result.add_argument("--campaign")
+    result.add_argument("--attempt-number", type=int)
+    result.add_argument("--retry-or-failure-reason")
+    result.add_argument("--shard-count", type=int)
+    result.add_argument("--group-count", type=int)
     result.add_argument("--once", action="store_true")
     return result
 

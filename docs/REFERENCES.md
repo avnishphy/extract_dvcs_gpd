@@ -1,5 +1,11 @@
 # References
 
+The machine-readable figure-family inventory and convention gates are in
+[`configs/literature/benchmarks_v1.json`](../configs/literature/benchmarks_v1.json)
+and summarized in [Literature benchmarks](LITERATURE_BENCHMARKS.md). It includes
+Xu et al., arXiv:2605.06994; Moffat et al., arXiv:2303.12006; and Bertone et
+al., arXiv:2107.11312. No paper figures or invented digitized curves are stored.
+
 ## GPD and DVCS foundations
 
 1. M. Diehl, “Generalized Parton Distributions,” *Physics Reports* **388** (2003) 41–277. arXiv:hep-ph/0307382. DOI: 10.1016/j.physrep.2003.08.002.

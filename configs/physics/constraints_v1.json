@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "constraints": [
+    {
+      "identifier": "support_x",
+      "gpd": "all",
+      "channel": "all",
+      "mode": "hard",
+      "enabled": true,
+      "scale_GeV2": null,
+      "scheme": null,
+      "order_or_moment": null,
+      "weight": null,
+      "covariance": null,
+      "source": "GPD support convention",
+      "coordinate_region": {"x": [-1.0, 1.0]},
+      "numerical_method": "decoder support mask",
+      "tolerance": 0.0,
+      "diagnostics": {}
+    },
+    {
+      "identifier": "continuity_cross_over",
+      "gpd": "all",
+      "channel": "all",
+      "mode": "diagnostic",
+      "enabled": true,
+      "scale_GeV2": 1.0,
+      "scheme": "MSbar",
+      "order_or_moment": null,
+      "weight": null,
+      "covariance": null,
+      "source": "stored native GPD truth",
+      "coordinate_region": {"boundary": ["x=-xi", "x=+xi"]},
+      "numerical_method": "one-sided stored-coordinate residual",
+      "tolerance": 0.001,
+      "diagnostics": {}
+    },
+    {
+      "identifier": "lattice_low_mellin_moments",
+      "gpd": "all",
+      "channel": "declared_by_dataset",
+      "mode": "external_likelihood",
+      "enabled": false,
+      "scale_GeV2": null,
+      "scheme": null,
+      "order_or_moment": null,
+      "weight": null,
+      "covariance": [[1.0]],
+      "source": "UNSET_DISABLED_DEFAULT",
+      "coordinate_region": {},
+      "numerical_method": "native-or-stored moment label with declared matching",
+      "tolerance": 0.0,
+      "diagnostics": {
+        "matching_evolution_metadata": null,
+        "nuisance_systematic_treatment": null,
+        "disabled_by_default": true
+      }
+    }
+  ]
+}
