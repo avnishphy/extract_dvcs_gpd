@@ -94,16 +94,27 @@ def number(value: str) -> float | None:
     value = value.strip()
     if value in {"", "N/A", "[N/A]", "Not Supported"}:
         return None
+    # ``nounits`` is requested from nvidia-smi, but older drivers and test
+    # fixtures can still include a separated or attached unit.  Accept one
+    # finite leading numeric token and reject trailing non-unit garbage.
+    match = re.fullmatch(
+        r"([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)"
+        r"(?:\s*(?:%|MiB|GiB|W))?",
+        value,
+        flags=re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    try:
+        parsed = float(match.group(1))
+    except ValueError:
+        return None
+    return parsed if math.isfinite(parsed) else None
 
 
 def node_family(hostname: str) -> str:
     match = re.match(r"(farm(?:19|23|25)|sciml[0-9]+)", hostname.lower())
     return match.group(1) if match else "other"
-    try:
-        parsed = float(value)
-    except ValueError:
-        return None
-    return parsed if math.isfinite(parsed) else None
 
 
 def gpu_sample(enabled: bool) -> dict[str, Any]:

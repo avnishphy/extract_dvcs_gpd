@@ -187,14 +187,62 @@ class GroupedValidationNPE(NPE):
         }
         validation_kwargs = {
             "batch_size": min(training_batch_size, len(validation_indices)),
-            "drop_last": True,
-            "sampler": SubsetRandomSampler(validation_indices.tolist()),
+            "drop_last": False,
+            "sampler": _SubsetSequentialSampler(validation_indices.tolist()),
             **additions,
         }
         return (
             data.DataLoader(dataset, **train_kwargs),
             data.DataLoader(dataset, **validation_kwargs),
         )
+
+    def _validate_epoch(self, val_loader: data.DataLoader, loss_args: Any) -> float:
+        """Return exact per-row validation NLD, including a partial last batch.
+
+        SBI 0.26.1 divides its accumulated loss by ``len(loader) * batch_size``.
+        That denominator is too large when ``drop_last=False`` and the final batch
+        is partial.  Keep SBI's loss implementation while counting the evaluated
+        rows directly.  The sequential validation sampler makes repeated scoring
+        of an unchanged checkpoint deterministic.
+        """
+
+        loss_sum = 0.0
+        sample_count = 0
+        with torch.no_grad():
+            for batch in val_loader:
+                losses = (
+                    self._get_losses(batch=batch)
+                    if loss_args is None
+                    else self._get_losses(batch=batch, loss_args=loss_args)
+                )
+                if losses.ndim == 0:
+                    raise RuntimeError(
+                        "validation loss must retain one value per synthetic row"
+                    )
+                if not torch.isfinite(losses).all():
+                    raise RuntimeError("validation produced non-finite losses")
+                loss_sum += float(losses.double().sum().item())
+                sample_count += int(losses.numel())
+        if sample_count != len(self._grouped_validation_indices):
+            raise RuntimeError(
+                "validation loader did not evaluate every frozen row exactly once: "
+                f"expected {len(self._grouped_validation_indices)}, "
+                f"observed {sample_count}"
+            )
+        return loss_sum / sample_count
+
+
+class _SubsetSequentialSampler(data.Sampler[int]):
+    """Iterate an explicit row subset once in its declared frozen order."""
+
+    def __init__(self, indices: Sequence[int]) -> None:
+        self.indices = tuple(int(index) for index in indices)
+
+    def __iter__(self):
+        return iter(self.indices)
+
+    def __len__(self) -> int:
+        return len(self.indices)
 
 
 def stage10_physical_to_latent(theta: Tensor) -> Tensor:
