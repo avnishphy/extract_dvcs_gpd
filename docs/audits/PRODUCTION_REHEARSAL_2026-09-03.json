@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "status": "blocked_not_run",
+  "campaign_id": "experiment-josh-validation-conditional-dd-baseline-v1",
+  "production_configuration_sha256": "3c4f1aeefc86cdeea54a43061b5d868336a7b249209d219a2fc7c1b23727870b",
+  "runtime_sif_sha256": "3793116765e64f917f7c464955341735df6c310caecd3568a064a792001effdb",
+  "required_invariant_fields": [
+    "physics configuration",
+    "96-point kinematic table and ordering",
+    "factorized prior form and bounds",
+    "six-observable definition and ordering",
+    "fixed-at-declared-truth covariance semantics",
+    "explicit normalization nuisance semantics",
+    "context schema",
+    "DD target schema",
+    "native bridge and SIF identity",
+    "SWIF staging code"
+  ],
+  "permitted_override_fields": [
+    "native_parameter_count",
+    "noise_replicates_per_parameter",
+    "atomic_shard_count",
+    "shards_per_worker",
+    "active_ensemble_member_count",
+    "posterior_sample_count",
+    "exact_reevaluation_sample_count"
+  ],
+  "completed_stages": [],
+  "not_run_reason": "The approved canonical GPD coordinate request is absent, the declared xB/t domain contradicts the frozen kinematic table, physics assumptions remain draft, and the production image registry digest is null. Creating substitute coordinates or silently editing physics would violate the rehearsal contract.",
+  "synthetic_tensor_smoke_accepted_as_substitute": false,
+  "farm_pilot_accepted_as_substitute": false,
+  "next_action": "After approvals and fail-closed preflight pass, create a separately named override manifest and run the exact native-to-result vertical chain with reduced counts."
+}

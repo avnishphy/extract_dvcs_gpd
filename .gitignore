@@ -16,6 +16,7 @@ jobs/jlab_ifarm/resources.env
 jobs/jlab_ifarm/logs/
 jobs/jlab_ifarm/swif-*.json
 /logs/
+docs/audits/logs/
 user/workspaces/
 user/corpora/
 user/corpus_exports/
