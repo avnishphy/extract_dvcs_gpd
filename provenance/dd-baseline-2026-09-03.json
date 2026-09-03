@@ -1,0 +1,168 @@
+{
+  "schema_version": 1,
+  "baseline_id": "dd-deepsets-maf-swif-validation-v7",
+  "captured_at_current_head": "22f45e94d424e2a73c57d6b2504869a2eebb35f4",
+  "captured_at_current_head_dirty": false,
+  "baseline_status": "historical_completed_validation_run",
+  "model_family": "dd_deepsets_maf",
+  "representation_class": "full_independent_double_distribution",
+  "inference_method": "neural_posterior_estimation",
+  "observation_encoder": "DeepSets",
+  "density_estimator": "MAF",
+  "density_estimator_implementation": "Zuko",
+  "resolved_configuration": {
+    "storage_kind": "immutable_tar_member",
+    "archive": "results/swif2/experiment-josh-validation-v7/state/experiment-josh-validation-v7-project-after-train.tar",
+    "member": "experiment_josh/.engine/workflow.json",
+    "sha256": "952ffe5d4b228ac203193aa456a3c8e0a396960e7aa6e3d64b2a2eba3a5726f4",
+    "extraction_command": "tar -xOf <archive> experiment_josh/.engine/workflow.json"
+  },
+  "physics_configuration": {
+    "storage_kind": "immutable_tar_member",
+    "archive": "results/swif2/experiment-josh-validation-v7/state/experiment-josh-validation-v7-project-after-train.tar",
+    "member": "experiment_josh/.engine/physics.json",
+    "sha256": "6c2807364b95bc158ed47926f288bd134368a4575e50df1ab541376ac4f79a02"
+  },
+  "artifact_identities": {
+    "bridge_contract_sha256": "72a0edbc980df56b166e31330d5ef572e15717db5b6b9376bf113e331733c1ce",
+    "configuration_sha256": "6a86cdaff729ff1a2d53fad718dc2d010f021c4e93a6e82b8cebbcf0bbb2a0b4",
+    "corpus_manifest_sha256": "ae99250863125036f684d896252653b772b2a8164a90bd7797a4a216f43c4a58",
+    "selection_sha256": "8ba9eaab71ce248970a7377ec92bb07873a0364f3afb70f333b731d2837297e5",
+    "realization_manifest_sha256": "0ff6e3915dfdd5790a490f54ab88a1f3f4b70bb76912417123ed20dfc7d2c58f",
+    "training_input_sha256": "0ff6e3915dfdd5790a490f54ab88a1f3f4b70bb76912417123ed20dfc7d2c58f",
+    "experiment_record_sha256": "22d6dc8d030991f97caef2ea0fb2b168c3635cf598fee3ea77ceb856ac5e7a89"
+  },
+  "dependency_lock_hashes": {
+    "pyproject.toml": "ee8397b40de308c97d6d208a5c7c221cd1f76cafdeae714fcfe20909b9795ee6",
+    "requirements/runtime-constraints.txt": "2906f1697c04760019c13c630f9216c935e8f6e779fba9d59899749526a3aba3",
+    "provenance/dependencies.lock.json": "93f0d7f19a52928b9893ef07f550d70a3840040e7a7cfc8264a8712804a2b95b",
+    "provenance/images.lock.json": "883e3e4e14e940a57f1db6f513aa8870131fc566d3eff94f80a157f8ddcac054"
+  },
+  "model_contract": {
+    "target_dimension": 82,
+    "target_transform": "80 bounded DD controls mapped by analytic probits plus 2 standard-normal nuisances",
+    "context_schema": "stage11_full_independent_dd_multiq2_context_v1",
+    "point_count": 576,
+    "point_feature_count": 18,
+    "global_feature_count": 9,
+    "flattened_context_dimension": 10377,
+    "architecture": {
+      "point_hidden": 128,
+      "point_layers": 3,
+      "point_layer_norm": false,
+      "dataset_hidden": 128,
+      "dataset_layers": 2,
+      "embedding_features": 96,
+      "flow": "zuko_maf",
+      "flow_hidden_features": 96,
+      "num_transforms": 6,
+      "z_score_theta": "independent",
+      "z_score_x": "none"
+    }
+  },
+  "split_contract": {
+    "policy": "grouped_by_native_parameter_draw",
+    "training_groups": 11796,
+    "validation_groups": 1311,
+    "test_groups": 3277,
+    "training_rows": 94368,
+    "validation_rows": 10488,
+    "test_rows": 26216
+  },
+  "training": {
+    "candidate_seeds": [57439, 85743, 98465, 56486, 78546],
+    "active_ensemble_seeds": [78546, 56486, 57439],
+    "mean_train_negative_log_density": 112.76232966997266,
+    "mean_test_negative_log_density": 113.91078092578759,
+    "train_wall_seconds": 1557,
+    "parameter_count_per_member": 543416,
+    "optimizer": "Adam (SBI 0.26.1 trainer)",
+    "learning_rate": 0.0005,
+    "training_batch_size": 256,
+    "gradient_clip_max_norm": 5.0,
+    "scheduler": "none",
+    "amp_scaler": "none",
+    "stop_after_epochs": 25,
+    "max_num_epochs": 500,
+    "resolved_sbi_train_arguments": {
+      "num_atoms": 10,
+      "validation_fraction_ignored_by_grouped_adapter": 0.1,
+      "calibration_kernel": null,
+      "resume_training": false,
+      "force_first_round_loss": false,
+      "discard_prior_samples": false,
+      "use_combined_loss": false,
+      "retrain_from_scratch": false,
+      "show_train_summary": false,
+      "dataloader_kwargs": null
+    },
+    "all_seeds": {
+      "native_parameters": 51010,
+      "training_noise": 51011,
+      "pseudodata": 51012,
+      "conventional_nuisance": 51013,
+      "comparison": 51014,
+      "coverage": 51015,
+      "optimization": 51016,
+      "derived_posterior_smoke_seed": "ensemble_seed + 1",
+      "derived_coverage_seed": "ensemble_seed + 1000 + trial_index",
+      "derived_pseudodata_seed": "ensemble_seed + 2000"
+    },
+    "members": [
+      {"seed": 56486, "checkpoint_sha256": "f02ef85507e357c6549072392ef6a79d7a1efff0b83906ce623adbd8b77adfa4", "best_validation_negative_log_density": 113.93194217681885, "epochs": 32},
+      {"seed": 57439, "checkpoint_sha256": "0076c7419cac198fe97609ba330252b8bde259359cb02da7b1e51006423c4503", "best_validation_negative_log_density": 114.0873924255371, "epochs": 32},
+      {"seed": 78546, "checkpoint_sha256": "a73fc8ed72f41dd92802cea1d2972d137b69e02f0fbe1c5b47741cd52a07308a", "best_validation_negative_log_density": 113.39375553131103, "epochs": 36},
+      {"seed": 85743, "checkpoint_sha256": "4da64435c9575a70e03afa98f381df7064f47760913e855fe65b61f0917f8135", "best_validation_negative_log_density": 114.47142715454102, "epochs": 30},
+      {"seed": 98465, "checkpoint_sha256": "3646dc2ae63500138b501e705874e0ef8bcae6a908ed83f9eebaf1ae7e69dc48", "best_validation_negative_log_density": 114.15121917724609, "epochs": 34}
+    ]
+  },
+  "runtime": {
+    "historical_image_digest": "sha256:c6ac0f9f0a193ca3d994a67b577badd1260e9916b1f19f78f7ed2fe69233efe9",
+    "historical_code_commit": null,
+    "historical_code_commit_status": "unrecorded_in_archived_runtime",
+    "torch": "2.12.1+cu126",
+    "python": "3.12",
+    "cuda_runtime": "12.6",
+    "sbi": "0.26.1",
+    "zuko": "1.6.0",
+    "numpy": "1.26.4",
+    "optuna": "4.5.0",
+    "accelerator": "cuda",
+    "visible_gpu_count": 1,
+    "training_host": "sciml2502.jlab.org",
+    "training_slurm_job_id": "9658652",
+    "gpu_model": "NVIDIA A800 40GB Active",
+    "gpu_numeric_telemetry_valid": false,
+    "gpu_numeric_telemetry_reason": "all 53 training nvidia-smi samples were parser errors under the historical collector",
+    "cpu_and_memory_telemetry_caveat": "cgroup-wide maxima and efficiencies are retained as operational evidence, not model-only measurements"
+  },
+  "native_backend": {
+    "bridge": {"version": "0.10.0", "source_sha256": "6842f5f05e3accfbde80129f8736954942a36bce1603d8e8cbcf697b8fe79141"},
+    "PARTONS": {"version": "5.0.0", "commit": "1ad0b7d3bf62328f564c4ded06793e5feed00d4f"},
+    "APFEL++": {"version": "4.8.0", "dependency_lock_commit": "27deaec493d95bad0686b3b1c91fbbc910c891ff"},
+    "ElementaryUtils": {"version": "5.0.0", "commit": "0133fc6e69872270027c37381a273893f7841b42"},
+    "NumA++": {"version": "5.0.0", "commit": "f184ee75f1d61b380e522d38ba48fbcbe9d78ae5"},
+    "LHAPDF": {"version": "6.5.6"},
+    "historical_exact_build_identity": null,
+    "historical_exact_build_identity_status": "not recorded in the v7 runtime summary"
+  },
+  "evaluation_contract": {
+    "role": "historical_development_validation",
+    "covariance_policy": "fixed_at_declared_truth",
+    "uncertainty_mode": "full_covariance_with_sampled_nuisances",
+    "exact_command_invocation": "swif2 run experiment-josh-validation-v7",
+    "exact_inner_train_command": null,
+    "exact_inner_train_command_status": "not present in the retained summary; workflow generator invocation is unresolved"
+  },
+  "current_environment_not_baseline": {
+    "image_digest": "sha256:3793116765e64f917f7c464955341735df6c310caecd3568a064a792001effdb",
+    "fresh_build_sif_sha256": "c850f82c4133f3d6cbcdf20f8879c4cd57ac141c5d9cac3f47c633d4d14890b3",
+    "note": "These identify the present pinned environment and must not be substituted for the historical v7 runtime identity."
+  },
+  "limitations": [
+    "The archived runtime did not record the source commit, so bitwise source reconstruction is unresolved.",
+    "The historical GPU telemetry parser rejected every sample; no utilization, power, or memory conclusion is supported.",
+    "This baseline predates the exact partial-validation-batch correction and must not be used as a post-fix performance regression number.",
+    "The covariance policy was fixed_at_declared_truth and is not a generator-independent OOD benchmark contract."
+  ]
+}

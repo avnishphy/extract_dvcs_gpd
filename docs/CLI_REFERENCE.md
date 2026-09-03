@@ -2,6 +2,15 @@
 
 ## 0.3 architecture commands
 
+- `model-smoke --model-family {dd_deepsets_maf,neural_gpd_deepsets_maf}`
+  runs a tiny deterministic synthetic DeepSets+MAF train/sample check. It does
+  not call PARTONS and does not establish scientific readiness.
+- `corpus-audit-failures CORPUS [--bins N]` summarizes recorded native
+  proposal acceptance, failure types, shard rates, and parameter-region rates.
+- Model-bearing project commands accept `--model-family`. DD is the documented
+  backward-compatible default. Neural production stages currently fail with
+  an actionable maturity message instead of silently using DD targets.
+
 - `corpus-preflight PROJECT [--gpd-truth-request FILE]` validates the explicit
   coordinate table and reports coverage, work, storage, shards, files, and
   model compatibility without running PARTONS. With no flag it reads
@@ -12,6 +21,13 @@
   posterior GPD/CFF/observable checks.
 - `materialize` is the one-release compatibility wrapper that publishes an
   architecture-neutral realization plus the DD model view.
+
+Developer smoke examples inside the pinned environment:
+
+```bash
+python -m extract_dvcs_cff.cli.user model-smoke --model-family dd_deepsets_maf
+python -m extract_dvcs_cff.cli.user model-smoke --model-family neural_gpd_deepsets_maf
+```
 
 Selection, realization/view creation, decoder/MAF work, comparison, plotting,
 literature plots, and presentation generation are saved-artifact-only stages.

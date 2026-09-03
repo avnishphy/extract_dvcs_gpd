@@ -1,5 +1,19 @@
 # Known limitations and claim boundary
 
+- Production train/evaluate/compare/holdout/plot dispatch remains DD-only.
+  Neural-GPD view construction and a tiny NPE mechanics smoke exist, but the
+  CLI rejects neural production stages until the decoder, whitening,
+  checkpoint, and result-bundle route is complete.
+- The historical SWIF validation-v7 collector rejected every numeric GPU
+  sample because of a parser defect. Those utilization/power/VRAM records are
+  invalid; only the repaired collector may support future conclusions.
+- Evaluation-role, unseal-ledger, strict provenance, covariance-policy,
+  uncertainty-realization, DD-projection, and native-failure contracts are
+  focused APIs. Existing legacy artifacts are not retroactively relabelled.
+- Epoch-level Optuna pruning, full interruption/resume checkpoints, SWIF state
+  deltas, SBC/TARP/L-C2ST, simultaneous bands, and inverse-crime-resistant
+  closure remain unimplemented.
+
 - Canonical native GPD-truth storage is now mandatory for newly created
   schema-2 corpora, but no reviewed production coordinate table or completed
   production corpus is claimed yet. The bundled two-point table is only a
@@ -14,12 +28,13 @@
 
 - No OCI image has been published. `provenance/images.lock.json` intentionally
   has null digests, so source build is the only verified installer decision.
-- Apptainer 1.5.2 and the JLab Slurm/SWIF2 tools were available; usable CUDA
-  hardware was not. The clean 0.3.0 Apptainer build compiled the native stack
-  but failed while retrieving pinned PyTorch metadata after repeated
-  `download-r2.pytorch.org` connection resets, so no 0.3.0 SIF or GPU runtime
-  acceptance is claimed. The pre-existing pinned 0.2.0 SIF ran the complete
-  static suite against the 0.3.0 source tree. See the dated
+- Apptainer 1.5.2 and the JLab Slurm/SWIF2 tools were available. The dated
+  verification record identifies a 0.3.0 SIF with SHA-256 `c850f82c...`; the
+  current on-disk 0.3.0 SIF is a different artifact with SHA-256
+  `3793116765e64f917f7c464955341735df6c310caecd3568a064a792001effdb` and has
+  separately passed CPU/static and native self-tests. No fresh GPU smoke was
+  run, so GPU runtime acceptance is not claimed. The historical v7 job saw an
+  A800, but its numeric GPU telemetry is invalid. See the dated
   [container verification record](../provenance/container-verification-2026-08-31.json).
   Normal installation uses `install.sh`, whose host-prefetched, checksum-bound
   wheel path avoids the failed manual-build download route.

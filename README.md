@@ -21,6 +21,16 @@ conditional MAF, and PARTONS physics. The neural-GPD branch is NNGPD-inspired
 latent-function compression, not a claim of full model independence. On a
 DD-generated corpus it tests closure over the DD-induced truth distribution.
 
+| Model family | View | Synthetic mechanics smoke | Production train/evaluate/plot |
+|---|---:|---:|---:|
+| `dd_deepsets_maf` | ready | ready | ready (subject to campaign validation) |
+| `neural_gpd_deepsets_maf` | experimental | ready | blocked pending a frozen decoder/whitening production path |
+
+All model-bearing commands expose `--model-family`. The legacy-compatible
+default is DD; selecting a neural family at an unsupported production stage
+fails before DD code runs. `model-smoke` exercises both target dimensions but
+is synthetic software evidence, not a trained scientific result.
+
 ## Five-minute orientation
 
 Choose one execution path. Ordinary Linux can run stages directly. JLab
@@ -207,6 +217,9 @@ Start at the [documentation map](docs/INDEX.md). The primary guides are:
 - [Installation](docs/INSTALLATION.md)
 - [User guide](docs/USER_GUIDE.md)
 - [CLI reference](docs/CLI_REFERENCE.md)
+- [Uncertainty contracts](docs/UNCERTAINTY_CONTRACTS.md)
+- [Claims ledger](docs/CLAIMS_LEDGER.md)
+- [Literature benchmark audit](docs/literature/BENCHMARK_AUDIT.md)
 - [Experiment JSON reference](docs/EXPERIMENT_JSON_REFERENCE.md)
 - [Corpus and data selection](docs/CORPUS_AND_DATA_SELECTION.md)
 - [Canonical GPD truth](docs/CANONICAL_GPD_TRUTH.md)

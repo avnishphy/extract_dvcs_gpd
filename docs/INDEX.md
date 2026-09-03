@@ -66,6 +66,10 @@ references for editing or interpreting a stage.
   simulation-based-inference literature relevant to the implementation.
 - [Literature benchmarks](LITERATURE_BENCHMARKS.md) records reproducible
   figure-family status, convention gates, and corpus coverage requirements.
+- [Literature benchmark audit](literature/BENCHMARK_AUDIT.md) records the
+  source-by-source comparison contract and unresolved protocol details.
+- [Uncertainty contracts](UNCERTAINTY_CONTRACTS.md) defines the independent
+  realization, covariance, exposure, nuisance, noise, jitter, and output axes.
 - [Dated progress presentation](presentations/current_progress_2026-08-31/README.md)
   is the verified one-time 2026-08-31 Beamer snapshot.
 - [Architecture decision records](adr/0001-partons-sole-physics-backend.md)
@@ -77,6 +81,8 @@ references for editing or interpreting a stage.
   credentials, database boundaries, and publication controls.
 - [Known limitations](KNOWN_LIMITATIONS.md) distinguishes verified,
   conditional, and unavailable capabilities.
+- [Claims ledger](CLAIMS_LEDGER.md) maps potential scientific claims to the
+  evidence still required.
 - [Acceptance procedures](ACCEPTANCE.md) gives executable local and JLab
   verification sequences.
 - [Development configuration and testing](DEVELOPMENT_AND_TESTING.md) maps

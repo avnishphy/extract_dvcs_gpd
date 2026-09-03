@@ -4,7 +4,11 @@ Release 0.3 uses five explicit immutable layers. The authoritative summary,
 schema migration, and identity rules are in
 [Artifact architecture and migration](ARTIFACT_ARCHITECTURE_0_3.md). The only
 registered inference paths are DD + DeepSets + MAF and NNGPD-inspired neural
-GPD + DeepSets + MAF; both retain PARTONS as their sole physics backend.
+GPD + DeepSets + MAF; both retain PARTONS as their sole physics backend. The
+central registry records stage-level maturity. CLI dispatch resolves the
+family before a stage: DD remains the compatibility default, while unsupported
+neural production stages fail closed instead of loading DD arrays. The neural
+synthetic smoke proves shared conditional-MAF mechanics only.
 
 ## Purpose and design constraints
 
@@ -173,7 +177,13 @@ common input-scale coordinates and aligned one-for-one with core groups.
 Covariance, nuisances, noise, and DeepSets contexts are materialized later
 from an immutable group selection. Experiment-constant encoding terms are
 computed once; independently seeded groups fill fixed rows across CPU workers.
-The physics prediction is never reimplemented in Python.
+The physics prediction is never reimplemented in Python. Uncertainty
+realizations are children of the same corpus and selection, not new native
+corpora. Their contract independently records central/sampled observation,
+covariance model, descriptor exposure, nuisance policy, physical noise scale,
+numerical jitter, output kind, and covariance policy. Covariance scales with
+the square of physical noise scale; jitter remains separate. See
+[Uncertainty contracts](UNCERTAINTY_CONTRACTS.md).
 
 Five controls are inferred for every combination of four GPD types and four
 channels: normalization, small-β exponent, large-β exponent, profile width,
@@ -196,6 +206,14 @@ therefore encode absence without manufacturing zero-valued observations.
 Candidate ensemble members use fixed seeds. Internal grouped-validation NLL
 selects the configured number of active members. The untouched outer DD test,
 named native holdouts, and real-data diagnostic are excluded from selection.
+
+Neural GPD targets are stored once per native truth group. The realization's
+`parameter_indices` is part of the model view and lazily expands targets to
+noisy context rows. Canonical coordinates use fixed one-hot GPD/channel/parity
+encodings plus x, xi, t, Q2, and mask; incompatible identities are rejected
+even when shapes match. The serious transform is training-group-only shrinkage
+full-covariance whitening with collapsed dimensions removed. Production neural
+train/evaluate/result assembly remains gated.
 
 Realization publication uses a project/profile process lock. This matters for
 multi-GPU Optuna, whose independent device workers share one generated tensor

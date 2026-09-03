@@ -5,6 +5,10 @@ constraint, native-boundary, literature, and comparison contracts. Set
 `DVCS_DISABLE_NATIVE_EXECUTION=1` in downstream integration tests. Validate
 SWIF placement with `tests/verify_jlab_swif2_workflows.sh` and container drift
 with `tools/validate_container_contract.py`.
+`tests/test_scientific_contracts.py` covers exact validation batches,
+uncertainty/covariance semantics, generator metadata and foreign-model guards,
+projection and rejection audits, sealing/provenance, telemetry, neural target
+alignment, coordinates, whitening, and literature-registry completeness.
 
 This page is for contributors and operators who need to verify the checked-in
 implementation. It does not add a second user workflow: the supported

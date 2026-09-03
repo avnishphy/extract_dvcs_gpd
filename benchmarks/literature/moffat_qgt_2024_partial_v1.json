@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "benchmark_id": "moffat-qgt-2024-partial-v1",
+  "tier": "literature_reproduction_scaffold",
+  "comparability_grade": "partial",
+  "source_registry_id": "moffat_qgt_2024",
+  "inference_object": "31-parameter parametric GPD/DD and D-term point fits",
+  "verified_settings": {
+    "generator": "GK model plus first three Gegenbauer D-term terms",
+    "parameter_dimension": 31,
+    "physical_uncertainty": "independent 10 percent Gaussian replicas",
+    "uncertainty_contract_preset": "literature_fixed_relative_replica",
+    "covariance": "diagonal",
+    "optimizer_family": "PyTorch Adam stochastic gradient descent",
+    "summary": "replica mean and standard deviation",
+    "reported_chi2_per_point": 0.2303
+  },
+  "unresolved_required_settings": [
+    "replica count",
+    "complete parameter coordinate definitions",
+    "parameter bounds and initialization distributions",
+    "complete observable list and kinematic table",
+    "perturbative and evolution configuration",
+    "optimizer schedule and stopping rule",
+    "train validation test split",
+    "whether any off-diagonal covariance was used"
+  ],
+  "execution_status": "blocked_pending_source_details_or_author_export",
+  "native_corpus_policy": {
+    "primary_master_corpus_replaced": false,
+    "existing_corpus_sufficiency": "not_established_for_the_31_parameter_GK_D_term_problem",
+    "new_native_generation_authorized": false,
+    "cost_and_storage_estimate_required_before_comparator_corpus": true
+  },
+  "common_benchmark_export_contract": {
+    "required": [
+      "native_truth_group_id",
+      "generator_metadata",
+      "observable_id_and_kinematics",
+      "central_native_prediction",
+      "paired_standard_normal_draw",
+      "diagonal_relative_sigma",
+      "split_role",
+      "parameter_bounds_when_common"
+    ],
+    "same_truth_groups_and_noise_draws_for_methods": true,
+    "internal_DD_82D_and_literature_31D_are_identical_tasks": false
+  },
+  "metric_policy": {
+    "direct_reproduction": ["chi2_per_point", "central_function_error", "runtime"],
+    "posterior_method_additions": [
+      "posterior_predictive_discrepancy",
+      "held_out_predictive_metrics",
+      "coverage",
+      "sharpness"
+    ],
+    "lower_chi2_automatically_superior": false,
+    "chi2_per_degree_of_freedom_requires_defensible_ndf": true
+  }
+}
