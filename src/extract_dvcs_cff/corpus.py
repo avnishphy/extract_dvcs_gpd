@@ -284,6 +284,20 @@ def _core_identity(config: Mapping[str, Any], physics: Mapping[str, Any],
             "generator_family": "dd",
             "generator_representation": config["representation"],
             "generator_prior_id": "full_independent_dd_uniform_v1",
+            "generator_metadata": {
+                "representation_class": "double_distribution",
+                "named_model_family": "internal_full_independent_dd",
+                "implementation_version": config["representation"],
+                "parameterization_variant": "independent_type_channel_shapes_v1",
+                "physics_configuration": hashlib.sha256(
+                    canonical(physics_core).encode("utf-8")
+                ).hexdigest(),
+                "D_term_policy": (
+                    "omitted" if "D_term" in physics.get("gpd_content", {}).get("omitted", [])
+                    else "declared_in_physics_configuration"
+                ),
+                "source_backend": "PARTONS",
+            },
             "gpd_truth_request": deepcopy(gpd_truth_request),
         })
     return result
