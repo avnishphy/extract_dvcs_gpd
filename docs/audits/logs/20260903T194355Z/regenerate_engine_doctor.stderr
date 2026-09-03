@@ -1,0 +1,4 @@
+/opt/dvcs/venv/lib/python3.12/site-packages/extract_dvcs_cff/cli/user.py:1113: FutureWarning: migrated retired inference.neural_posterior.num_bins: MAF has no spline bins; save a new schema-9 project without this field
+  experiment = _load_experiment(project)
+/opt/dvcs/venv/lib/python3.12/site-packages/extract_dvcs_cff/cli/user.py:1113: FutureWarning: migrated retired hyperparameter search_space.num_bins; only MAF hyperparameters remain active
+  experiment = _load_experiment(project)

@@ -1,0 +1,17 @@
+[codex/physics-production-readiness a35ddfe] feat: add explicit model-family scientific contracts
+ Committer: Avnish Singh <singhav@ifarm2402.jlab.org>
+Your name and email address were configured automatically based
+on your username and hostname. Please check that they are accurate.
+You can suppress this message by setting them explicitly:
+
+    git config --global user.name "Your Name"
+    git config --global user.email you@example.com
+
+After doing this, you may fix the identity used for this commit with:
+
+    git commit --amend --reset-author
+
+ 8 files changed, 1055 insertions(+), 11 deletions(-)
+ create mode 100644 benchmarks/literature/comparators_v1.json
+ create mode 100644 src/extract_dvcs_cff/inference/family_smoke.py
+ create mode 100644 tests/test_scientific_contracts.py

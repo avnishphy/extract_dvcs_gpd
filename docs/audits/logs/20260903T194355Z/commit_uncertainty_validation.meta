@@ -1,0 +1,15 @@
+start_utc=2026-09-03T19:51:31Z
+host=ifarm2402.jlab.org
+working_directory=/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd
+invocation=bash -lc git\ add\ src/extract_dvcs_cff/data/uncertainty.py\ src/extract_dvcs_cff/scientific_validation.py\ src/extract_dvcs_cff/corpus.py\ docs/UNCERTAINTY_CONTRACTS.md\;\ git\ diff\ --cached\ --check\;\ git\ commit\ -m\ \"feat:\ add\ uncertainty\ and\ validation\ contracts\" 
+user=singhav
+shell=/bin/tcsh
+git_head=9040378c789710cb73ca1bd665e89b7b94dd7eba
+git_branch=codex/physics-production-readiness
+HOME=/home/singhav
+HOST=ifarm2402.jlab.org
+PATH=/home/singhav/.codex/tmp/arg0/codex-arg08OcLxI:/u/group/nps/singhav/.vscode-server/bin/a44adf7f53e00964ab890f9f8758a334f1fc15bc/bin/remote-cli:/usr/share/Modules/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/opt/puppetlabs/bin:/opt/puppetlabs/bin:/u/group/nps/singhav/.vscode-server/extensions/openai.chatgpt-26.825.51511-linux-x64/bin/linux-x86_64
+TMPDIR=/scratch/singhav
+USER=singhav
+end_utc=2026-09-03T19:51:31Z
+exit_status=0

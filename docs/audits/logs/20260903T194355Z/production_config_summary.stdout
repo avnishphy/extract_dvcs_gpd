@@ -1,0 +1,768 @@
+## experiment top-level
+[
+  "experiment",
+  "inference",
+  "injected_truth",
+  "output_diagnostics",
+  "schema_version",
+  "synthetic_dataset",
+  "validation_gates"
+]
+## workflow top-level
+[
+  "bridge_schema_version",
+  "context_contract",
+  "data_provenance",
+  "diagnostics",
+  "experimental_model",
+  "frozen_validation_gates",
+  "hyperparameter_optimization",
+  "kinematics",
+  "network",
+  "observables",
+  "physics_configuration",
+  "profiles",
+  "real_data",
+  "representation",
+  "runtime",
+  "schema_version",
+  "seeds",
+  "truth",
+  "workflow"
+]
+## physics
+{
+  "analysis_order_label": null,
+  "evolution_configuration": {
+    "active_flavors": {
+      "module": "ActiveFlavorsThresholdsConstant",
+      "n_flavors": 3
+    },
+    "alpha_s": {
+      "module": "RunningAlphaStrongApfel",
+      "order": "LO",
+      "reference_scale": {
+        "unit": "GeV",
+        "value": 91.1876
+      },
+      "reference_value": 0.118,
+      "scheme": "MSbar",
+      "thresholds": [
+        0,
+        0,
+        0
+      ]
+    },
+    "coefficient_function_order": null,
+    "factorization_scheme": "MSbar",
+    "gpd_evolution_order": "LO",
+    "module": "GPDEvolutionApfel",
+    "renormalization_scale": null,
+    "twist": null
+  },
+  "gpd_content": {
+    "baseline": "independent_project_double_distribution_per_type_and_channel",
+    "channels": [
+      "u",
+      "d",
+      "s",
+      "gluon"
+    ],
+    "omitted": [
+      "D_term",
+      "Etilde_pion_pole",
+      "heavy_quark_input"
+    ],
+    "shadow": {
+      "H.u": "installed_PARTONS_GPDBDMMS21_up_sea",
+      "all_other_channels": "project_defined_zero_forward_moment_DD_test_direction_v1",
+      "cff_null_property_verified": false
+    },
+    "types": [
+      "H",
+      "E",
+      "Htilde",
+      "Etilde"
+    ]
+  },
+  "input_scale": {
+    "Q0_squared": {
+      "unit": "GeV2",
+      "value": 1.0
+    }
+  },
+  "observable_domain": {
+    "Q2": {
+      "maximum": 80.0,
+      "minimum": 1.0,
+      "unit": "GeV2"
+    },
+    "beam_energy": {
+      "maximum": 200.0,
+      "minimum": 3.0,
+      "unit": "GeV"
+    },
+    "phi": {
+      "maximum": 6.283185307179586,
+      "minimum": 0.0,
+      "unit": "rad"
+    },
+    "t": {
+      "maximum": -0.08,
+      "minimum": -0.2,
+      "unit": "GeV2"
+    },
+    "x_b": {
+      "maximum": 0.28,
+      "minimum": 0.12
+    }
+  },
+  "parameters": {
+    "gpd_shapes": {
+      "E": {
+        "d": {
+          "a": 0.7,
+          "c": 4.5,
+          "normalization": -1.2,
+          "profile_b": 1.5,
+          "t_slope": {
+            "unit": "GeV-2",
+            "value": 1.0
+          }
+        },
+        "gluon": {
+          "a": 0.4,
+          "c": 5.0,
+          "normalization": 0.3,
+          "profile_b": 1.5,
+          "t_slope": {
+            "unit": "GeV-2",
+            "value": 1.0
+          }
+        },
+        "s": {
+          "a": 0.7,
+          "c": 5.2,
+          "normalization": -0.1,
+          "profile_b": 2.0,
+          "t_slope": {
+            "unit": "GeV-2",
+            "value": 1.0
+          }
+        },
+        "u": {
+          "a": 0.7,
+          "c": 4.2,
+          "normalization": 1.0,
+          "profile_b": 1.5,
+          "t_slope": {
+            "unit": "GeV-2",
+            "value": 1.0
+          }
+        }
+      },
+      "Etilde": {
+        "d": {
+          "a": 0.65,
+          "c": 4.8,
+          "normalization": -0.3,
+          "profile_b": 2.0,
+          "t_slope": {
+            "unit": "GeV-2",
+            "value": 1.2
+          }
+        },
+        "gluon": {
+          "a": 0.45,
+          "c": 5.0,
+          "normalization": 0.2,
+          "profile_b": 2.0,
+          "t_slope": {
+            "unit": "GeV-2",
+            "value": 1.2
+          }
+        },
+        "s": {
+          "a": 0.7,
+          "c": 5.2,
+          "normalization": 0.05,
+          "profile_b": 2.5,
+          "t_slope": {
+            "unit": "GeV-2",
+            "value": 1.2
+          }
+        },
+        "u": {
+          "a": 0.6,
+          "c": 4.5,
+          "normalization": 0.8,
+          "profile_b": 2.0,
+          "t_slope": {
+            "unit": "GeV-2",
+            "value": 1.2
+          }
+        }
+      },
+      "H": {
+        "d": {
+          "a": 0.6,
+          "c": 4.0,
+          "normalization": 1.0,
+          "profile_b": 1.2,
+          "t_slope": {
+            "unit": "GeV-2",
+            "value": 0.8
+          }
+        },
+        "gluon": {
+          "a": 0.35,
+          "c": 5.0,
+          "normalization": 1.5,
+          "profile_b": 1.2,
+          "t_slope": {
+            "unit": "GeV-2",
+            "value": 0.8
+          }
+        },
+        "s": {
+          "a": 0.65,
+          "c": 5.0,
+          "normalization": 0.25,
+          "profile_b": 1.5,
+          "t_slope": {
+            "unit": "GeV-2",
+            "value": 0.8
+          }
+        },
+        "u": {
+          "a": 0.55,
+          "c": 3.8,
+          "normalization": 2.0,
+          "profile_b": 1.2,
+          "t_slope": {
+            "unit": "GeV-2",
+            "value": 0.8
+          }
+        }
+      },
+      "Htilde": {
+        "d": {
+          "a": 0.5,
+          "c": 3.8,
+          "normalization": -0.4,
+          "profile_b": 1.2,
+          "t_slope": {
+            "unit": "GeV-2",
+            "value": 0.7
+          }
+        },
+        "gluon": {
+          "a": 0.4,
+          "c": 4.5,
+          "normalization": 0.5,
+          "profile_b": 1.2,
+          "t_slope": {
+            "unit": "GeV-2",
+            "value": 0.7
+          }
+        },
+        "s": {
+          "a": 0.55,
+          "c": 4.5,
+          "normalization": -0.1,
+          "profile_b": 1.5,
+          "t_slope": {
+            "unit": "GeV-2",
+            "value": 0.7
+          }
+        },
+        "u": {
+          "a": 0.45,
+          "c": 3.2,
+          "normalization": 1.27,
+          "profile_b": 1.2,
+          "t_slope": {
+            "unit": "GeV-2",
+            "value": 0.7
+          }
+        }
+      }
+    },
+    "quadrature_order": 128,
+    "shadow_channel_amplitudes": {
+      "E": {
+        "d": 0.5,
+        "gluon": 1.0,
+        "s": 0.25,
+        "u": 1.0
+      },
+      "Etilde": {
+        "d": 0.5,
+        "gluon": 1.0,
+        "s": 0.25,
+        "u": 1.0
+      },
+      "H": {
+        "d": 0.5,
+        "gluon": 1.0,
+        "s": 0.25,
+        "u": 1.0
+      },
+      "Htilde": {
+        "d": 0.5,
+        "gluon": 1.0,
+        "s": 0.25,
+        "u": 1.0
+      }
+    },
+    "shadow_coefficients": {
+      "E": -0.35,
+      "Etilde": -0.2,
+      "H": 0.6,
+      "Htilde": 0.4
+    }
+  },
+  "real_data": false,
+  "representation": "stage11_lo_multiq2_full_independent_dd_v1",
+  "scale_treatment": {
+    "accepted_observable_scale": "Q2_in_[Q0_squared,80_GeV2]",
+    "data_evolved": false,
+    "gpd_evolution_invoked_for_accepted_observables": true,
+    "off_scale_campaign_available": true,
+    "off_scale_native_probe": "artifacts/stage_10/probes/run_attempt2_stdout.json"
+  },
+  "schema_version": 4,
+  "theory_configuration": {
+    "analysis_order_label": null,
+    "cff_module": "DVCSCFFStandard",
+    "coefficient_function_order": "LO",
+    "factorization_scale_squared": "Q2",
+    "observable_modules": [
+      "DVCSCrossSectionUUMinus",
+      "DVCSCrossSectionDifferenceLUMinus",
+      "DVCSAc",
+      "DVCSAluMinus",
+      "DVCSAulMinus",
+      "DVCSAllMinus"
+    ],
+    "process_module": "DVCSProcessGV08",
+    "renormalization_scale_squared": "Q2",
+    "scales_module": "DVCSScalesQ2Multiplier",
+    "twist": null,
+    "xi_converter_module": "DVCSXiConverterXBToXi"
+  }
+}
+## experiment non-kinematic configuration
+{
+  "schema_version": 8,
+  "experiment": {
+    "name": "experiment_josh",
+    "description": "Synthetic DVCS posterior experiment with structured multi-dimensional kinematic coverage; no real data"
+  },
+  "injected_truth": {
+    "gpd_parameters": {
+      "H": {
+        "u": {
+          "normalization": 2.0,
+          "a": 0.55,
+          "c": 3.8,
+          "profile_b": 1.2,
+          "t_slope_GeV_minus2": 0.8
+        },
+        "d": {
+          "normalization": 1.0,
+          "a": 0.6,
+          "c": 4.0,
+          "profile_b": 1.2,
+          "t_slope_GeV_minus2": 0.8
+        },
+        "s": {
+          "normalization": 0.25,
+          "a": 0.65,
+          "c": 5.0,
+          "profile_b": 1.5,
+          "t_slope_GeV_minus2": 0.8
+        },
+        "gluon": {
+          "normalization": 1.5,
+          "a": 0.35,
+          "c": 5.0,
+          "profile_b": 1.2,
+          "t_slope_GeV_minus2": 0.8
+        }
+      },
+      "E": {
+        "u": {
+          "normalization": 1.0,
+          "a": 0.7,
+          "c": 4.2,
+          "profile_b": 1.5,
+          "t_slope_GeV_minus2": 1.0
+        },
+        "d": {
+          "normalization": -1.2,
+          "a": 0.7,
+          "c": 4.5,
+          "profile_b": 1.5,
+          "t_slope_GeV_minus2": 1.0
+        },
+        "s": {
+          "normalization": -0.1,
+          "a": 0.7,
+          "c": 5.2,
+          "profile_b": 2.0,
+          "t_slope_GeV_minus2": 1.0
+        },
+        "gluon": {
+          "normalization": 0.3,
+          "a": 0.4,
+          "c": 5.0,
+          "profile_b": 1.5,
+          "t_slope_GeV_minus2": 1.0
+        }
+      },
+      "Htilde": {
+        "u": {
+          "normalization": 1.27,
+          "a": 0.45,
+          "c": 3.2,
+          "profile_b": 1.2,
+          "t_slope_GeV_minus2": 0.7
+        },
+        "d": {
+          "normalization": -0.4,
+          "a": 0.5,
+          "c": 3.8,
+          "profile_b": 1.2,
+          "t_slope_GeV_minus2": 0.7
+        },
+        "s": {
+          "normalization": -0.1,
+          "a": 0.55,
+          "c": 4.5,
+          "profile_b": 1.5,
+          "t_slope_GeV_minus2": 0.7
+        },
+        "gluon": {
+          "normalization": 0.5,
+          "a": 0.4,
+          "c": 4.5,
+          "profile_b": 1.2,
+          "t_slope_GeV_minus2": 0.7
+        }
+      },
+      "Etilde": {
+        "u": {
+          "normalization": 0.8,
+          "a": 0.6,
+          "c": 4.5,
+          "profile_b": 2.0,
+          "t_slope_GeV_minus2": 1.2
+        },
+        "d": {
+          "normalization": -0.3,
+          "a": 0.65,
+          "c": 4.8,
+          "profile_b": 2.0,
+          "t_slope_GeV_minus2": 1.2
+        },
+        "s": {
+          "normalization": 0.05,
+          "a": 0.7,
+          "c": 5.2,
+          "profile_b": 2.5,
+          "t_slope_GeV_minus2": 1.2
+        },
+        "gluon": {
+          "normalization": 0.2,
+          "a": 0.45,
+          "c": 5.0,
+          "profile_b": 2.0,
+          "t_slope_GeV_minus2": 1.2
+        }
+      },
+      "shadow_coefficients": {
+        "H": 0.6,
+        "E": -0.35,
+        "Htilde": 0.4,
+        "Etilde": -0.2
+      },
+      "shadow_channel_amplitudes": {
+        "H": {
+          "u": 1.0,
+          "d": 0.5,
+          "s": 0.25,
+          "gluon": 1.0
+        },
+        "E": {
+          "u": 1.0,
+          "d": 0.5,
+          "s": 0.25,
+          "gluon": 1.0
+        },
+        "Htilde": {
+          "u": 1.0,
+          "d": 0.5,
+          "s": 0.25,
+          "gluon": 1.0
+        },
+        "Etilde": {
+          "u": 1.0,
+          "d": 0.5,
+          "s": 0.25,
+          "gluon": 1.0
+        }
+      }
+    },
+    "nuisance_parameters": {
+      "eta_global_normalization": 0.35,
+      "eta_lu_normalization": -0.25
+    }
+  },
+  "synthetic_dataset": {
+    "kinematics_source": {
+      "mode": "manual"
+    },
+    "observables": [
+      {
+        "id": "DVCSCrossSectionUUMinus",
+        "native_unit": "nb/GeV4",
+        "normalization_scale": 1.0,
+        "user_label": "Beam-spin half-sum / unpolarized cross section"
+      },
+      {
+        "id": "DVCSCrossSectionDifferenceLUMinus",
+        "native_unit": "nb/GeV4",
+        "normalization_scale": 0.1,
+        "user_label": "Beam-spin difference"
+      },
+      {
+        "id": "DVCSAc",
+        "native_unit": "1",
+        "normalization_scale": 1.0,
+        "user_label": "Beam-charge asymmetry"
+      },
+      {
+        "id": "DVCSAluMinus",
+        "native_unit": "1",
+        "normalization_scale": 1.0,
+        "user_label": "Beam-spin asymmetry"
+      },
+      {
+        "id": "DVCSAulMinus",
+        "native_unit": "1",
+        "normalization_scale": 1.0,
+        "user_label": "Longitudinal target-spin asymmetry"
+      },
+      {
+        "id": "DVCSAllMinus",
+        "native_unit": "1",
+        "normalization_scale": 1.0,
+        "user_label": "Longitudinal double-spin asymmetry"
+      }
+    ],
+    "uncertainty_model": {
+      "uncorrelated_relative_sigma": 0.05,
+      "uncorrelated_absolute_floor_normalized": 0.01,
+      "local_correlation_fraction": 0.015,
+      "local_correlation_length": 1.5,
+      "phi_shape_correlated_fraction": 0.01,
+      "global_normalization_fraction": 0.02,
+      "lu_normalization_fraction": 0.03
+    },
+    "kinematics_count": 96
+  },
+  "inference": {
+    "profiles": {
+      "quick": {
+        "native_parameter_count": 2048,
+        "noise_replicates_per_parameter": 2,
+        "held_out_fraction": 0.2,
+        "posterior_sample_count": 1024,
+        "conventional_nuisance_draws_per_parameter": 8,
+        "coverage_trial_count": 20,
+        "exact_reevaluation_sample_count": 48,
+        "max_num_epochs": 100,
+        "stop_after_epochs": 20,
+        "ensemble_seeds": [
+          51001,
+          51002
+        ],
+        "active_ensemble_member_count": 2
+      },
+      "validation": {
+        "native_parameter_count": 16384,
+        "noise_replicates_per_parameter": 8,
+        "held_out_fraction": 0.2,
+        "posterior_sample_count": 16384,
+        "conventional_nuisance_draws_per_parameter": 8,
+        "coverage_trial_count": 200,
+        "exact_reevaluation_sample_count": 64,
+        "max_num_epochs": 500,
+        "stop_after_epochs": 25,
+        "ensemble_seeds": [
+          57439,
+          85743,
+          98465,
+          56486,
+          78546
+        ],
+        "active_ensemble_member_count": 3
+      }
+    },
+    "neural_posterior": {
+      "estimator": "sbi.NPE",
+      "flow": "zuko_maf",
+      "point_hidden": 128,
+      "point_layers": 3,
+      "dataset_hidden": 128,
+      "dataset_layers": 2,
+      "embedding_features": 96,
+      "point_layer_norm": false,
+      "flow_hidden_features": 96,
+      "num_transforms": 6,
+      "num_bins": 8,
+      "z_score_theta": "independent",
+      "z_score_x": "none",
+      "training_batch_size": 256,
+      "learning_rate": 0.0005,
+      "validation_fraction": 0.1
+    },
+    "random_seeds": {
+      "native_parameters": 51010,
+      "training_noise": 51011,
+      "pseudodata": 51012,
+      "conventional_nuisance": 51013,
+      "comparison": 51014,
+      "coverage": 51015,
+      "optimization": 51016
+    },
+    "runtime": {
+      "accelerator": "auto",
+      "cpu_threads": 4,
+      "deterministic_algorithms": true,
+      "native_workers": "all_available"
+    },
+    "hyperparameter_optimization": {
+      "package": "Optuna",
+      "sampler": "TPESampler",
+      "objective": "best_validation_negative_log_density",
+      "trials": {
+        "quick": 12,
+        "validation": 40
+      },
+      "pruner": "MedianPruner",
+      "pruner_startup_trials": 5,
+      "pruner_warmup_epochs": 10,
+      "search_space": {
+        "point_hidden": [
+          64,
+          96,
+          128,
+          192
+        ],
+        "dataset_hidden": [
+          64,
+          96,
+          128,
+          192
+        ],
+        "embedding_features": [
+          64,
+          96,
+          128
+        ],
+        "flow_hidden_features": [
+          64,
+          96,
+          128,
+          192
+        ],
+        "num_transforms": [
+          4,
+          6,
+          8
+        ],
+        "num_bins": [
+          6,
+          8,
+          10
+        ],
+        "training_batch_size": [
+          128,
+          256,
+          512
+        ],
+        "learning_rate": [
+          0.0001,
+          0.002
+        ]
+      }
+    }
+  },
+  "output_diagnostics": {
+    "gpd_reference_kinematics": {
+      "x_b": 0.2,
+      "t_GeV2": -0.12,
+      "Q2_GeV2": 2.0,
+      "beam_energy_GeV": 12.0,
+      "phi_rad": 0.0
+    },
+    "gpd_x_grid": {
+      "minimum": 0.001,
+      "maximum": 0.8,
+      "point_count": 65
+    },
+    "credible_interval": 0.9
+  },
+  "validation_gates": {
+    "minimum_conventional_effective_sample_size": 80,
+    "maximum_ensemble_sliced_wasserstein": 0.45,
+    "maximum_marginal_wasserstein_over_conventional_sd": 0.6,
+    "maximum_test_nll_minus_validation_nll": 0.75,
+    "maximum_coverage_standard_error": 3.5,
+    "minimum_posterior_predictive_point_90_coverage": 0.75,
+    "minimum_neural_to_conventional_stress_width_ratio": 0.85,
+    "maximum_exact_reevaluation_invalid_fraction": 0.0
+  }
+}
+## kinematic digest/count/ranges
+2d4130fce5d4fd27ced6ad833360d95c0b3528141ca09f4c903a94a4ee94cff5  -
+[
+  96,
+  0.12,
+  0.4,
+  -0.7,
+  -0.12,
+  1.4,
+  7.0,
+  [
+    10.6
+  ],
+  8
+]
+## workflow selected fields
+{
+  "schema_version": 8,
+  "project": null,
+  "profile": null,
+  "corpus": null,
+  "selection": null,
+  "realization": null,
+  "model_view": null,
+  "training": null,
+  "evaluation": null,
+  "runtime": {
+    "accelerator": "cpu",
+    "cpu_threads": 256,
+    "deterministic_algorithms": true,
+    "native_workers": "all_available"
+  },
+  "provenance": null
+}
+## file hashes
+22d6dc8d030991f97caef2ea0fb2b168c3635cf598fee3ea77ceb856ac5e7a89  workspace/experiment_josh/experiment.json
+6c2807364b95bc158ed47926f288bd134368a4575e50df1ab541376ac4f79a02  workspace/experiment_josh/.engine/physics.json
+a0b673cb76dbd20dd528ab5ede515f93c4581cf4ce819518197004a354a8666e  workspace/experiment_josh/.engine/workflow.json
+c5de6aa2b01c8dd491fc91ba4ae9e359cfb3ab886556b040b58461c0a6849bf6  workspace/experiment_josh/selections/baseline.json
+3793116765e64f917f7c464955341735df6c310caecd3568a064a792001effdb  .dvcs/extract-dvcs-gpd-jlab_ifarm-0.3.0.sif

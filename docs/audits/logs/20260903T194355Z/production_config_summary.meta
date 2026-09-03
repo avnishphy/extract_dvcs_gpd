@@ -1,0 +1,15 @@
+start_utc=2026-09-03T19:54:03Z
+host=ifarm2402.jlab.org
+working_directory=/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd
+invocation=bash -lc printf\ \"%s\\n\"\ \"##\ experiment\ top-level\"\;\ jq\ \"keys\"\ workspace/experiment_josh/experiment.json\;\ printf\ \"%s\\n\"\ \"##\ workflow\ top-level\"\;\ jq\ \"keys\"\ workspace/experiment_josh/.engine/workflow.json\;\ printf\ \"%s\\n\"\ \"##\ physics\"\;\ jq\ .\ workspace/experiment_josh/.engine/physics.json\;\ printf\ \"%s\\n\"\ \"##\ experiment\ non-kinematic\ configuration\"\;\ jq\ \"del\(.synthetic_dataset.kinematics\)\ \|\ .synthetic_dataset.kinematics_count\ =\ 96\"\ workspace/experiment_josh/experiment.json\;\ printf\ \"%s\\n\"\ \"##\ kinematic\ digest/count/ranges\"\;\ jq\ -c\ \".synthetic_dataset.kinematics\"\ workspace/experiment_josh/experiment.json\ \|\ sha256sum\;\ jq\ \"\[.synthetic_dataset.kinematics\ \|\ length\,\ \(map\(.x_b\)\|min\)\,\ \(map\(.x_b\)\|max\)\,\ \(map\(.t_GeV2\)\|min\)\,\ \(map\(.t_GeV2\)\|max\)\,\ \(map\(.Q2_GeV2\)\|min\)\,\ \(map\(.Q2_GeV2\)\|max\)\,\ \(map\(.beam_energy_GeV\)\|unique\)\,\ \(map\(.phi_rad\)\|unique\|length\)\]\"\ workspace/experiment_josh/experiment.json\;\ printf\ \"%s\\n\"\ \"##\ workflow\ selected\ fields\"\;\ jq\ \"\{schema_version\,project\,profile\,corpus\,selection\,realization\,model_view\,training\,evaluation\,runtime\,provenance\}\"\ workspace/experiment_josh/.engine/workflow.json\;\ printf\ \"%s\\n\"\ \"##\ file\ hashes\"\;\ sha256sum\ workspace/experiment_josh/experiment.json\ workspace/experiment_josh/.engine/physics.json\ workspace/experiment_josh/.engine/workflow.json\ workspace/experiment_josh/selections/baseline.json\ .dvcs/extract-dvcs-gpd-jlab_ifarm-0.3.0.sif 
+user=singhav
+shell=/bin/tcsh
+git_head=c0ba0f4fe2c0ede07b66e6ad5175d12cd186870c
+git_branch=codex/physics-production-readiness
+HOME=/home/singhav
+HOST=ifarm2402.jlab.org
+PATH=/home/singhav/.codex/tmp/arg0/codex-arg08OcLxI:/u/group/nps/singhav/.vscode-server/bin/a44adf7f53e00964ab890f9f8758a334f1fc15bc/bin/remote-cli:/usr/share/Modules/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/opt/puppetlabs/bin:/opt/puppetlabs/bin:/u/group/nps/singhav/.vscode-server/extensions/openai.chatgpt-26.825.51511-linux-x64/bin/linux-x86_64
+TMPDIR=/scratch/singhav
+USER=singhav
+end_utc=2026-09-03T19:54:08Z
+exit_status=0

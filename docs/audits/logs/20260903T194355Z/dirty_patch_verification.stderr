@@ -1,0 +1,10 @@
+.............................................................
+----------------------------------------------------------------------
+Ran 61 tests in 2.375s
+
+OK
+requesting a Slurm GPU allocation for doctor
+terminate called after throwing an instance of 'ElemUtils::CustomException'
+  what():  (LoggerManager::update) Cannot open log file = /cache/partons-logs/03-09-2026_partons.log
+LoggerManager terminated !
+/src/tests/run.sh: line 6: 3225555 Aborted                 (core dumped) "${bridge}" --self-test

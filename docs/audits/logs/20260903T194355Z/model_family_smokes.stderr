@@ -1,0 +1,4 @@
+/opt/dvcs/venv/lib/python3.12/site-packages/sbi/inference/trainers/npe/npe_base.py:196: UserWarning: Data has constant values in dimension(s) [17, 18, 19, 20, 21, 22, 23, 24, 25, 26]. These dimensions carry no information and will be mapped to zero after z-scoring. Consider removing constant features from your data.
+  warn_if_invalid_for_zscoring(x)
+/opt/dvcs/venv/lib/python3.12/site-packages/sbi/inference/trainers/npe/npe_base.py:196: UserWarning: Data has constant values in dimension(s) [17, 18, 19, 20, 21, 22, 23, 24, 25, 26]. These dimensions carry no information and will be mapped to zero after z-scoring. Consider removing constant features from your data.
+  warn_if_invalid_for_zscoring(x)

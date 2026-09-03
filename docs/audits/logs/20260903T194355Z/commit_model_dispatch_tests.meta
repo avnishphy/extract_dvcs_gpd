@@ -1,0 +1,15 @@
+start_utc=2026-09-03T19:51:45Z
+host=ifarm2402.jlab.org
+working_directory=/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd
+invocation=bash -lc git\ add\ src/extract_dvcs_cff/neural_gpd.py\ src/extract_dvcs_cff/model_registry.py\ src/extract_dvcs_cff/inference/family_smoke.py\ src/extract_dvcs_cff/cli/user.py\ src/extract_dvcs_cff/literature.py\ tests/test_scientific_contracts.py\ tests/run.sh\ benchmarks/literature/comparators_v1.json\;\ git\ diff\ --cached\ --check\;\ git\ commit\ -m\ \"feat:\ add\ explicit\ model-family\ scientific\ contracts\" 
+user=singhav
+shell=/bin/tcsh
+git_head=3f7e765133064b86be0ca76b06b2963fe533c3ca
+git_branch=codex/physics-production-readiness
+HOME=/home/singhav
+HOST=ifarm2402.jlab.org
+PATH=/home/singhav/.codex/tmp/arg0/codex-arg08OcLxI:/u/group/nps/singhav/.vscode-server/bin/a44adf7f53e00964ab890f9f8758a334f1fc15bc/bin/remote-cli:/usr/share/Modules/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/opt/puppetlabs/bin:/opt/puppetlabs/bin:/u/group/nps/singhav/.vscode-server/extensions/openai.chatgpt-26.825.51511-linux-x64/bin/linux-x86_64
+TMPDIR=/scratch/singhav
+USER=singhav
+end_utc=2026-09-03T19:51:45Z
+exit_status=0

@@ -1,0 +1,13 @@
+3793116765e64f917f7c464955341735df6c310caecd3568a064a792001effdb  .dvcs/extract-dvcs-gpd-jlab_ifarm-0.3.0.sif
+org.label-schema.build-arch: amd64
+org.label-schema.build-date: Thursday_3_September_2026_1:9:46_EDT
+org.label-schema.schema-version: 1.0
+org.label-schema.usage.apptainer.version: 1.5.2-1.el9
+org.label-schema.usage.singularity.deffile.bootstrap: docker
+org.label-schema.usage.singularity.deffile.from: ubuntu@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90
+org.opencontainers.image.base.digest: sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90
+org.opencontainers.image.base.name: docker.io/library/ubuntu@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90
+org.opencontainers.image.revision: recorded-in-/opt/dvcs/app/provenance/build-metadata.json
+org.opencontainers.image.source: https://github.com/avnishphy/extract_dvcs_gpd
+org.opencontainers.image.title: extract-dvcs-gpd
+org.opencontainers.image.version: 0.3.0

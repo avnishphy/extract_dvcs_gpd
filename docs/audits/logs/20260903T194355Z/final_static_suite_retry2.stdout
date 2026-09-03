@@ -1,0 +1,11 @@
+distribution static verification: PASS
+documentation verification: PASS (24 required pages, 121 schema leaves)
+JLab GPU launcher verification: PASS
+JLab batch submission verification: PASS
+JLab progress logging verification: PASS
+JLab SWIF2 workflow verification: PASS
+JLab SWIF2 submission verification: PASS
+system-package retry verification: PASS
+Apptainer image resume checks passed
+User-controlled physical kinematic contract verification: PASS
+shell and installer static verification: PASS

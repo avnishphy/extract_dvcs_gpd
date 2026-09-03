@@ -1,0 +1,1112 @@
+{
+  "blocking_failures": [
+    {
+      "blocking": true,
+      "detail": [
+        {
+          "actual": [
+            0.12,
+            0.4
+          ],
+          "declared": [
+            0.12,
+            0.28
+          ],
+          "field": "x_b"
+        },
+        {
+          "actual": [
+            -0.7,
+            -0.12
+          ],
+          "declared": [
+            -0.2,
+            -0.08
+          ],
+          "field": "t"
+        }
+      ],
+      "id": "physics.kinematics_inside_declared_domain",
+      "passed": false
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "manifest": "draft_requires_researcher_approval",
+        "registry": "draft_requires_researcher_approval"
+      },
+      "id": "assumptions.researcher_approved",
+      "passed": false
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "declared": null,
+        "observed": null,
+        "path": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/workspace/experiment_josh/gpd_truth.json"
+      },
+      "id": "corpus.function_grid_request",
+      "passed": false
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "digest": null,
+        "local_sif_sha256": "3793116765e64f917f7c464955341735df6c310caecd3568a064a792001effdb",
+        "published": false,
+        "registry": "ghcr.io/OWNER/extract-dvcs-gpd"
+      },
+      "id": "runtime.published_image_digest",
+      "passed": false
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "DVCS_CORPUS": {
+          "configured": "my_test_big_corpus1-corpus",
+          "required": "experiment-josh-native-v1"
+        },
+        "DVCS_PROJECT": {
+          "configured": "my_test_big_corpus1",
+          "required": "experiment_josh"
+        }
+      },
+      "id": "swif.campaign_environment",
+      "passed": false
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "manifest_status": "not_run_blocked_by_missing_approved_function_grid_and_physics_approvals",
+        "path": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/docs/audits/PRODUCTION_REHEARSAL_2026-09-03.json",
+        "report_status": "blocked_not_run"
+      },
+      "id": "rehearsal.production_vertical",
+      "passed": false
+    }
+  ],
+  "checks": [
+    {
+      "blocking": true,
+      "detail": {
+        "observed": 1,
+        "required": 1
+      },
+      "id": "manifest.schema",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": "experiment_josh",
+      "id": "identity.project",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": "validation",
+      "id": "identity.profile",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": "baseline",
+      "id": "identity.selection",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": "experiment-josh-native-v1",
+      "id": "identity.corpus",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": "experiment-josh-corpus-baseline-v1",
+      "id": "identity.corpus_workflow",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": "experiment-josh-analysis-baseline-v1",
+      "id": "identity.analysis_workflow",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "declared": "22d6dc8d030991f97caef2ea0fb2b168c3635cf598fee3ea77ceb856ac5e7a89",
+        "observed": "22d6dc8d030991f97caef2ea0fb2b168c3635cf598fee3ea77ceb856ac5e7a89",
+        "path": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/workspace/experiment_josh/experiment.json"
+      },
+      "id": "hash.experiment_path",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "declared": "3c4f1aeefc86cdeea54a43061b5d868336a7b249209d219a2fc7c1b23727870b",
+        "observed": "3c4f1aeefc86cdeea54a43061b5d868336a7b249209d219a2fc7c1b23727870b",
+        "path": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/workspace/experiment_josh/.engine/workflow.json"
+      },
+      "id": "hash.workflow_path",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "declared": "6c2807364b95bc158ed47926f288bd134368a4575e50df1ab541376ac4f79a02",
+        "observed": "6c2807364b95bc158ed47926f288bd134368a4575e50df1ab541376ac4f79a02",
+        "path": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/workspace/experiment_josh/.engine/physics.json"
+      },
+      "id": "hash.physics_path",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "declared": "c5de6aa2b01c8dd491fc91ba4ae9e359cfb3ab886556b040b58461c0a6849bf6",
+        "observed": "c5de6aa2b01c8dd491fc91ba4ae9e359cfb3ab886556b040b58461c0a6849bf6",
+        "path": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/workspace/experiment_josh/selections/baseline.json"
+      },
+      "id": "hash.selection_path",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": 8,
+      "id": "schema.workflow",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": 4,
+      "id": "schema.physics",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": "num_bins must not appear in the generated workflow",
+      "id": "schema.retired_maf_field_absent",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "count": 96,
+        "declared": "701d451a921976459ace744767aca5b0a8d1b4854c6087187785fbb6b77e49be",
+        "declared_count": 96,
+        "observed": "701d451a921976459ace744767aca5b0a8d1b4854c6087187785fbb6b77e49be"
+      },
+      "id": "kinematics.hash",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": 96,
+      "id": "kinematics.count",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": [
+        {
+          "actual": [
+            0.12,
+            0.4
+          ],
+          "declared": [
+            0.12,
+            0.28
+          ],
+          "field": "x_b"
+        },
+        {
+          "actual": [
+            -0.7,
+            -0.12
+          ],
+          "declared": [
+            -0.2,
+            -0.08
+          ],
+          "field": "t"
+        }
+      ],
+      "id": "physics.kinematics_inside_declared_domain",
+      "passed": false
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "declared": "d85a19777dfdf8209ade87415e1db0fbff324cb510d2a8f9c9519e3aab2af9a5",
+        "observed": "d85a19777dfdf8209ade87415e1db0fbff324cb510d2a8f9c9519e3aab2af9a5"
+      },
+      "id": "prior.hash",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "manifest": "dcbc6623c6f29886a61238d2449502b9d0241dce19331b9f14d4e22ab6e451e4",
+        "observed": "dcbc6623c6f29886a61238d2449502b9d0241dce19331b9f14d4e22ab6e451e4",
+        "registry": "dcbc6623c6f29886a61238d2449502b9d0241dce19331b9f14d4e22ab6e451e4"
+      },
+      "id": "assumptions.hash",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "manifest": "draft_requires_researcher_approval",
+        "registry": "draft_requires_researcher_approval"
+      },
+      "id": "assumptions.researcher_approved",
+      "passed": false
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "declared": null,
+        "observed": null,
+        "path": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/workspace/experiment_josh/gpd_truth.json"
+      },
+      "id": "corpus.function_grid_request",
+      "passed": false
+    },
+    {
+      "blocking": true,
+      "detail": 1024,
+      "id": "corpus.shard_count",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": 32,
+      "id": "corpus.worker_count",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": 16384,
+      "id": "corpus.accepted_count",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "candidate": "workspace/.corpora/partons-validation-16384",
+        "compatible": false,
+        "reason": "schema-v1 corpus was generated by bridge 0.9 and has no canonical function-grid truth; it cannot satisfy the schema-v2 architecture-neutral campaign contract"
+      },
+      "id": "corpus.reuse_policy",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": 131072,
+      "id": "analysis.realization_count",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "outer_test": 3277,
+        "training": 11796,
+        "validation": 1311
+      },
+      "id": "analysis.selection_count_sum",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "declared": 12,
+        "stage_count": 12
+      },
+      "id": "analysis.job_count",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "declared": "3793116765e64f917f7c464955341735df6c310caecd3568a064a792001effdb",
+        "observed": "3793116765e64f917f7c464955341735df6c310caecd3568a064a792001effdb",
+        "path": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/.dvcs/extract-dvcs-gpd-jlab_ifarm-0.3.0.sif"
+      },
+      "id": "runtime.sif_digest",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "digest": null,
+        "local_sif_sha256": "3793116765e64f917f7c464955341735df6c310caecd3568a064a792001effdb",
+        "published": false,
+        "registry": "ghcr.io/OWNER/extract-dvcs-gpd"
+      },
+      "id": "runtime.published_image_digest",
+      "passed": false
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "declared": "2a2d79c2baaa1ce3670a2ca25e2d95b845b9820da78a734ff632781ce814c01d",
+        "observed": "2a2d79c2baaa1ce3670a2ca25e2d95b845b9820da78a734ff632781ce814c01d",
+        "stderr": ""
+      },
+      "id": "runtime.bridge_binary_digest",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "apfelxx_required": "4.8.0",
+        "capabilities": {
+          "backend": {
+            "apfelxx": {
+              "version": "4.8.0"
+            },
+            "bridge_schema_version": 1,
+            "bridge_source_sha256": "6842f5f05e3accfbde80129f8736954942a36bce1603d8e8cbcf697b8fe79141",
+            "bridge_version": "0.10.0",
+            "compiler": {
+              "cxx_standard": 17,
+              "id": "GNU",
+              "version": "13.3.0"
+            },
+            "elementary_utils": {
+              "git_revision": "0133fc6e69872270027c37381a273893f7841b42",
+              "version": "5.0.0"
+            },
+            "execution_mode": "single_process_single_worker",
+            "gsl": {
+              "version": "2.8"
+            },
+            "lhapdf": {
+              "version": "6.5.6"
+            },
+            "native_libraries": [
+              {
+                "name": "PARTONS",
+                "path": "libPARTONS.so"
+              },
+              {
+                "name": "APFEL++",
+                "path": "libapfelxx.so"
+              },
+              {
+                "name": "NumA++",
+                "path": "libNumA++.so"
+              },
+              {
+                "name": "ElementaryUtils",
+                "path": "libElementaryUtils.so"
+              },
+              {
+                "name": "LHAPDF",
+                "path": "libLHAPDF.so"
+              },
+              {
+                "name": "GSL",
+                "path": "libgsl.so"
+              }
+            ],
+            "numa": {
+              "git_revision": "f184ee75f1d61b380e522d38ba48fbcbe9d78ae5",
+              "version": "5.0.0"
+            },
+            "partons": {
+              "git_revision": "1ad0b7d3bf62328f564c4ded06793e5feed00d4f",
+              "version": "5.0.0"
+            }
+          },
+          "capabilities": {
+            "canonical_gpd_truth_v1": {
+              "available": true,
+              "coordinate_convention": "signed_x_xi_t_at_common_input_scale_v1",
+              "factorization_scheme": "MSbar",
+              "input_scale_squared_GeV2": 1.0,
+              "operation": "batch_evaluate_canonical_gpd_truth",
+              "required_contract": "configs/schemas/master_native_physics_corpus_v2.schema.json",
+              "status_mask": true,
+              "supports_irregular_explicit_coordinates": true
+            },
+            "commands": [
+              "capabilities",
+              "self_test",
+              "evaluate_gpd",
+              "batch_evaluate_gpd",
+              "evaluate_dd_gpd",
+              "batch_evaluate_dd_gpd",
+              "evaluate_evolved_dd_gpd",
+              "batch_evaluate_evolved_dd_gpd",
+              "evaluate_coupled_basis_gpd",
+              "batch_evaluate_coupled_basis_gpd",
+              "evaluate_conformal_moment_gpd",
+              "batch_evaluate_conformal_moment_gpd",
+              "evaluate_shadow_dvcs",
+              "batch_evaluate_shadow_dvcs",
+              "evaluate_pseudodata_dvcs",
+              "batch_evaluate_pseudodata_dvcs",
+              "batch_evaluate_canonical_gpd_truth",
+              "evaluate_post_training_comparison_dvcs",
+              "batch_evaluate_post_training_comparison_dvcs",
+              "evaluate_native_model_holdout_dvcs",
+              "batch_evaluate_native_model_holdout_dvcs"
+            ],
+            "conformal_moment_family": {
+              "available": true,
+              "evolution": false,
+              "integration_limits": [
+                256,
+                512,
+                1024,
+                2048
+              ],
+              "mapping": "PARTONS_GPDModule_factory_GPDService",
+              "module": "ConformalMomentGPD",
+              "moment_parameterization": "GUMP_k0_single_Regge_term",
+              "mu_f_squared_GeV2": 4.0,
+              "operation": "evaluate_conformal_moment_gpd",
+              "perturbative_label": null,
+              "q0_squared_GeV2": 4.0,
+              "reconstruction": "analytic_inverse_Mellin_convolution",
+              "representation": "stage08_zero_skewness_conformal_moment_v1",
+              "skewness": 0.0,
+              "t_range_GeV2": [
+                -0.5,
+                0.0
+              ],
+              "thread_safe_parallel_execution": false
+            },
+            "coupled_quark_gluon": {
+              "available": true,
+              "explicit_directions": [
+                "sigma",
+                "t3",
+                "gluon"
+              ],
+              "factorization_scheme": "MSbar",
+              "fixed_active_flavors": 3,
+              "input_basis": "apfel_nf3_sigma_t3_gluon",
+              "operation": "evaluate_coupled_basis_gpd",
+              "physical_output_flavors": [
+                "up",
+                "down",
+                "strange",
+                "charm",
+                "bottom",
+                "top",
+                "gluon"
+              ],
+              "representation": "stage07_coupled_basis_dd_v1",
+              "thread_safe_parallel_execution": false,
+              "thresholds_GeV": [
+                0,
+                0,
+                0
+              ],
+              "validated_g_to_q_response": true,
+              "validated_non_singlet_decoupling": true,
+              "validated_q_to_g_response": true,
+              "variable_flavor_thresholds": false,
+              "verified_evolution_order": "LO"
+            },
+            "dvcs_cff": {
+              "bridge_available": true,
+              "coefficient_orders": [
+                "LO",
+                "NLO"
+              ],
+              "restricted_operation": "evaluate_shadow_dvcs_or_evaluate_pseudodata_dvcs",
+              "source_runtime_audited": true
+            },
+            "dvcs_observable": {
+              "bridge_available": true,
+              "modules": [
+                "DVCSCrossSectionUUMinus",
+                "DVCSCrossSectionDifferenceLUMinus",
+                "DVCSAc",
+                "DVCSAluMinus",
+                "DVCSAulMinus",
+                "DVCSAllMinus"
+              ],
+              "restricted_operation": "evaluate_shadow_dvcs_or_evaluate_pseudodata_dvcs",
+              "source_runtime_audited": true
+            },
+            "evaluate_dd_gpd": {
+              "available": true,
+              "d_term": false,
+              "evolution": false,
+              "flavors": [
+                "up"
+              ],
+              "gpd_types": [
+                "H"
+              ],
+              "integrator": "NumA_GaussLegendre",
+              "mapping": "PARTONS_GPDModule_factory_GPDService",
+              "module": "FixedScaleDDGPD",
+              "mu_f_squared": {
+                "unit": "GeV2",
+                "value": 4.0
+              },
+              "parton_content": "reduced_up_valence_forward_input_no_gluon_no_sea",
+              "perturbative_label": null,
+              "q0_squared": {
+                "unit": "GeV2",
+                "value": 4.0
+              },
+              "quadrature_orders": [
+                32,
+                64,
+                128,
+                256
+              ],
+              "representation": "stage03_fixed_scale_up_valence_v1"
+            },
+            "evaluate_gpd": {
+              "available": true,
+              "gpd_types": [
+                "H"
+              ],
+              "model_reference_mu_f2": {
+                "unit": "GeV2",
+                "value": 4.0
+              },
+              "modules": [
+                "GPDGK16"
+              ],
+              "mu_r2_role": "passed_to_GPDKinematic_not_separately_benchmarked",
+              "scale_treatment": "native_GPDGK16_internal_scale_dependence_no_GPDEvolutionModule",
+              "units": {
+                "mu_f2": "GeV2",
+                "mu_r2": "GeV2",
+                "t": "GeV2"
+              }
+            },
+            "external_neural_gpd_function_v1": {
+              "available": false,
+              "reason": "TabulatedPseudodataGPD consumes APFEL++ tables built inside the bridge and has no validated public loader for a frozen external function artifact",
+              "required_contract": "configs/schemas/neural_gpd_function_artifact_v1.schema.json",
+              "smallest_native_change": "validate and load neural_gpd_function_artifact_v1, build the input-scale PARTONS GPDModule/APFEL table, and expose an explicit exact-neural-reevaluate request"
+            },
+            "gpd_evolution": {
+              "active_flavors_module": "ActiveFlavorsThresholdsConstant",
+              "alpha_s_module": "RunningAlphaStrongApfel",
+              "analysis_order_label": null,
+              "bridge_available": true,
+              "coefficient_function_order": null,
+              "factorization_scale_squared_range_GeV2": [
+                4.0,
+                16.0
+              ],
+              "factorization_scheme": "MSbar",
+              "fixed_active_flavors": 3,
+              "fixed_scale_fallback": false,
+              "heavy_flavor_thresholds": false,
+              "input_scale_squared_GeV2": 4.0,
+              "operation": "evaluate_evolved_dd_gpd",
+              "positive_x_range": [
+                1e-05,
+                0.95
+              ],
+              "renormalization_scale": null,
+              "representation": "stage06_lo_apfel_evolved_reduced_dd_v1",
+              "source_runtime_audited": true,
+              "thresholds_GeV": [
+                0,
+                0,
+                0
+              ],
+              "twist": null,
+              "validated_singlet_gluon_mixing": false,
+              "verified_order": "LO"
+            },
+            "native_model_holdout_dvcs": {
+              "analysis_order_label": null,
+              "available": true,
+              "coefficient_function_order": "LO",
+              "external_native_validation_use": true,
+              "fresh_kinematics_manifest_required": true,
+              "models": [
+                "GPDGK11",
+                "GPDGK16",
+                "GPDGK19",
+                "GPDVGG99"
+              ],
+              "native_outputs_generated_during_freeze": false,
+              "operations": [
+                "evaluate_native_model_holdout_dvcs",
+                "batch_evaluate_native_model_holdout_dvcs"
+              ],
+              "q2_squared_GeV2_domain": "[1,80]",
+              "real_data_fit": false,
+              "replaces_dd_outer_test": false,
+              "role": "post_training_external_native_validation_test",
+              "thread_safe_parallel_execution": false,
+              "training_use": false
+            },
+            "post_training_real_comparison_dvcs": {
+              "available": true,
+              "beam_energy_GeV_domain": "3<=E<=200",
+              "data_evolved": false,
+              "gpd_evolved_to_each_datum_Q2": true,
+              "mapped_observable": "DVCSAluMinus",
+              "operations": [
+                "evaluate_post_training_comparison_dvcs",
+                "batch_evaluate_post_training_comparison_dvcs"
+              ],
+              "posterior_updated": false,
+              "q2_squared_GeV2_domain": "[1,80]",
+              "real_data_fit": false,
+              "role": "post_training_diagnostic_only",
+              "source_Q2_retained": true,
+              "t_GeV2_domain": "-1<=t<0",
+              "thread_safe_parallel_execution": false,
+              "x_b_domain": "0<xB<1"
+            },
+            "production_perturbative_configurations": [],
+            "pseudodata_dvcs": {
+              "analysis_order_label": null,
+              "available": true,
+              "baseline_module": "FixedScaleDDGPD",
+              "coefficient_function_module": "DVCSCFFStandard",
+              "coefficient_function_order": "LO",
+              "composition_module": "PseudodataInputGPD",
+              "configured_gpd_evolution_module": "GPDEvolutionApfel",
+              "gpd_evolution_order": "LO",
+              "gpd_types": [
+                "H",
+                "E",
+                "Htilde",
+                "Etilde"
+              ],
+              "input_parton_channels": [
+                "u",
+                "d",
+                "s",
+                "gluon"
+              ],
+              "observable_modules": [
+                "DVCSCrossSectionUUMinus",
+                "DVCSCrossSectionDifferenceLUMinus",
+                "DVCSAc",
+                "DVCSAluMinus",
+                "DVCSAulMinus",
+                "DVCSAllMinus"
+              ],
+              "observable_q2_squared_GeV2_domain": "[1,80]",
+              "observable_selection": "ordered_nonempty_subset_of_observable_modules",
+              "off_scale_dvcs_campaign_available": true,
+              "operation": "evaluate_pseudodata_dvcs",
+              "process_module": "DVCSProcessGV08",
+              "q0_squared_GeV2": 1.0,
+              "representation": "stage11_lo_multiq2_full_independent_dd_v1",
+              "scale_treatment": "input_GPD_at_Q0_evolved_to_each_datum_Q2_no_data_evolution",
+              "shadow_modules": {
+                "H.u": "GPDBDMMS21",
+                "cff_null_property_verified": false,
+                "other_channels": "project_zero_forward_moment_DD_test_direction_v1"
+              },
+              "thread_safe_parallel_execution": false
+            },
+            "shadow_identifiability": {
+              "analysis_order_label": null,
+              "available": true,
+              "baseline_module": "GPDGK16",
+              "coefficient_function_module": "DVCSCFFStandard",
+              "coefficient_function_order": "NLO",
+              "composition_module": "ShadowInjectionGPD",
+              "gpd_evolution_order": null,
+              "observable_module": "DVCSCrossSectionUUMinus",
+              "operation": "evaluate_shadow_dvcs",
+              "process_module": "DVCSProcessGV08",
+              "representation": "stage09_gk16_plus_bdmms21_shadow_v1",
+              "shadow_content": "up_sea_quark_only",
+              "shadow_module": "GPDBDMMS21",
+              "thread_safe_parallel_execution": false,
+              "twist": null
+            },
+            "thread_safe_parallel_execution": false,
+            "verified_evolution_only_configurations": [
+              "stage06_lo_apfel_fixed_nf3_msbar_v1",
+              "stage07_lo_apfel_coupled_fixed_nf3_msbar_v1"
+            ]
+          },
+          "operation": "capabilities",
+          "schema_version": 1,
+          "status": "ok"
+        },
+        "partons_revision_required": "1ad0b7d3bf62328f564c4ded06793e5feed00d4f",
+        "returncode": 0,
+        "route_required": "stage11_lo_multiq2_full_independent_dd_v1",
+        "stderr": ""
+      },
+      "id": "runtime.native_capabilities",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "missing": []
+      },
+      "id": "swif.required_environment",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "DVCS_CORPUS": {
+          "configured": "my_test_big_corpus1-corpus",
+          "required": "experiment-josh-native-v1"
+        },
+        "DVCS_PROJECT": {
+          "configured": "my_test_big_corpus1",
+          "required": "experiment_josh"
+        }
+      },
+      "id": "swif.campaign_environment",
+      "passed": false
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "path": "/usr/bin/swif2",
+        "version": "swif2 client version 2.10.12"
+      },
+      "id": "swif.command",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "free_GiB": 442.0869140625,
+        "path": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/workspace",
+        "probe": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/workspace",
+        "writable": true
+      },
+      "id": "storage.workspace_root",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "free_GiB": 442.0869140625,
+        "path": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/cache",
+        "probe": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/cache",
+        "writable": true
+      },
+      "id": "storage.cache_root",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "free_GiB": 442.0869140625,
+        "path": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/results/swif2",
+        "probe": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/results/swif2",
+        "writable": true
+      },
+      "id": "storage.result_root",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "free_GiB": 442.0869140625,
+        "path": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/.dvcs/database",
+        "probe": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/.dvcs/database",
+        "writable": true
+      },
+      "id": "storage.database_root",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "free_GiB": 869.287109375,
+        "path": "/farm_out/singhav/dvcs",
+        "probe": "/farm_out/singhav/dvcs",
+        "writable": true
+      },
+      "id": "storage.log_root",
+      "passed": true
+    },
+    {
+      "blocking": false,
+      "detail": {
+        "returncode": 1,
+        "stderr": "",
+        "stdout": ""
+      },
+      "id": "storage.quota_query",
+      "passed": false
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "invalid": [],
+        "missing": [],
+        "resources": {
+          "compare": {
+            "cores_each": 2,
+            "disk_each": "32G",
+            "jobs": 1,
+            "ram_each": "12G",
+            "walltime_each": "4h"
+          },
+          "corpus_merge": {
+            "cores_each": 4,
+            "disk_each": "64G",
+            "jobs": 1,
+            "ram_each": "16G",
+            "walltime_each": "12h"
+          },
+          "corpus_worker": {
+            "cores_each": 16,
+            "disk_each": "32G",
+            "jobs": 32,
+            "ram_each": "32G",
+            "walltime_each": "12h"
+          },
+          "evaluate": {
+            "cores_each": 8,
+            "disk_each": "48G",
+            "gpus_each": 1,
+            "jobs": 1,
+            "ram_each": "16G",
+            "walltime_each": "12h"
+          },
+          "exact_reevaluate": {
+            "cores_each": 8,
+            "disk_each": "48G",
+            "jobs": 1,
+            "ram_each": "16G",
+            "walltime_each": "12h"
+          },
+          "holdout_merge": {
+            "cores_each": 2,
+            "disk_each": "48G",
+            "jobs": 1,
+            "ram_each": "20G",
+            "walltime_each": "2h"
+          },
+          "holdout_worker": {
+            "cores_each": 4,
+            "disk_each": "48G",
+            "jobs": 4,
+            "ram_each": "20G",
+            "walltime_each": "12h"
+          },
+          "materialize": {
+            "cores_each": 2,
+            "disk_each": "48G",
+            "jobs": 1,
+            "ram_each": "20G",
+            "walltime_each": "4h"
+          },
+          "plot": {
+            "cores_each": 2,
+            "disk_each": "32G",
+            "jobs": 1,
+            "ram_each": "8G",
+            "walltime_each": "1h"
+          },
+          "selection": {
+            "cores_each": 1,
+            "disk_each": "8G",
+            "jobs": 1,
+            "ram_each": "4G",
+            "walltime_each": "30m"
+          },
+          "train": {
+            "cores_each": 4,
+            "disk_each": "48G",
+            "gpus_each": 1,
+            "jobs": 1,
+            "ram_each": "32G",
+            "walltime_each": "12h"
+          }
+        }
+      },
+      "id": "resources.complete",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "declared": "e8d9b3cba14e56a89c28336b0963c6999a8c7a9967914c410416f61f916daf34",
+        "observed": "e8d9b3cba14e56a89c28336b0963c6999a8c7a9967914c410416f61f916daf34"
+      },
+      "id": "covariance.report_hash",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "bridge_sha256": "2a2d79c2baaa1ce3670a2ca25e2d95b845b9820da78a734ff632781ce814c01d",
+        "current_truth_identity": true,
+        "status": "pass",
+        "truth_evaluation_count": 96,
+        "truth_provenance": null
+      },
+      "id": "covariance.production_authoritative",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": [],
+      "id": "covariance.no_double_counting",
+      "passed": true
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "manifest_status": "not_run_blocked_by_missing_approved_function_grid_and_physics_approvals",
+        "path": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/docs/audits/PRODUCTION_REHEARSAL_2026-09-03.json",
+        "report_status": "blocked_not_run"
+      },
+      "id": "rehearsal.production_vertical",
+      "passed": false
+    },
+    {
+      "blocking": true,
+      "detail": {
+        "allow_dirty": true,
+        "entries": [
+          " M tests/run.sh",
+          "?? docs/audits/PREVIOUS_PATCH_AUDIT_2026-09-03.md",
+          "?? docs/audits/PRODUCTION_COVARIANCE_VALIDATION_2026-09-03.json",
+          "?? docs/audits/PRODUCTION_NATIVE_ASSUMPTIONS.md",
+          "?? docs/audits/PRODUCTION_PREFLIGHT_2026-09-03.json",
+          "?? docs/audits/PRODUCTION_REHEARSAL_2026-09-03.json",
+          "?? docs/audits/logs/20260903T194355Z/assumption_registry_render.meta",
+          "?? docs/audits/logs/20260903T194355Z/assumption_registry_render.stderr",
+          "?? docs/audits/logs/20260903T194355Z/assumption_registry_render.stdout",
+          "?? docs/audits/logs/20260903T194355Z/check_assumption_registry.meta",
+          "?? docs/audits/logs/20260903T194355Z/check_assumption_registry.stderr",
+          "?? docs/audits/logs/20260903T194355Z/check_assumption_registry.stdout",
+          "?? docs/audits/logs/20260903T194355Z/commit_governance_docs.meta",
+          "?? docs/audits/logs/20260903T194355Z/commit_governance_docs.stderr",
+          "?? docs/audits/logs/20260903T194355Z/commit_governance_docs.stdout",
+          "?? docs/audits/logs/20260903T194355Z/commit_model_dispatch_tests.meta",
+          "?? docs/audits/logs/20260903T194355Z/commit_model_dispatch_tests.stderr",
+          "?? docs/audits/logs/20260903T194355Z/commit_model_dispatch_tests.stdout",
+          "?? docs/audits/logs/20260903T194355Z/commit_uncertainty_validation.meta",
+          "?? docs/audits/logs/20260903T194355Z/commit_uncertainty_validation.stderr",
+          "?? docs/audits/logs/20260903T194355Z/commit_uncertainty_validation.stdout",
+          "?? docs/audits/logs/20260903T194355Z/commit_validation_telemetry.meta",
+          "?? docs/audits/logs/20260903T194355Z/commit_validation_telemetry.stderr",
+          "?? docs/audits/logs/20260903T194355Z/commit_validation_telemetry.stdout",
+          "?? docs/audits/logs/20260903T194355Z/create_preservation_branch.meta",
+          "?? docs/audits/logs/20260903T194355Z/create_preservation_branch.stderr",
+          "?? docs/audits/logs/20260903T194355Z/create_preservation_branch.stdout",
+          "?? docs/audits/logs/20260903T194355Z/dirty_patch_verification.meta",
+          "?? docs/audits/logs/20260903T194355Z/dirty_patch_verification.stderr",
+          "?? docs/audits/logs/20260903T194355Z/dirty_patch_verification.stdout",
+          "?? docs/audits/logs/20260903T194355Z/final_diff_check.meta",
+          "?? docs/audits/logs/20260903T194355Z/final_diff_check.stderr",
+          "?? docs/audits/logs/20260903T194355Z/final_diff_check.stdout",
+          "?? docs/audits/logs/20260903T194355Z/final_focused_readiness_tests.meta",
+          "?? docs/audits/logs/20260903T194355Z/final_focused_readiness_tests.stderr",
+          "?? docs/audits/logs/20260903T194355Z/final_focused_readiness_tests.stdout",
+          "?? docs/audits/logs/20260903T194355Z/final_static_suite.meta",
+          "?? docs/audits/logs/20260903T194355Z/final_static_suite.stderr",
+          "?? docs/audits/logs/20260903T194355Z/final_static_suite.stdout",
+          "?? docs/audits/logs/20260903T194355Z/final_static_suite_host.meta",
+          "?? docs/audits/logs/20260903T194355Z/final_static_suite_host.stderr",
+          "?? docs/audits/logs/20260903T194355Z/final_static_suite_host.stdout",
+          "?? docs/audits/logs/20260903T194355Z/final_static_suite_retry.meta",
+          "?? docs/audits/logs/20260903T194355Z/final_static_suite_retry.stderr",
+          "?? docs/audits/logs/20260903T194355Z/final_static_suite_retry.stdout",
+          "?? docs/audits/logs/20260903T194355Z/final_static_suite_retry2.meta",
+          "?? docs/audits/logs/20260903T194355Z/final_static_suite_retry2.stderr",
+          "?? docs/audits/logs/20260903T194355Z/final_static_suite_retry2.stdout",
+          "?? docs/audits/logs/20260903T194355Z/focused_scientific_contracts.meta",
+          "?? docs/audits/logs/20260903T194355Z/focused_scientific_contracts.stderr",
+          "?? docs/audits/logs/20260903T194355Z/focused_scientific_contracts.stdout",
+          "?? docs/audits/logs/20260903T194355Z/historical_covariance_diagnostic.meta",
+          "?? docs/audits/logs/20260903T194355Z/historical_covariance_diagnostic.stderr",
+          "?? docs/audits/logs/20260903T194355Z/historical_covariance_diagnostic.stdout",
+          "?? docs/audits/logs/20260903T194355Z/model_family_smokes.meta",
+          "?? docs/audits/logs/20260903T194355Z/model_family_smokes.stderr",
+          "?? docs/audits/logs/20260903T194355Z/model_family_smokes.stdout",
+          "?? docs/audits/logs/20260903T194355Z/native_verification_retry.meta",
+          "?? docs/audits/logs/20260903T194355Z/native_verification_retry.stderr",
+          "?? docs/audits/logs/20260903T194355Z/native_verification_retry.stdout",
+          "?? docs/audits/logs/20260903T194355Z/production_config_summary.meta",
+          "?? docs/audits/logs/20260903T194355Z/production_config_summary.stderr",
+          "?? docs/audits/logs/20260903T194355Z/production_config_summary.stdout",
+          "?? docs/audits/logs/20260903T194355Z/production_covariance_audit.meta",
+          "?? docs/audits/logs/20260903T194355Z/production_covariance_audit.stderr",
+          "?? docs/audits/logs/20260903T194355Z/production_covariance_audit.stdout",
+          "?? docs/audits/logs/20260903T194355Z/production_covariance_audit_retry.meta",
+          "?? docs/audits/logs/20260903T194355Z/production_covariance_audit_retry.stderr",
+          "?? docs/audits/logs/20260903T194355Z/production_covariance_audit_retry.stdout",
+          "?? docs/audits/logs/20260903T194355Z/production_preflight_initial.meta",
+          "?? docs/audits/logs/20260903T194355Z/production_preflight_initial.stderr",
+          "?? docs/audits/logs/20260903T194355Z/production_preflight_initial.stdout",
+          "?? docs/audits/logs/20260903T194355Z/production_preflight_post_tests.meta",
+          "?? docs/audits/logs/20260903T194355Z/production_preflight_post_tests.stderr",
+          "?? docs/audits/logs/20260903T194355Z/production_preflight_post_tests.stdout",
+          "?? docs/audits/logs/20260903T194355Z/regenerate_engine_doctor.meta",
+          "?? docs/audits/logs/20260903T194355Z/regenerate_engine_doctor.stderr",
+          "?? docs/audits/logs/20260903T194355Z/regenerate_engine_doctor.stdout",
+          "?? docs/audits/logs/20260903T194355Z/render_assumption_registry.meta",
+          "?? docs/audits/logs/20260903T194355Z/render_assumption_registry.stderr",
+          "?? docs/audits/logs/20260903T194355Z/render_assumption_registry.stdout",
+          "?? docs/audits/logs/20260903T194355Z/render_assumption_registry_final.meta",
+          "?? docs/audits/logs/20260903T194355Z/render_assumption_registry_final.stderr",
+          "?? docs/audits/logs/20260903T194355Z/render_assumption_registry_final.stdout",
+          "?? docs/audits/logs/20260903T194355Z/required_documents.meta",
+          "?? docs/audits/logs/20260903T194355Z/required_documents.stderr",
+          "?? docs/audits/logs/20260903T194355Z/required_documents.stdout",
+          "?? docs/audits/logs/20260903T194355Z/sif_identity.meta",
+          "?? docs/audits/logs/20260903T194355Z/sif_identity.stderr",
+          "?? docs/audits/logs/20260903T194355Z/sif_identity.stdout",
+          "?? docs/audits/logs/20260903T194355Z/stage0_code_diff.meta",
+          "?? docs/audits/logs/20260903T194355Z/stage0_code_diff.stderr",
+          "?? docs/audits/logs/20260903T194355Z/stage0_code_diff.stdout",
+          "?? docs/audits/logs/20260903T194355Z/stage0_documentation_diff.meta",
+          "?? docs/audits/logs/20260903T194355Z/stage0_documentation_diff.stderr",
+          "?? docs/audits/logs/20260903T194355Z/stage0_documentation_diff.stdout",
+          "?? docs/audits/logs/20260903T194355Z/stage0_snapshot.meta",
+          "?? docs/audits/logs/20260903T194355Z/stage0_snapshot.stderr",
+          "?? docs/audits/logs/20260903T194355Z/stage0_snapshot.stdout",
+          "?? docs/audits/logs/20260903T194355Z/swif2_analysis_dry_run.meta",
+          "?? docs/audits/logs/20260903T194355Z/swif2_analysis_dry_run.stderr",
+          "?? docs/audits/logs/20260903T194355Z/swif2_analysis_dry_run.stdout",
+          "?? docs/audits/logs/20260903T194355Z/swif2_corpus_dry_run.meta",
+          "?? docs/audits/logs/20260903T194355Z/swif2_corpus_dry_run.stderr",
+          "?? docs/audits/logs/20260903T194355Z/swif2_corpus_dry_run.stdout",
+          "?? provenance/production-native-assumptions.json",
+          "?? provenance/production-submission-manifest.json",
+          "?? provenance/regeneration-impact-matrix.json",
+          "?? scripts/audit_stage0_snapshot.sh",
+          "?? scripts/run_audited_command.sh",
+          "?? tests/test_production_readiness.py",
+          "?? tools/audit_production_covariance.py",
+          "?? tools/production_preflight.py",
+          "?? tools/render_physics_assumptions.py"
+        ]
+      },
+      "id": "git.clean",
+      "passed": true
+    }
+  ],
+  "git": {
+    "branch": "codex/physics-production-readiness",
+    "head": "c0ba0f4fe2c0ede07b66e6ad5175d12cd186870c"
+  },
+  "manifest": "/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd/provenance/production-submission-manifest.json",
+  "manifest_sha256": "ed3bade2b569116f4919ec4e64579aa3bd8f2a86b74b43570c87c9ea7d35573c",
+  "schema_version": 1,
+  "status": "NO-GO",
+  "summary": {
+    "blocking_failure_count": 6,
+    "check_count": 47,
+    "passed_count": 40,
+    "warning_count": 1
+  }
+}

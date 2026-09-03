@@ -1,0 +1,407 @@
+
+===== docs/audits/IMPLEMENTATION_REPORT_2026-09-03.md =====
+# Implementation report (2026-09-03)
+
+## Repository state
+
+- Authoritative HEAD before and after work: `22f45e94d424e2a73c57d6b2504869a2eebb35f4`, branch `main`.
+- Initial state: clean. Final state: uncommitted audit implementation; no commit was created.
+- No files were moved or deleted. No production corpus, training campaign, sweep, SWIF workflow, or GPU job was launched.
+- Historical DD baseline: [`provenance/dd-baseline-2026-09-03.json`](../../provenance/dd-baseline-2026-09-03.json).
+
+## File ledger
+
+| File | Change and reason | Scientific behavior | Verification |
+|---|---|---|---|
+| `src/extract_dvcs_cff/inference/stage10.py` | Deterministic sequential validation, retain partial batch, exact row-count denominator. | Changes future early stopping/validation NLD when validation rows do not divide the batch size. Training remains shuffled. | 2/2/1 regression; both CLI smokes; static suite. |
+| `jobs/jlab_ifarm/collect_performance_metrics.py` | Repair unreachable finite numeric parser and accept declared units. | Telemetry only; historical broken GPU numbers remain invalid. | Parser table regression; JLab wrapper checks. |
+| `src/extract_dvcs_cff/data/uncertainty.py` | New factorized contracts, presets, covariance policies, paired realization and immutable shared-corpus publication. | Adds versioned statistical alternatives; never calls or changes native physics. | Scaling, central, fixed-relative, zero-noise, covariance independence, ancestry/idempotence tests. |
+| `src/extract_dvcs_cff/scientific_validation.py` | Generator hierarchy, holdout labels, metric guard, bounded multi-start projection artifact, provenance gate, evaluation-role/unseal ledger, rejection audit. | Adds gates/diagnostics; does not reinterpret legacy artifacts. | Generator, projection, provenance, sealing, native-rejection fixture tests. |
+| `src/extract_dvcs_cff/corpus.py` | Add hierarchical generator metadata to new schema-2 corpus identity. | New corpus IDs include stronger generator semantics; stored physics is unchanged. | Static corpus suite. |
+| `src/extract_dvcs_cff/neural_gpd.py` | Typed one-hot coordinate identity, lazy row/group alignment, training-only full-covariance whitening, collapsed-dimension removal; neural views carry `parameter_indices` and whitening. | Changes newly published neural model views/targets only; no completed production neural result is claimed. | Alignment, coordinate, whitening and collapse tests; neural CLI smoke. |
+| `src/extract_dvcs_cff/model_registry.py` | Stage maturity and fail-closed family/stage resolver. | Prevents neural requests from silently using DD stages. DD remains default. | Dispatch regression and both family smokes. |
+| `src/extract_dvcs_cff/inference/family_smoke.py` | Tiny grouped synthetic DD/neural DeepSets+MAF train/sample path. | Software mechanics only; no native or scientific benchmark behavior. | Two direct CLI runs. |
+| `src/extract_dvcs_cff/cli/user.py` | Add explicit family options, `model-smoke`, and `corpus-audit-failures`. | DD backward-compatible default; unsupported neural production stages fail early. | CLI smokes, parser/documentation/static suite. |
+| `src/extract_dvcs_cff/literature.py` | Strict comparator-registry loader. | Validation only; does not create numerical literature results. | Registry completeness test. |
+| `tests/test_scientific_contracts.py` | Add 18 focused scientific-contract tests. | Test-only. | 18/18 pass in pinned image. |
+| `tests/run.sh` | Include the new test module in static acceptance. | Test orchestration only. | Complete static run, 61/61 pass. |
+| `benchmarks/literature/comparators_v1.json` | Ten-source machine-readable audit with explicit null/unresolved fields and grades. | Benchmark metadata only. | JSON and strict schema validation. |
+| `benchmarks/literature/moffat_qgt_2024_partial_v1.json` | Partial reproduction/export scaffold; blocks guessed settings or native generation. | No fit or corpus generated. | JSON validation. |
+| `provenance/dd-baseline-2026-09-03.json` | Resolve archived DD-v7 configuration/member hashes, dependencies, architecture, seeds, split, checkpoints, runtime and limitations. | Historical evidence only. | JSON validation and direct archive-member/hash inspection. |
+| `docs/audits/CURRENT_HEAD_AUDIT.md` | Current environment, prior-review reconciliation, implications, stages/non-goals, remaining blockers. | Documentation only. | Documentation checker. |
+| `docs/audits/IMPLEMENTATION_REPORT_2026-09-03.md` | This final evidence ledger. | Documentation only. | Link/diff checks. |
+| `docs/literature/BENCHMARK_AUDIT.md` | Comparison policy, grades, NNGPD/Moffat distinctions and required validation/figures. | Documentation only. | Documentation checker. |
+| `docs/UNCERTAINTY_CONTRACTS.md` | Define axes, presets, covariance scaling, jitter and point/posterior semantics. | Documentation only. | Documentation checker. |
+| `docs/CLAIMS_LEDGER.md` | Evidence-gated scientific-claim status. | Documentation only. | Documentation checker. |
+| `README.md` | Add model maturity matrix and audit links. | Documentation only. | Documentation checker. |
+| `docs/ARCHITECTURE.md` | Record dispatch, uncertainty ancestry, neural alignment/coordinate/whitening boundaries. | Documentation only. | Documentation checker. |
+| `docs/CLI_REFERENCE.md` | Document new commands and maturity behavior. | Documentation only. | Documentation checker. |
+| `docs/DEVELOPMENT_AND_TESTING.md` | Document focused suite coverage. | Documentation only. | Documentation checker. |
+| `docs/INDEX.md` | Link new canonical pages. | Documentation only. | Documentation checker. |
+| `docs/KNOWN_LIMITATIONS.md` | Correct neural and container maturity, invalid historical telemetry, outstanding work. | Documentation only. | Documentation checker. |
+
+## Executed verification
+
+| Command | Exit | Result/raw-log location |
+|---|---:|---|
+| `python3 -m json.tool` on all three new JSON authorities | 0 | Passed; output intentionally suppressed. |
+| Pinned-image focused unittest discovery | 0 | 18 tests passed in 4.827 s; raw output is retained in the Codex tool transcript, not written to the repository. |
+| Pinned-image `model-smoke --model-family dd_deepsets_maf` | 0 | Finite 3-D posterior samples; no native call; raw output in tool transcript. |
+| Pinned-image `model-smoke --model-family neural_gpd_deepsets_maf` | 0 | Finite 2-D posterior samples; no native call; raw output in tool transcript. |
+| Pinned-image `bash tests/run.sh static` with writable `/tmp` and read-only host `rg` bind | 0 | Distribution/docs checks, 61 tests, all JLab fixture checks, shell/installer checks passed; raw output in tool transcript. |
+| Pinned-image `bash tests/run.sh native` with writable temporary `/cache` | 0 | Bridge capabilities and self-test passed exactly; raw output in tool transcript. |
+| `git diff --check` | 0 | No whitespace errors. |
+
+Two environmental attempts failed before the final passing commands: static
+verification first inherited a nonexistent `/scratch/singhav` TMPDIR and then
+found no `rg` in the image; native self-test first lacked a writable PARTONS
+log directory. These are not reported as passing attempts. No standalone raw
+log files were created; the exact raw stdout/stderr is in the session tool
+transcript.
+
+Not run: the quick test because it generates a native corpus; production/DD or
+neural training; exact posterior reevaluation; Optuna; SWIF submission; GPU
+smoke; calibration/OOD/closure campaigns. They require compute, a suitable
+completed corpus/artifact set, or explicit authorization.
+
+## Benchmark evidence
+
+Before: historical DD-v7 mean train NLD 112.76232966997266 and mean test NLD
+113.91078092578759, with five checkpoint records. The run predates the
+partial-batch fix and has invalid GPU numeric telemetry. After: no comparable
+scientific benchmark was run, so there is no before/after accuracy or speed
+claim. The only new measured executions are mechanics tests/smokes.
+
+## Schemas and compatibility
+
+- Added uncertainty-realization schema 1, literature-comparator registry schema
+  1, projection artifact schema 1, and baseline manifest schema 1.
+- New schema-2 corpus identities gain additive `generator_metadata`; this
+  intentionally changes IDs for newly created corpora but does not rewrite old
+  corpora.
+- Neural model-view schema 1 gains `parameter_indices`, alignment, coordinate,
+  and whitening semantics. No production neural view is migrated implicitly.
+- Existing DD CLI invocations remain valid because DD is the explicit default.
+  Neural requests at unsupported stages now fail instead of falling through.
+- Uncertainty/architecture variants prove corpus reuse by retaining identical
+  `master_corpus_id` and `selection_id`, changing only child realization/view
+  identity, and recording `native_physics_executed: false`.
+
+## Literature grades and assumptions
+
+The exact per-source grades and unresolved fields live in the registry. The
+2024 Moffat material is `partial`; the inaccessible 2026 deck is
+`not_comparable`; different-object neural/global/shadow studies are principally
+`conceptual`. No source is claimed as exactly reproduced. Assumptions are
+limited to explicit framework defaults (DD backward-compatible CLI default,
+positive-noise MAF posterior, exact stored-coordinate decoding); missing paper
+settings remain null. The prompt's Bertone arXiv identifier did not resolve to
+the relevant shadow paper found by the audit, and the discrepancy is retained.
+
+## Remaining blockers to claims
+
+- DD literature non-inferiority: exact comparator protocol/code, declared
+  margin/resampling unit, common benchmark, at least three paired seeds, and an
+  untouched final asset.
+- Calibrated within-family posterior: fresh post-fix training plus SBC,
+  coverage/sharpness, TARP, L-C2ST, PPC, contraction and seed sensitivity.
+- Named-family generalization: versioned foreign generator artifacts,
+  generator-independent covariance, deterministic DD projection floors,
+  multiple seeds, and frozen development/final roles.
+- Cross-representation generalization: at least three distinct families under
+  one function contract, train-only transforms, leave-one-family-out training,
+  and decoder-floor-aware metrics.
+- Real-data extraction: audited measurement mappings and covariance/likelihood,
+  nuisance/systematic treatment, physics-order scope appropriate to the claim,
+  blind validation, and publication traceability.
+
+High-value work deliberately deferred: serious minibatch/resumable
+autoencoder, production neural NPE dispatch, full checkpoints, epoch-level
+Optuna pruning, calibration/proper scores, inverse-crime closure, simultaneous
+bands, SWIF state deltas, and measured GPU/HPC optimization. Implementing these
+without the prerequisite corpora, physics-owner decisions, or authorized
+compute would create unsupported evidence rather than a defensible result.
+
+===== docs/audits/CURRENT_HEAD_AUDIT.md =====
+# Current-HEAD scientific audit (2026-09-03)
+
+Audited commit: `22f45e94d424e2a73c57d6b2504869a2eebb35f4` on `main`. The tree was clean before this audit. No submodules were present.
+
+## Environment identity
+
+The host Python is 3.9.25 with NumPy 1.26.4 and does not provide Torch, SBI, Zuko, or Optuna. Scientific tests must therefore run in the pinned Apptainer image. The current environment records Python 3.12, Torch 2.12.1, SBI 0.26.1, Zuko 1.6.0, Optuna 4.5.0, PARTONS 5.0.0 (`1ad0b...`), APFEL++ (`27deaec...`), and LHAPDF 6.5.6. The install image digest is `sha256:379311...`; the verified SIF file hash is `c850f82c...`. Neither is the historical SWIF-v7 image (`sha256:c6ac0f...`).
+
+## Findings and dispositions
+
+| Priority | Finding | Disposition in this slice |
+|---|---|---|
+| P0 | SBI 0.26.1 validation divides by nominal batches times batch size; dropping the last group wastes validation evidence. | Validation is sequential, retains the partial batch, and divides by the exact evaluated row count. A 2/2/1 regression test freezes the behavior. |
+| P0 | GPU telemetry numeric parsing was unreachable because it was indented after `node_family` returned. | Parser repaired and tested on integer, decimal, exponent, units, whitespace, missing, non-finite, and malformed values. Historical v7 GPU samples remain invalid. |
+| P0 | Observation realization, noise model, uncertainty exposure, nuisance treatment, covariance policy, and output semantics were entangled. | Added a validated factorized uncertainty contract, declared presets, paired-noise realization, and strict zero-noise posterior guard. Physical noise and numerical jitter are separately recorded. |
+| P0 | Generator identity was too weak for named-family and representation-class holdouts. | Added seven-field generator metadata and explicit holdout classification. New schema-2 corpora record the internal DD family. |
+| P0 | Foreign-model tests could accidentally report internal-DD parameter recovery. | Metric guard limits foreign truth to observables, CFFs, common functions/functionals, and a separately labelled best-DD projection floor. |
+| P0 | Neural group targets were not explicitly aligned to realization rows. | Neural views now carry `parameter_indices` and a lazy group-to-row alignment contract. |
+| P1 | Neural coordinates encoded scientific categories ordinally and diagonal scaling hid correlations/collapse. | Added fixed one-hot typed coordinate tables and training-only shrinkage full-covariance whitening with collapsed-dimension removal. |
+| P1 | Production provenance accepted unknown placeholders. | Added fail-closed validation for production/publication profiles; quick/validation profiles receive an explicit missing-field report. |
+| P1 | Final evaluation artifacts had no access-control state. | Added role labels plus an explicit append-only unseal ledger gate. |
+| P1 | Native rejection evidence existed but had no distortion audit. | Added proposal/acceptance, failure-type, shard, and marginal parameter-region diagnostics; resulting inference is explicitly conditional on simulator validity when rejection occurs. |
+| P1 | Literature comparisons mixed unlike objects and omitted unknowns. | Added a strict, machine-readable ten-source comparator registry with null/unresolved fields and comparability grades. |
+
+## Reconciliation with the prior review
+
+| Verified current-HEAD fact | Discrepancy | Implication | Planned stage | Non-goal of this slice |
+|---|---|---|---|---|
+| Public train/evaluate code loads DD arrays and DD transforms. | Confirmed. | Neural selection must fail before this route. | Stage 3 dispatch gate and smoke now; production route later. | No large neural training. |
+| Neural latents are group-level and contexts are row-level; old views omitted `parameter_indices`. | Confirmed. | Pairing could be wrong or require wasteful duplication. | Stage 3 alignment contract and tests now. | No production decoder fit. |
+| Validation used random order and `drop_last=True`; SBI's partial-batch denominator is nominal. | Confirmed and the upstream SBI 0.26.1 implementation was inspected. | Missing/misweighted rows can bias early stopping. | Stage 1 exact-count override now. | Training shuffle remains. |
+| Holdout covariance was built from the selected truth/model. | Confirmed. | Generator and covariance shifts were confounded. | Stage 1 policy API and Stage 2 variant artifacts now. | Historical holdouts are not reinterpreted. |
+| Result provenance allowed `unrecorded`. | Confirmed. | Production reconstruction could be impossible. | Stage 1 fail-closed validator now; workflow-wide migration later. | No fabricated historical commit. |
+| Rejected native candidates and replacements were recorded but not summarized spatially. | Confirmed. | Accepted draws can represent a validity-conditioned prior. | Stage 1 audit command now. | No learned validity classifier. |
+| Optuna reports pruning after the training call. | Confirmed. | The pruner does not save epoch compute. | Stage 6 later. | No broad sweep. |
+| GPU numeric parsing sat after an unconditional return. | Confirmed. | Historical numeric GPU distributions are invalid. | Stage 1 parser/tests now; fresh telemetry later. | No inferred A800 utilization. |
+| SWIF stages transfer complete growing archives. | Confirmed. | Staging overhead can dominate and scale poorly. | Stage 6 delta migration later. | No archive rewrite without reconstruction tests. |
+| Documentation described both registered families more uniformly than executable maturity justified. | Confirmed. | Users could mistake a scaffold for a production path. | Stage 7 maturity matrix and claims ledger now. | No model-independent claim. |
+
+## Remaining blockers, stated narrowly
+
+- The public CLI still trains the DD target by default. A production neural target requires a published schema-2 corpus with stored canonical GPD truth, a fitted decoder view, and an explicit CLI model-family dispatch. The present neural utilities and tests are a contract-complete slice, not a completed large neural training claim.
+- No fresh native generation, full MAF retraining, Optuna campaign, GPU benchmark, or sealed final evaluation was run. This was intentional: the task prohibits expensive production work.
+- Optuna pruning is still trial-level after training rather than connected to an epoch callback; it is not reported as functional epoch-wise pruning.
+- The SWIF workflow still transfers large growing state archives. Archive-transfer redesign needs a separate workflow migration and storage measurement.
+- Existing historical evaluation used `fixed_at_declared_truth`; a fresh generator-independent holdout realization must be materialized before OOD conclusions.
+
+## Verification
+
+Run the focused suite exactly as follows:
+
+```bash
+apptainer exec --bind "$PWD":/src .dvcs/extract-dvcs-gpd-jlab_ifarm-0.3.0.sif \
+  env PYTHONPATH=/src/src MPLCONFIGDIR=/tmp/matplotlib \
+  python3 -m unittest discover -v -s /src/tests -p test_scientific_contracts.py
+```
+
+The audit run passed 13/13 tests. No native physics call occurs in these tests.
+
+The resolved DD baseline is [recorded separately](../../provenance/dd-baseline-2026-09-03.json); unknown historical source identity and broken historical GPU telemetry are preserved as unknown/invalid rather than guessed.
+
+===== provenance/dd-baseline-2026-09-03.json =====
+{
+  "schema_version": 1,
+  "baseline_id": "dd-deepsets-maf-swif-validation-v7",
+  "captured_at_current_head": "22f45e94d424e2a73c57d6b2504869a2eebb35f4",
+  "captured_at_current_head_dirty": false,
+  "baseline_status": "historical_completed_validation_run",
+  "model_family": "dd_deepsets_maf",
+  "representation_class": "full_independent_double_distribution",
+  "inference_method": "neural_posterior_estimation",
+  "observation_encoder": "DeepSets",
+  "density_estimator": "MAF",
+  "density_estimator_implementation": "Zuko",
+  "resolved_configuration": {
+    "storage_kind": "immutable_tar_member",
+    "archive": "results/swif2/experiment-josh-validation-v7/state/experiment-josh-validation-v7-project-after-train.tar",
+    "member": "experiment_josh/.engine/workflow.json",
+    "sha256": "952ffe5d4b228ac203193aa456a3c8e0a396960e7aa6e3d64b2a2eba3a5726f4",
+    "extraction_command": "tar -xOf <archive> experiment_josh/.engine/workflow.json"
+  },
+  "physics_configuration": {
+    "storage_kind": "immutable_tar_member",
+    "archive": "results/swif2/experiment-josh-validation-v7/state/experiment-josh-validation-v7-project-after-train.tar",
+    "member": "experiment_josh/.engine/physics.json",
+    "sha256": "6c2807364b95bc158ed47926f288bd134368a4575e50df1ab541376ac4f79a02"
+  },
+  "artifact_identities": {
+    "bridge_contract_sha256": "72a0edbc980df56b166e31330d5ef572e15717db5b6b9376bf113e331733c1ce",
+    "configuration_sha256": "6a86cdaff729ff1a2d53fad718dc2d010f021c4e93a6e82b8cebbcf0bbb2a0b4",
+    "corpus_manifest_sha256": "ae99250863125036f684d896252653b772b2a8164a90bd7797a4a216f43c4a58",
+    "selection_sha256": "8ba9eaab71ce248970a7377ec92bb07873a0364f3afb70f333b731d2837297e5",
+    "realization_manifest_sha256": "0ff6e3915dfdd5790a490f54ab88a1f3f4b70bb76912417123ed20dfc7d2c58f",
+    "training_input_sha256": "0ff6e3915dfdd5790a490f54ab88a1f3f4b70bb76912417123ed20dfc7d2c58f",
+    "experiment_record_sha256": "22d6dc8d030991f97caef2ea0fb2b168c3635cf598fee3ea77ceb856ac5e7a89"
+  },
+  "dependency_lock_hashes": {
+    "pyproject.toml": "ee8397b40de308c97d6d208a5c7c221cd1f76cafdeae714fcfe20909b9795ee6",
+    "requirements/runtime-constraints.txt": "2906f1697c04760019c13c630f9216c935e8f6e779fba9d59899749526a3aba3",
+    "provenance/dependencies.lock.json": "93f0d7f19a52928b9893ef07f550d70a3840040e7a7cfc8264a8712804a2b95b",
+    "provenance/images.lock.json": "883e3e4e14e940a57f1db6f513aa8870131fc566d3eff94f80a157f8ddcac054"
+  },
+  "model_contract": {
+    "target_dimension": 82,
+    "target_transform": "80 bounded DD controls mapped by analytic probits plus 2 standard-normal nuisances",
+    "context_schema": "stage11_full_independent_dd_multiq2_context_v1",
+    "point_count": 576,
+    "point_feature_count": 18,
+    "global_feature_count": 9,
+    "flattened_context_dimension": 10377,
+    "architecture": {
+      "point_hidden": 128,
+      "point_layers": 3,
+      "point_layer_norm": false,
+      "dataset_hidden": 128,
+      "dataset_layers": 2,
+      "embedding_features": 96,
+      "flow": "zuko_maf",
+      "flow_hidden_features": 96,
+      "num_transforms": 6,
+      "z_score_theta": "independent",
+      "z_score_x": "none"
+    }
+  },
+  "split_contract": {
+    "policy": "grouped_by_native_parameter_draw",
+    "training_groups": 11796,
+    "validation_groups": 1311,
+    "test_groups": 3277,
+    "training_rows": 94368,
+    "validation_rows": 10488,
+    "test_rows": 26216
+  },
+  "training": {
+    "candidate_seeds": [57439, 85743, 98465, 56486, 78546],
+    "active_ensemble_seeds": [78546, 56486, 57439],
+    "mean_train_negative_log_density": 112.76232966997266,
+    "mean_test_negative_log_density": 113.91078092578759,
+    "train_wall_seconds": 1557,
+    "parameter_count_per_member": 543416,
+    "optimizer": "Adam (SBI 0.26.1 trainer)",
+    "learning_rate": 0.0005,
+    "training_batch_size": 256,
+    "gradient_clip_max_norm": 5.0,
+    "scheduler": "none",
+    "amp_scaler": "none",
+    "stop_after_epochs": 25,
+    "max_num_epochs": 500,
+    "resolved_sbi_train_arguments": {
+      "num_atoms": 10,
+      "validation_fraction_ignored_by_grouped_adapter": 0.1,
+      "calibration_kernel": null,
+      "resume_training": false,
+      "force_first_round_loss": false,
+      "discard_prior_samples": false,
+      "use_combined_loss": false,
+      "retrain_from_scratch": false,
+      "show_train_summary": false,
+      "dataloader_kwargs": null
+    },
+    "all_seeds": {
+      "native_parameters": 51010,
+      "training_noise": 51011,
+      "pseudodata": 51012,
+      "conventional_nuisance": 51013,
+      "comparison": 51014,
+      "coverage": 51015,
+      "optimization": 51016,
+      "derived_posterior_smoke_seed": "ensemble_seed + 1",
+      "derived_coverage_seed": "ensemble_seed + 1000 + trial_index",
+      "derived_pseudodata_seed": "ensemble_seed + 2000"
+    },
+    "members": [
+      {"seed": 56486, "checkpoint_sha256": "f02ef85507e357c6549072392ef6a79d7a1efff0b83906ce623adbd8b77adfa4", "best_validation_negative_log_density": 113.93194217681885, "epochs": 32},
+      {"seed": 57439, "checkpoint_sha256": "0076c7419cac198fe97609ba330252b8bde259359cb02da7b1e51006423c4503", "best_validation_negative_log_density": 114.0873924255371, "epochs": 32},
+      {"seed": 78546, "checkpoint_sha256": "a73fc8ed72f41dd92802cea1d2972d137b69e02f0fbe1c5b47741cd52a07308a", "best_validation_negative_log_density": 113.39375553131103, "epochs": 36},
+      {"seed": 85743, "checkpoint_sha256": "4da64435c9575a70e03afa98f381df7064f47760913e855fe65b61f0917f8135", "best_validation_negative_log_density": 114.47142715454102, "epochs": 30},
+      {"seed": 98465, "checkpoint_sha256": "3646dc2ae63500138b501e705874e0ef8bcae6a908ed83f9eebaf1ae7e69dc48", "best_validation_negative_log_density": 114.15121917724609, "epochs": 34}
+    ]
+  },
+  "runtime": {
+    "historical_image_digest": "sha256:c6ac0f9f0a193ca3d994a67b577badd1260e9916b1f19f78f7ed2fe69233efe9",
+    "historical_code_commit": null,
+    "historical_code_commit_status": "unrecorded_in_archived_runtime",
+    "torch": "2.12.1+cu126",
+    "python": "3.12",
+    "cuda_runtime": "12.6",
+    "sbi": "0.26.1",
+    "zuko": "1.6.0",
+    "numpy": "1.26.4",
+    "optuna": "4.5.0",
+    "accelerator": "cuda",
+    "visible_gpu_count": 1,
+    "training_host": "sciml2502.jlab.org",
+    "training_slurm_job_id": "9658652",
+    "gpu_model": "NVIDIA A800 40GB Active",
+    "gpu_numeric_telemetry_valid": false,
+    "gpu_numeric_telemetry_reason": "all 53 training nvidia-smi samples were parser errors under the historical collector",
+    "cpu_and_memory_telemetry_caveat": "cgroup-wide maxima and efficiencies are retained as operational evidence, not model-only measurements"
+  },
+  "native_backend": {
+    "bridge": {"version": "0.10.0", "source_sha256": "6842f5f05e3accfbde80129f8736954942a36bce1603d8e8cbcf697b8fe79141"},
+    "PARTONS": {"version": "5.0.0", "commit": "1ad0b7d3bf62328f564c4ded06793e5feed00d4f"},
+    "APFEL++": {"version": "4.8.0", "dependency_lock_commit": "27deaec493d95bad0686b3b1c91fbbc910c891ff"},
+    "ElementaryUtils": {"version": "5.0.0", "commit": "0133fc6e69872270027c37381a273893f7841b42"},
+    "NumA++": {"version": "5.0.0", "commit": "f184ee75f1d61b380e522d38ba48fbcbe9d78ae5"},
+    "LHAPDF": {"version": "6.5.6"},
+    "historical_exact_build_identity": null,
+    "historical_exact_build_identity_status": "not recorded in the v7 runtime summary"
+  },
+  "evaluation_contract": {
+    "role": "historical_development_validation",
+    "covariance_policy": "fixed_at_declared_truth",
+    "uncertainty_mode": "full_covariance_with_sampled_nuisances",
+    "exact_command_invocation": "swif2 run experiment-josh-validation-v7",
+    "exact_inner_train_command": null,
+    "exact_inner_train_command_status": "not present in the retained summary; workflow generator invocation is unresolved"
+  },
+  "current_environment_not_baseline": {
+    "image_digest": "sha256:3793116765e64f917f7c464955341735df6c310caecd3568a064a792001effdb",
+    "fresh_build_sif_sha256": "c850f82c4133f3d6cbcdf20f8879c4cd57ac141c5d9cac3f47c633d4d14890b3",
+    "note": "These identify the present pinned environment and must not be substituted for the historical v7 runtime identity."
+  },
+  "limitations": [
+    "The archived runtime did not record the source commit, so bitwise source reconstruction is unresolved.",
+    "The historical GPU telemetry parser rejected every sample; no utilization, power, or memory conclusion is supported.",
+    "This baseline predates the exact partial-validation-batch correction and must not be used as a post-fix performance regression number.",
+    "The covariance policy was fixed_at_declared_truth and is not a generator-independent OOD benchmark contract."
+  ]
+}
+
+===== docs/literature/BENCHMARK_AUDIT.md =====
+# Literature benchmark audit
+
+The source of truth is [`benchmarks/literature/comparators_v1.json`](../../benchmarks/literature/comparators_v1.json). Every record names the inferred object, generator/model family, representation, D-term status, observable/input level, kinematics/evolution, parameterization, uncertainty/covariance/nuisance assumptions, splits, optimization, metrics, bands, calibration/holdout status, code availability, unresolved facts, and an explicit comparability grade. `null` never means zero or absent; it means the audited source did not establish the value.
+
+## Comparison policy
+
+Only like-for-like quantities may share a numerical table. Raw-DVCS-to-DD posterior inference, raw-DVCS-to-CFF inverse maps, aggregate-CFF/Mellin neural GPD constraints, and global experimental/lattice fits are different inference objects. Conceptual comparators may motivate plots or validation checks but do not constitute reproduced numerical baselines.
+
+The closest accessible parametric closure is Moffat's 2024 presentation: GK pseudodata, 31 fitted controls, the first three Gegenbauer D-term terms, independent 10% Gaussian replicas, Adam, and replica mean/standard-deviation reporting. Replica count, exact bounds, full kinematic/observable tables, correlations, split, and stopping rule remain unresolved; its grade is therefore `partial`, not `exact`. The linked 2026 ECT* deck could not be retrieved during the audit, so all method fields remain unresolved and its grade is `not_comparable`.
+
+NNGPD is a direct neural function representation constrained by aggregate CFF and Mellin/form-factor information from a single UVA2 model family; it is not raw-DVCS amortized posterior inference and does not expose a common internal-DD truth vector. The Dutrieux neural-DD paper, VAIM/C-VAIM inverse maps, GUMP global extraction, Watkins extraction, and shadow-GPD studies likewise receive only the comparison level their published inference object supports.
+
+## Reproducibility statuses
+
+- `exact`: all relevant contracts and numerical data are available and matched.
+- `high`: small, declared differences do not change the scientific object.
+- `partial`: some numerical slices are reproducible, with material unresolved protocol details.
+- `conceptual`: useful scientific comparator, but the inference object or data contract differs.
+- `not_comparable`: evidence is unavailable or the required contract cannot be established.
+
+At this HEAD no paper is claimed as an exact reproduced baseline. No plotted pixels, values digitized from figures, guessed priors, or invented uncertainties are permitted. New numerical overlays require convention checks for GPD/flavor combination, normalization, scale, scheme, perturbative order, and sign.
+
+## Validation requirements inherited from the audit
+
+Posterior claims require SBC rank diagnostics, coverage-versus-nominal curves, posterior predictive checks, calibration-error summaries, and at least one local two-sample diagnostic such as L-C2ST or a coverage diagnostic such as TARP. NLL remains useful for optimization but is not sufficient evidence of calibration. Point-estimate comparators must be labelled as such and cannot be promoted to posterior bands by adding numerical jitter.
+
+## Publication figures that remain required
+
+Saved-artifact-only plotting should eventually generate: DD and neural function closure; CFF closure; observable posterior predictive checks; same-family interpolation/extrapolation; named-family holdout; cross-representation holdout; best-DD projection floor with restart spread; coverage/calibration; and uncertainty ablations. Every panel must name the uncertainty contract, generator class/family, evaluation role, model family, transform identity, and whether the target family was seen in training.
+
+===== docs/CLAIMS_LEDGER.md =====
+# Claims ledger
+
+| Potential claim | Current evidence | Status |
+|---|---|---|
+| DD software closure path executes | Historical grouped validation-v7 artifacts plus current deterministic-validation regression | development evidence only |
+| Every validation row is scored once | Exact 2/2/1 partial-batch regression and sequential frozen sampler | supported |
+| Uncertainty variants reuse native physics | Content-addressed realization API/test retains common corpus/selection and records no native call | contract supported |
+| DD and neural targets share DeepSets+MAF mechanics | Both tiny CLI smoke commands train and sample finite posteriors | software smoke only |
+| Neural-GPD scientific posterior is mature | No production decoder/whitening/checkpoint/result bundle | not supported |
+| DD literature non-inferiority | Literature details, margin, final assets, and paired campaign absent | not supported |
+| Within-family posterior calibration | SBC/TARP/L-C2ST and a fresh post-fix multi-seed campaign absent | not supported |
+| Named-family generalization | Fixed-covariance realization, projection comparison, seeds, and frozen evaluation absent | not supported |
+| Cross-representation generalization | Multiple common-contract families and leave-one-family-out evidence absent | not supported |
+| Real-data GPD extraction | Measurements remain quarantined; likelihood/covariance and NLO breadth absent | not supported |
+| GPU efficiency improvement | Historical numeric telemetry invalid and no post-fix benchmark run | not supported |
+
+All bands must say whether they are posterior, replica, or seed summaries and
+whether they are pointwise or simultaneous. Central-only plots, low
+chi-square, or prior-like coverage do not establish calibrated uncertainty.

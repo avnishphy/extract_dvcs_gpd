@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/src/tools/audit_production_covariance.py", line 245, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/src/tools/audit_production_covariance.py", line 131, in main
+    config = load_configuration(configuration_path)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/src/src/extract_dvcs_cff/workflows/pseudodata.py", line 376, in load_configuration
+    _exact_keys(
+  File "/src/src/extract_dvcs_cff/workflows/pseudodata.py", line 230, in _exact_keys
+    raise ValueError(
+ValueError: hyperparameter_optimization.search_space key mismatch: missing=[], unknown=['num_bins']

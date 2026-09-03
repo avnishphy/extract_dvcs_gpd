@@ -1,0 +1,20 @@
+[codex/physics-production-readiness c0ba0f4] docs: record evidence and claim boundaries
+ Committer: Avnish Singh <singhav@ifarm2402.jlab.org>
+Your name and email address were configured automatically based
+on your username and hostname. Please check that they are accurate.
+You can suppress this message by setting them explicitly:
+
+    git config --global user.name "Your Name"
+    git config --global user.email you@example.com
+
+After doing this, you may fix the identity used for this commit with:
+
+    git commit --amend --reset-author
+
+ 12 files changed, 537 insertions(+), 8 deletions(-)
+ create mode 100644 benchmarks/literature/moffat_qgt_2024_partial_v1.json
+ create mode 100644 docs/CLAIMS_LEDGER.md
+ create mode 100644 docs/audits/CURRENT_HEAD_AUDIT.md
+ create mode 100644 docs/audits/IMPLEMENTATION_REPORT_2026-09-03.md
+ create mode 100644 docs/literature/BENCHMARK_AUDIT.md
+ create mode 100644 provenance/dd-baseline-2026-09-03.json

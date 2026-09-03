@@ -1,0 +1,617 @@
+diff --git a/README.md b/README.md
+index 9ddcea5..ba338cf 100644
+--- a/README.md
++++ b/README.md
+@@ -21,6 +21,16 @@ conditional MAF, and PARTONS physics. The neural-GPD branch is NNGPD-inspired
+ latent-function compression, not a claim of full model independence. On a
+ DD-generated corpus it tests closure over the DD-induced truth distribution.
+ 
++| Model family | View | Synthetic mechanics smoke | Production train/evaluate/plot |
++|---|---:|---:|---:|
++| `dd_deepsets_maf` | ready | ready | ready (subject to campaign validation) |
++| `neural_gpd_deepsets_maf` | experimental | ready | blocked pending a frozen decoder/whitening production path |
++
++All model-bearing commands expose `--model-family`. The legacy-compatible
++default is DD; selecting a neural family at an unsupported production stage
++fails before DD code runs. `model-smoke` exercises both target dimensions but
++is synthetic software evidence, not a trained scientific result.
++
+ ## Five-minute orientation
+ 
+ Choose one execution path. Ordinary Linux can run stages directly. JLab
+@@ -207,6 +217,9 @@ Start at the [documentation map](docs/INDEX.md). The primary guides are:
+ - [Installation](docs/INSTALLATION.md)
+ - [User guide](docs/USER_GUIDE.md)
+ - [CLI reference](docs/CLI_REFERENCE.md)
++- [Uncertainty contracts](docs/UNCERTAINTY_CONTRACTS.md)
++- [Claims ledger](docs/CLAIMS_LEDGER.md)
++- [Literature benchmark audit](docs/literature/BENCHMARK_AUDIT.md)
+ - [Experiment JSON reference](docs/EXPERIMENT_JSON_REFERENCE.md)
+ - [Corpus and data selection](docs/CORPUS_AND_DATA_SELECTION.md)
+ - [Canonical GPD truth](docs/CANONICAL_GPD_TRUTH.md)
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+index b309acc..1e13a90 100644
+--- a/docs/ARCHITECTURE.md
++++ b/docs/ARCHITECTURE.md
+@@ -4,7 +4,11 @@ Release 0.3 uses five explicit immutable layers. The authoritative summary,
+ schema migration, and identity rules are in
+ [Artifact architecture and migration](ARTIFACT_ARCHITECTURE_0_3.md). The only
+ registered inference paths are DD + DeepSets + MAF and NNGPD-inspired neural
+-GPD + DeepSets + MAF; both retain PARTONS as their sole physics backend.
++GPD + DeepSets + MAF; both retain PARTONS as their sole physics backend. The
++central registry records stage-level maturity. CLI dispatch resolves the
++family before a stage: DD remains the compatibility default, while unsupported
++neural production stages fail closed instead of loading DD arrays. The neural
++synthetic smoke proves shared conditional-MAF mechanics only.
+ 
+ ## Purpose and design constraints
+ 
+@@ -173,7 +177,13 @@ common input-scale coordinates and aligned one-for-one with core groups.
+ Covariance, nuisances, noise, and DeepSets contexts are materialized later
+ from an immutable group selection. Experiment-constant encoding terms are
+ computed once; independently seeded groups fill fixed rows across CPU workers.
+-The physics prediction is never reimplemented in Python.
++The physics prediction is never reimplemented in Python. Uncertainty
++realizations are children of the same corpus and selection, not new native
++corpora. Their contract independently records central/sampled observation,
++covariance model, descriptor exposure, nuisance policy, physical noise scale,
++numerical jitter, output kind, and covariance policy. Covariance scales with
++the square of physical noise scale; jitter remains separate. See
++[Uncertainty contracts](UNCERTAINTY_CONTRACTS.md).
+ 
+ Five controls are inferred for every combination of four GPD types and four
+ channels: normalization, small-β exponent, large-β exponent, profile width,
+@@ -197,6 +207,14 @@ Candidate ensemble members use fixed seeds. Internal grouped-validation NLL
+ selects the configured number of active members. The untouched outer DD test,
+ named native holdouts, and real-data diagnostic are excluded from selection.
+ 
++Neural GPD targets are stored once per native truth group. The realization's
++`parameter_indices` is part of the model view and lazily expands targets to
++noisy context rows. Canonical coordinates use fixed one-hot GPD/channel/parity
++encodings plus x, xi, t, Q2, and mask; incompatible identities are rejected
++even when shapes match. The serious transform is training-group-only shrinkage
++full-covariance whitening with collapsed dimensions removed. Production neural
++train/evaluate/result assembly remains gated.
++
+ Realization publication uses a project/profile process lock. This matters for
+ multi-GPU Optuna, whose independent device workers share one generated tensor
+ set: one process writes the atomic realization and matching workers reuse its
+diff --git a/docs/CLI_REFERENCE.md b/docs/CLI_REFERENCE.md
+index 6d02e4e..a00f06c 100644
+--- a/docs/CLI_REFERENCE.md
++++ b/docs/CLI_REFERENCE.md
+@@ -2,6 +2,15 @@
+ 
+ ## 0.3 architecture commands
+ 
++- `model-smoke --model-family {dd_deepsets_maf,neural_gpd_deepsets_maf}`
++  runs a tiny deterministic synthetic DeepSets+MAF train/sample check. It does
++  not call PARTONS and does not establish scientific readiness.
++- `corpus-audit-failures CORPUS [--bins N]` summarizes recorded native
++  proposal acceptance, failure types, shard rates, and parameter-region rates.
++- Model-bearing project commands accept `--model-family`. DD is the documented
++  backward-compatible default. Neural production stages currently fail with
++  an actionable maturity message instead of silently using DD targets.
++
+ - `corpus-preflight PROJECT [--gpd-truth-request FILE]` validates the explicit
+   coordinate table and reports coverage, work, storage, shards, files, and
+   model compatibility without running PARTONS. With no flag it reads
+@@ -13,6 +22,13 @@
+ - `materialize` is the one-release compatibility wrapper that publishes an
+   architecture-neutral realization plus the DD model view.
+ 
++Developer smoke examples inside the pinned environment:
++
++```bash
++python -m extract_dvcs_cff.cli.user model-smoke --model-family dd_deepsets_maf
++python -m extract_dvcs_cff.cli.user model-smoke --model-family neural_gpd_deepsets_maf
++```
++
+ Selection, realization/view creation, decoder/MAF work, comparison, plotting,
+ literature plots, and presentation generation are saved-artifact-only stages.
+ 
+diff --git a/docs/DEVELOPMENT_AND_TESTING.md b/docs/DEVELOPMENT_AND_TESTING.md
+index 5964e8d..0cb2bcd 100644
+--- a/docs/DEVELOPMENT_AND_TESTING.md
++++ b/docs/DEVELOPMENT_AND_TESTING.md
+@@ -5,6 +5,10 @@ constraint, native-boundary, literature, and comparison contracts. Set
+ `DVCS_DISABLE_NATIVE_EXECUTION=1` in downstream integration tests. Validate
+ SWIF placement with `tests/verify_jlab_swif2_workflows.sh` and container drift
+ with `tools/validate_container_contract.py`.
++`tests/test_scientific_contracts.py` covers exact validation batches,
++uncertainty/covariance semantics, generator metadata and foreign-model guards,
++projection and rejection audits, sealing/provenance, telemetry, neural target
++alignment, coordinates, whitening, and literature-registry completeness.
+ 
+ This page is for contributors and operators who need to verify the checked-in
+ implementation. It does not add a second user workflow: the supported
+diff --git a/docs/INDEX.md b/docs/INDEX.md
+index 459af5b..7be6b84 100644
+--- a/docs/INDEX.md
++++ b/docs/INDEX.md
+@@ -66,6 +66,10 @@ references for editing or interpreting a stage.
+   simulation-based-inference literature relevant to the implementation.
+ - [Literature benchmarks](LITERATURE_BENCHMARKS.md) records reproducible
+   figure-family status, convention gates, and corpus coverage requirements.
++- [Literature benchmark audit](literature/BENCHMARK_AUDIT.md) records the
++  source-by-source comparison contract and unresolved protocol details.
++- [Uncertainty contracts](UNCERTAINTY_CONTRACTS.md) defines the independent
++  realization, covariance, exposure, nuisance, noise, jitter, and output axes.
+ - [Dated progress presentation](presentations/current_progress_2026-08-31/README.md)
+   is the verified one-time 2026-08-31 Beamer snapshot.
+ - [Architecture decision records](adr/0001-partons-sole-physics-backend.md)
+@@ -77,6 +81,8 @@ references for editing or interpreting a stage.
+   credentials, database boundaries, and publication controls.
+ - [Known limitations](KNOWN_LIMITATIONS.md) distinguishes verified,
+   conditional, and unavailable capabilities.
++- [Claims ledger](CLAIMS_LEDGER.md) maps potential scientific claims to the
++  evidence still required.
+ - [Acceptance procedures](ACCEPTANCE.md) gives executable local and JLab
+   verification sequences.
+ - [Development configuration and testing](DEVELOPMENT_AND_TESTING.md) maps
+diff --git a/docs/KNOWN_LIMITATIONS.md b/docs/KNOWN_LIMITATIONS.md
+index 657f8f7..a6cb22f 100644
+--- a/docs/KNOWN_LIMITATIONS.md
++++ b/docs/KNOWN_LIMITATIONS.md
+@@ -1,5 +1,19 @@
+ # Known limitations and claim boundary
+ 
++- Production train/evaluate/compare/holdout/plot dispatch remains DD-only.
++  Neural-GPD view construction and a tiny NPE mechanics smoke exist, but the
++  CLI rejects neural production stages until the decoder, whitening,
++  checkpoint, and result-bundle route is complete.
++- The historical SWIF validation-v7 collector rejected every numeric GPU
++  sample because of a parser defect. Those utilization/power/VRAM records are
++  invalid; only the repaired collector may support future conclusions.
++- Evaluation-role, unseal-ledger, strict provenance, covariance-policy,
++  uncertainty-realization, DD-projection, and native-failure contracts are
++  focused APIs. Existing legacy artifacts are not retroactively relabelled.
++- Epoch-level Optuna pruning, full interruption/resume checkpoints, SWIF state
++  deltas, SBC/TARP/L-C2ST, simultaneous bands, and inverse-crime-resistant
++  closure remain unimplemented.
++
+ - Canonical native GPD-truth storage is now mandatory for newly created
+   schema-2 corpora, but no reviewed production coordinate table or completed
+   production corpus is claimed yet. The bundled two-point table is only a
+@@ -14,12 +28,11 @@
+ 
+ - No OCI image has been published. `provenance/images.lock.json` intentionally
+   has null digests, so source build is the only verified installer decision.
+-- Apptainer 1.5.2 and the JLab Slurm/SWIF2 tools were available; usable CUDA
+-  hardware was not. The clean 0.3.0 Apptainer build compiled the native stack
+-  but failed while retrieving pinned PyTorch metadata after repeated
+-  `download-r2.pytorch.org` connection resets, so no 0.3.0 SIF or GPU runtime
+-  acceptance is claimed. The pre-existing pinned 0.2.0 SIF ran the complete
+-  static suite against the 0.3.0 source tree. See the dated
++- Apptainer 1.5.2 and the JLab Slurm/SWIF2 tools were available. A fresh 0.3.0
++  SIF is recorded with SHA-256 `c850f82c...` and passed documented CPU/native
++  verification; no fresh GPU smoke was run, so GPU runtime acceptance is not
++  claimed. The historical v7 job saw an A800, but its numeric GPU telemetry is
++  invalid. See the dated
+   [container verification record](../provenance/container-verification-2026-08-31.json).
+   Normal installation uses `install.sh`, whose host-prefetched, checksum-bound
+   wheel path avoids the failed manual-build download route.
+
+===== UNTRACKED docs/UNCERTAINTY_CONTRACTS.md =====
+# Uncertainty contracts
+
+An uncertainty realization changes statistical treatment, never native
+physics. `materialize_uncertainty_variant` consumes stored central predictions,
+a declared covariance source, and paired standard-normal draws. Its immutable
+manifest retains corpus/selection ancestry and records that PARTONS was not
+called.
+
+The independent axes are `observation_realization` (`central` or `sampled`),
+`uncertainty_model` (`full_covariance`, `diagonal`, `fixed_relative`, or
+`equal_weight_point_fit`), `uncertainty_exposure`, `nuisance_policy`,
+`physical_noise_scale`, `numerical_jitter`, `output_kind`, and
+`covariance_policy` (`training_reference`, `external_fixed`, or
+`holdout_truth_derived`). Generator identity is not a covariance selector.
+
+| Preset | Meaning |
+|---|---|
+| `full_uncertainty_posterior` | sampled full covariance, exposed descriptors, inferred nuisances, posterior |
+| `central_observation_full_likelihood` | exact central observation while retaining the full likelihood contract |
+| `literature_fixed_relative_replica` | configurable independent relative Gaussian replicas; the 10% scaffold is a point/replica comparator |
+| `near_noiseless_posterior` | positive reduced full covariance; configure paired scales such as 1, 0.5, 0.25, 0.1 |
+| `uncertainty_blind_point_benchmark` | exact central values, no descriptors, equal-weight point estimate, no posterior claim |
+
+The physical covariance is
+`physical_noise_scale**2 * reference_covariance`. Numerical jitter is added
+only to the separately named stabilized covariance. A zero-noise ordinary
+full-dimensional MAF posterior is rejected; the point benchmark is the valid
+deterministic alternative. Central evaluation may reuse a compatible full-
+uncertainty checkpoint because changing the evaluated observation alone does
+not change the training distribution.
+
+===== UNTRACKED benchmarks/literature/comparators_v1.json =====
+{
+  "schema_version": 1,
+  "registry_id": "dvcs-gpd-publication-comparators-v1",
+  "audit_date": "2026-09-03",
+  "unknown_value_policy": "null means not reported or not established from the audited source; never infer it",
+  "comparators": [
+    {
+      "id": "moffat_ectstar_2026",
+      "citation": "E. Moffat, Monte Carlo Extraction of GPDs from global DVCS data, ECT* presentation (2026)",
+      "sources": ["https://indico.ectstar.eu/event/266/contributions/7058/attachments/4374/6477/Moffat_ECF_6_15_26.pdf"],
+      "inferred_object": "GPDs from global DVCS data",
+      "generator_truth_model": null,
+      "representation_class": "double_distribution_parametric",
+      "named_model_family": null,
+      "model_variant": null,
+      "D_term_assumptions": null,
+      "observables": "global DVCS data; exact list inaccessible",
+      "input_level": "raw_DVCS_observables",
+      "kinematic_support": null,
+      "perturbative_evolution_settings": null,
+      "parameter_dimension": null,
+      "prior_bounds": null,
+      "uncertainty_generation": null,
+      "covariance_assumptions": null,
+      "uncertainties_as_model_inputs": null,
+      "nuisance_treatment": null,
+      "replica_count": null,
+      "data_split": null,
+      "evaluation_points_seen_during_training": null,
+      "optimizer_stopping": null,
+      "reported_metrics": null,
+      "uncertainty_band_definition": null,
+      "calibration_coverage_tested": null,
+      "family_or_kinematic_holdout": null,
+      "source_code": null,
+      "unresolved_details": ["Exact PDF could not be fetched by the audit client or direct TLS download on 2026-09-03", "All method details require direct inspection before reproduction"],
+      "comparability_grade": "not_comparable"
+    },
+    {
+      "id": "moffat_qgt_2024",
+      "citation": "E. Moffat, Progress towards a machine learning extraction of GPDs from data, QGT Collaboration meeting (2024)",
+      "sources": ["https://indico.jlab.org/event/881/contributions/15319/attachments/11716/18200/Moffat_9-14-24.pdf"],
+      "inferred_object": "31 parametric GPD/DD and D-term controls",
+      "generator_truth_model": "GK model plus first three Gegenbauer D-term terms",
+      "representation_class": "double_distribution_parametric",
+      "named_model_family": "GK",
+      "model_variant": "u_v and d_v DD parameters; H and Htilde PDF parameters fixed and profile parameters fitted; exact 31-coordinate list not tabulated",
+      "D_term_assumptions": "first three Gegenbauer terms; u and d coefficients fitted",
+      "observables": "various DVCS observables; exact list not reported in accessible slide text",
+      "input_level": "raw_DVCS_observables",
+      "kinematic_support": null,
+      "perturbative_evolution_settings": null,
+      "parameter_dimension": 31,
+      "prior_bounds": "random starting parameters; distributions and bounds not reported",
+      "uncertainty_generation": "independent Gaussian replicas with 10% uncertainty for every data point",
+      "covariance_assumptions": "diagonal implied by pointwise 10% statement; correlations not reported",
+      "uncertainties_as_model_inputs": false,
+      "nuisance_treatment": null,
+      "replica_count": null,
+      "data_split": null,
+      "evaluation_points_seen_during_training": null,
+      "optimizer_stopping": "PyTorch Adam stochastic gradient descent; stopping rule not reported",
+      "reported_metrics": ["chi2/Npts=0.2303", "replica mean and standard deviation", "closure plots"],
+      "uncertainty_band_definition": "mean and standard deviation across replicas",
+      "calibration_coverage_tested": false,
+      "family_or_kinematic_holdout": false,
+      "source_code": null,
+      "unresolved_details": ["replica count", "complete parameter definitions and bounds", "observable and kinematic tables", "evolution/order", "optimizer schedule and stopping", "data split", "covariance correlations"],
+      "comparability_grade": "partial"
+    },
+    {
+      "id": "dutrieux_ann_2022",
+      "citation": "H. Dutrieux et al., Artificial neural network modelling of generalised parton distributions, EPJC 82, 252 (2022), arXiv:2112.10528",
+      "sources": ["https://arxiv.org/abs/2112.10528", "https://doi.org/10.1140/epjc/s10052-022-10211-5"],
+      "inferred_object": "neural double-distribution representation of GPDs",
+      "generator_truth_model": "controlled modelling studies described in the paper",
+      "representation_class": "neural_double_distribution",
+      "named_model_family": "ANN-DD",
+      "model_variant": "theory-constrained neural double distributions",
+      "D_term_assumptions": null,
+      "observables": "PDF, elastic form-factor, and GPD theory constraints; not the repository raw-DVCS observation contract",
+      "input_level": "combination",
+      "kinematic_support": "paper-specific grids; no common exported contract audited",
+      "perturbative_evolution_settings": null,
+      "parameter_dimension": null,
+      "prior_bounds": null,
+      "uncertainty_generation": null,
+      "covariance_assumptions": null,
+      "uncertainties_as_model_inputs": null,
+      "nuisance_treatment": null,
+      "replica_count": null,
+      "data_split": null,
+      "evaluation_points_seen_during_training": null,
+      "optimizer_stopping": null,
+      "reported_metrics": "constraint and representation studies",
+      "uncertainty_band_definition": null,
+      "calibration_coverage_tested": false,
+      "family_or_kinematic_holdout": false,
+      "source_code": null,
+      "unresolved_details": ["A faithful numerical comparator requires extracting the paper tables, code status, and exact training protocol"],
+      "comparability_grade": "conceptual"
+    },
+    {
+      "id": "xu_nngpd_2026",
+      "citation": "J. Xu et al., Neural Network Representation of Generalized Parton Distributions (NNGPD), arXiv:2605.06994v1 (2026)",
+      "sources": ["https://arxiv.org/abs/2605.06994", "https://arxiv.org/pdf/2605.06994"],
+      "inferred_object": "H and E neural GPD functions",
+      "generator_truth_model": "single UVA2 Reggeized spectator-model family",
+      "representation_class": "direct_neural_gpd",
+      "named_model_family": "NNGPD",
+      "model_variant": "BNN constrained by aggregate CFFs, form factors, and Mellin moments",
+      "D_term_assumptions": "represented through moment constraints; exact comparator convention must be matched from the paper",
+      "observables": "CFF real/imaginary parts, Mellin moments/generalized form factors, symmetry/endpoint/smoothness constraints",
+      "input_level": "CFFs_and_Mellin_moments",
+      "kinematic_support": "UVA2 synthetic grids reported in the paper; not identical to repository raw-DVCS kinematics",
+      "perturbative_evolution_settings": "leading-order CFF relation; mu2=Q2; detailed evolution treatment requires exact table extraction",
+      "parameter_dimension": "Bayesian neural-network weights; not a common finite GPD-coordinate parameter problem",
+      "prior_bounds": null,
+      "uncertainty_generation": "noise-free and Gaussian-noise-injected synthetic aggregate constraints",
+      "covariance_assumptions": "Gaussian target noise; full cross-observable correlation contract not established",
+      "uncertainties_as_model_inputs": "uncertainties enter loss weighting; not the repository DeepSets descriptor contract",
+      "nuisance_treatment": null,
+      "replica_count": null,
+      "data_split": null,
+      "evaluation_points_seen_during_training": "GPD point values are not direct training targets; aggregate constraints span reported kinematics",
+      "optimizer_stopping": null,
+      "reported_metrics": ["component loss trajectories", "function closure", "noise-free versus noise-injected BNN bands"],
+      "uncertainty_band_definition": "BNN predictive bands",
+      "calibration_coverage_tested": false,
+      "family_or_kinematic_holdout": false,
+      "source_code": null,
+      "unresolved_details": ["exact replica/draw counts", "complete covariance", "train/validation/test split", "optimizer stopping", "source-code release"],
+      "comparability_grade": "conceptual"
+    },
+    {
+      "id": "almaeen_vaim_cff_2024",
+      "citation": "M. Almaeen et al., VAIM-CFF, arXiv:2405.05826 (2024)",
+      "sources": ["https://arxiv.org/abs/2405.05826"],
+      "inferred_object": "up to eight CFFs from a DVCS cross section",
+      "generator_truth_model": "paper-specific forward mapper",
+      "representation_class": "variational_autoencoder_inverse_mapper",
+      "named_model_family": "VAIM-CFF",
+      "model_variant": "VAIM with latent missing-information representation",
+      "D_term_assumptions": null,
+      "observables": "unpolarized DVCS cross section",
+      "input_level": "raw_DVCS_observables",
+      "kinematic_support": null,
+      "perturbative_evolution_settings": null,
+      "parameter_dimension": "up to eight CFFs",
+      "prior_bounds": null,
+      "uncertainty_generation": "paper studies multiple uncertainty-quantification assumptions",
+      "covariance_assumptions": null,
+      "uncertainties_as_model_inputs": null,
+      "nuisance_treatment": null,
+      "replica_count": null,
+      "data_split": null,
+      "evaluation_points_seen_during_training": null,
+      "optimizer_stopping": null,
+      "reported_metrics": "solution-set and latent-information diagnostics",
+      "uncertainty_band_definition": null,
+      "calibration_coverage_tested": null,
+      "family_or_kinematic_holdout": null,
+      "source_code": null,
+      "unresolved_details": ["Exact numerical protocol requires full paper-level benchmark extraction"],
+      "comparability_grade": "conceptual"
+    },
+    {
+      "id": "hossen_vaim_2024",
+      "citation": "F. Hossen et al., Variational autoencoder inverse mapper for extraction of Compton form factors: Benchmarks and conditional learning, arXiv:2408.11681 (2024)",
+      "sources": ["https://arxiv.org/abs/2408.11681"],
+      "inferred_object": "CFF solution distributions",
+      "generator_truth_model": "paper-specific DVCS forward model and MCMC benchmark",
+      "representation_class": "variational_autoencoder_inverse_mapper",
+      "named_model_family": "VAIM_and_C-VAIM",
+      "model_variant": "unconditional VAIM and kinematically conditional C-VAIM",
+      "D_term_assumptions": null,
+      "observables": "DVCS measurements/forward-model observables",
+      "input_level": "raw_DVCS_observables",
+      "kinematic_support": null,
+      "perturbative_evolution_settings": null,
+      "parameter_dimension": null,
+      "prior_bounds": null,
+      "uncertainty_generation": null,
+      "covariance_assumptions": null,
+      "uncertainties_as_model_inputs": null,
+      "nuisance_treatment": null,
+      "replica_count": null,
+      "data_split": null,
+      "evaluation_points_seen_during_training": null,
+      "optimizer_stopping": null,
+      "reported_metrics": "consistency with MCMC and cross-kinematic CFF correlation diagnostics",
+      "uncertainty_band_definition": "learned CFF solution distribution",
+      "calibration_coverage_tested": null,
+      "family_or_kinematic_holdout": null,
+      "source_code": null,
+      "unresolved_details": ["Exact numerical protocol requires full paper-level benchmark extraction"],
+      "comparability_grade": "conceptual"
+    },
+    {
+      "id": "guo_gump_1_0_2025",
+      "citation": "Y. Guo et al., First Global Extraction of Generalized Parton Distributions from Experiment and Lattice Data with Next-to-Leading-Order Accuracy, Phys. Rev. Lett. 135, 261903 (2025), arXiv:2509.08037",
+      "sources": ["https://arxiv.org/abs/2509.08037", "https://doi.org/10.1103/qct5-y7rp"],
+      "inferred_object": "quark and gluon GPDs and derived nucleon imaging quantities",
+      "generator_truth_model": "real global experimental, PDF, form-factor, and lattice inputs",
+      "representation_class": "conformal_moment_parametric",
+      "named_model_family": "GUMP_1.0",
+      "model_variant": "universal moment parameterization at nonzero skewness",
+      "D_term_assumptions": null,
+      "observables": "DVCS and rho-meson production plus PDFs, charge form factors, and lattice-QCD constraints",
+      "input_level": "combination",
+      "kinematic_support": "Jefferson Lab and HERA global data; exact tables are publication-specific",
+      "perturbative_evolution_settings": "NLO perturbative accuracy with evolution",
+      "parameter_dimension": null,
+      "prior_bounds": null,
+      "uncertainty_generation": null,
+      "covariance_assumptions": null,
+      "uncertainties_as_model_inputs": null,
+      "nuisance_treatment": null,
+      "replica_count": null,
+      "data_split": null,
+      "evaluation_points_seen_during_training": "real-data global fit; closure split question not directly applicable",
+      "optimizer_stopping": null,
+      "reported_metrics": "global data description and GPD/imaging uncertainties",
+      "uncertainty_band_definition": null,
+      "calibration_coverage_tested": false,
+      "family_or_kinematic_holdout": false,
+      "source_code": null,
+      "unresolved_details": ["Full likelihood/covariance and optimization details require dedicated reproduction audit"],
+      "comparability_grade": "not_comparable"
+    },
+    {
+      "id": "watkins_keller_2025",
+      "citation": "D. Watkins and D. Keller, Direct Deep Neural-network Extraction of Generalized Parton Distributions, arXiv:2512.21761 (2025)",
+      "sources": ["https://arxiv.org/abs/2512.21761"],
+      "inferred_object": "C-even H(+) GPD function from Re H CFF ensembles",
+      "generator_truth_model": "global neural CFF fit to Jefferson Lab unpolarized DVCS data",
+      "representation_class": "direct_neural_gpd_with_differentiable_PV",
+      "named_model_family": "direct_DNN_PV",
+      "model_variant": "fixed differentiable principal-value layer, exact oddness, endpoint suppression, curvature regularization",
+      "D_term_assumptions": null,
+      "observables": "Monte Carlo ensemble of Re H CFFs propagated from unpolarized DVCS measurements",
+      "input_level": "CFFs",
+      "kinematic_support": "Jefferson Lab phase space reported in paper",
+      "perturbative_evolution_settings": null,
+      "parameter_dimension": "neural-network weights",
+      "prior_bounds": null,
+      "uncertainty_generation": "replica ensemble of input CFFs and GPD networks",
+      "covariance_assumptions": "propagated experimental uncertainties; exact correlations require full audit",
+      "uncertainties_as_model_inputs": "replica-generated targets",
+      "nuisance_treatment": null,
+      "replica_count": null,
+      "data_split": null,
+      "evaluation_points_seen_during_training": null,
+      "optimizer_stopping": null,
+      "reported_metrics": "three-dimensional GPD surfaces and replica uncertainty",
+      "uncertainty_band_definition": "replica ensemble",
+      "calibration_coverage_tested": false,
+      "family_or_kinematic_holdout": false,
+      "source_code": null,
+      "unresolved_details": ["replica count", "full covariance", "optimizer/stopping", "holdout protocol", "source-code availability"],
+      "comparability_grade": "conceptual"
+    },
+    {
+      "id": "bertone_shadow_2021",
+      "citation": "V. Bertone et al., Shadow generalized parton distributions: a practical approach to the deconvolution problem of DVCS, arXiv:2107.11312 (2021)",
+      "sources": ["https://arxiv.org/abs/2107.11312"],
+      "inferred_object": "non-identifiable shadow-GPD directions",
+      "generator_truth_model": "constructed NLO shadow GPDs",
+      "representation_class": "analytic_shadow_gpd",
+      "named_model_family": "Bertone_shadow_construction",
+      "model_variant": "arbitrarily small DVCS imprint under evolution",
+      "D_term_assumptions": null,
+      "observables": "DVCS CFF/observable imprints",
+      "input_level": "combination",
+      "kinematic_support": "current and future facility scenarios",
+      "perturbative_evolution_settings": "NLO analysis with evolution",
+      "parameter_dimension": null,
+      "prior_bounds": null,
+      "uncertainty_generation": null,
+      "covariance_assumptions": null,
+      "uncertainties_as_model_inputs": null,
+      "nuisance_treatment": null,
+      "replica_count": null,
+      "data_split": null,
+      "evaluation_points_seen_during_training": null,
+      "optimizer_stopping": null,
+      "reported_metrics": "shadow imprint under evolution",
+      "uncertainty_band_definition": null,
+      "calibration_coverage_tested": false,
+      "family_or_kinematic_holdout": false,
+      "source_code": null,
+      "unresolved_details": ["User brief cited arXiv:2104.03836, but the located Bertone shadow paper is arXiv:2107.11312"],
+      "comparability_grade": "conceptual"
+    },
+    {
+      "id": "moffat_shadow_2023",
+      "citation": "E. Moffat et al., Shedding light on shadow generalized parton distributions, Phys. Rev. D 108, 036027 (2023), arXiv:2303.12006",
+      "sources": ["https://arxiv.org/abs/2303.12006", "https://doi.org/10.1103/PhysRevD.108.036027"],
+      "inferred_object": "evolution sensitivity to type-A/type-B shadow GPDs",
+      "generator_truth_model": "VGG-like H/E proxy with constructed shadows",
+      "representation_class": "double_distribution_shadow_gpd",
+      "named_model_family": "VGG_proxy_shadow",
+      "model_variant": "H and E CFF shadow study",
+      "D_term_assumptions": "omitted",
+      "observables": "H and E CFFs across xi and Q2",
+      "input_level": "CFFs",
+      "kinematic_support": "broad xi and Q2 lever-arm scenarios including xi=0.01,0.1,0.5",
+      "perturbative_evolution_settings": "input scale 1.27 GeV and evolution study",
+      "parameter_dimension": null,
+      "prior_bounds": null,
+      "uncertainty_generation": "illustrative percent-level CFF uncertainties",
+      "covariance_assumptions": null,
+      "uncertainties_as_model_inputs": false,
+      "nuisance_treatment": null,
+      "replica_count": null,
+      "data_split": null,
+      "evaluation_points_seen_during_training": null,
+      "optimizer_stopping": null,
+      "reported_metrics": "GPD and CFF response to shadow directions and evolution",
+      "uncertainty_band_definition": "shadow-envelope study",
+      "calibration_coverage_tested": false,
+      "family_or_kinematic_holdout": false,
+      "source_code": null,
+      "unresolved_details": ["A repository benchmark needs the exact type-A/type-B construction and convention adapter"],
+      "comparability_grade": "partial"
+    }
+  ]
+}
+
+===== UNTRACKED benchmarks/literature/moffat_qgt_2024_partial_v1.json =====
+{
+  "schema_version": 1,
+  "benchmark_id": "moffat-qgt-2024-partial-v1",
+  "tier": "literature_reproduction_scaffold",
+  "comparability_grade": "partial",
+  "source_registry_id": "moffat_qgt_2024",
+  "inference_object": "31-parameter parametric GPD/DD and D-term point fits",
+  "verified_settings": {
+    "generator": "GK model plus first three Gegenbauer D-term terms",
+    "parameter_dimension": 31,
+    "physical_uncertainty": "independent 10 percent Gaussian replicas",
+    "uncertainty_contract_preset": "literature_fixed_relative_replica",
+    "covariance": "diagonal",
+    "optimizer_family": "PyTorch Adam stochastic gradient descent",
+    "summary": "replica mean and standard deviation",
+    "reported_chi2_per_point": 0.2303
+  },
+  "unresolved_required_settings": [
+    "replica count",
+    "complete parameter coordinate definitions",
+    "parameter bounds and initialization distributions",
+    "complete observable list and kinematic table",
+    "perturbative and evolution configuration",
+    "optimizer schedule and stopping rule",
+    "train validation test split",
+    "whether any off-diagonal covariance was used"
+  ],
+  "execution_status": "blocked_pending_source_details_or_author_export",
+  "native_corpus_policy": {
+    "primary_master_corpus_replaced": false,
+    "existing_corpus_sufficiency": "not_established_for_the_31_parameter_GK_D_term_problem",
+    "new_native_generation_authorized": false,
+    "cost_and_storage_estimate_required_before_comparator_corpus": true
+  },
+  "common_benchmark_export_contract": {
+    "required": [
+      "native_truth_group_id",
+      "generator_metadata",
+      "observable_id_and_kinematics",
+      "central_native_prediction",
+      "paired_standard_normal_draw",
+      "diagonal_relative_sigma",
+      "split_role",
+      "parameter_bounds_when_common"
+    ],
+    "same_truth_groups_and_noise_draws_for_methods": true,
+    "internal_DD_82D_and_literature_31D_are_identical_tasks": false
+  },
+  "metric_policy": {
+    "direct_reproduction": ["chi2_per_point", "central_function_error", "runtime"],
+    "posterior_method_additions": [
+      "posterior_predictive_discrepancy",
+      "held_out_predictive_metrics",
+      "coverage",
+      "sharpness"
+    ],
+    "lower_chi2_automatically_superior": false,
+    "chi2_per_degree_of_freedom_requires_defensible_ndf": true
+  }
+}

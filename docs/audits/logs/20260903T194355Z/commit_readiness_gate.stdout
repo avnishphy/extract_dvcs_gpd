@@ -1,0 +1,27 @@
+[codex/physics-production-readiness 8bd71f9] feat: add fail-closed production readiness gate
+ Committer: Avnish Singh <singhav@ifarm2402.jlab.org>
+Your name and email address were configured automatically based
+on your username and hostname. Please check that they are accurate.
+You can suppress this message by setting them explicitly:
+
+    git config --global user.name "Your Name"
+    git config --global user.email you@example.com
+
+After doing this, you may fix the identity used for this commit with:
+
+    git commit --amend --reset-author
+
+ 15 files changed, 4723 insertions(+), 1 deletion(-)
+ create mode 100644 docs/audits/PRODUCTION_COVARIANCE_VALIDATION_2026-09-03.json
+ create mode 100644 docs/audits/PRODUCTION_NATIVE_ASSUMPTIONS.md
+ create mode 100644 docs/audits/PRODUCTION_PREFLIGHT_2026-09-03.json
+ create mode 100644 docs/audits/PRODUCTION_REHEARSAL_2026-09-03.json
+ create mode 100644 provenance/production-native-assumptions.json
+ create mode 100644 provenance/production-submission-manifest.json
+ create mode 100644 provenance/regeneration-impact-matrix.json
+ create mode 100644 scripts/audit_stage0_snapshot.sh
+ create mode 100644 scripts/run_audited_command.sh
+ create mode 100644 tests/test_production_readiness.py
+ create mode 100644 tools/audit_production_covariance.py
+ create mode 100644 tools/production_preflight.py
+ create mode 100644 tools/render_physics_assumptions.py

@@ -1,0 +1,15 @@
+start_utc=2026-09-03T21:12:20Z
+host=ifarm2402.jlab.org
+working_directory=/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd
+invocation=git add docs/audits/PREVIOUS_PATCH_AUDIT_2026-09-03.md docs/audits/PRODUCTION_READINESS_REPORT_2026-09-03.md 
+user=singhav
+shell=/bin/tcsh
+git_head=8bd71f95dcdb1d844cf4d26413adb3a5b8a64d9b
+git_branch=codex/physics-production-readiness
+HOME=/home/singhav
+HOST=ifarm2402.jlab.org
+PATH=/home/singhav/.codex/tmp/arg0/codex-arg08OcLxI:/u/group/nps/singhav/.vscode-server/bin/a44adf7f53e00964ab890f9f8758a334f1fc15bc/bin/remote-cli:/usr/share/Modules/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/opt/puppetlabs/bin:/opt/puppetlabs/bin:/u/group/nps/singhav/.vscode-server/extensions/openai.chatgpt-26.825.51511-linux-x64/bin/linux-x86_64
+TMPDIR=/scratch/singhav
+USER=singhav
+end_utc=2026-09-03T21:12:20Z
+exit_status=0

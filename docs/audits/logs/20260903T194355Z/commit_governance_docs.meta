@@ -1,0 +1,15 @@
+start_utc=2026-09-03T19:53:05Z
+host=ifarm2402.jlab.org
+working_directory=/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd
+invocation=bash -lc git\ add\ README.md\ docs/ARCHITECTURE.md\ docs/CLI_REFERENCE.md\ docs/DEVELOPMENT_AND_TESTING.md\ docs/INDEX.md\ docs/KNOWN_LIMITATIONS.md\ docs/CLAIMS_LEDGER.md\ docs/audits/CURRENT_HEAD_AUDIT.md\ docs/audits/IMPLEMENTATION_REPORT_2026-09-03.md\ docs/literature/BENCHMARK_AUDIT.md\ benchmarks/literature/moffat_qgt_2024_partial_v1.json\ provenance/dd-baseline-2026-09-03.json\;\ git\ diff\ --cached\ --check\;\ git\ commit\ -m\ \"docs:\ record\ evidence\ and\ claim\ boundaries\" 
+user=singhav
+shell=/bin/tcsh
+git_head=a35ddfed06352201c023fc2f48a50860a01588f2
+git_branch=codex/physics-production-readiness
+HOME=/home/singhav
+HOST=ifarm2402.jlab.org
+PATH=/home/singhav/.codex/tmp/arg0/codex-arg08OcLxI:/u/group/nps/singhav/.vscode-server/bin/a44adf7f53e00964ab890f9f8758a334f1fc15bc/bin/remote-cli:/usr/share/Modules/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/opt/puppetlabs/bin:/opt/puppetlabs/bin:/u/group/nps/singhav/.vscode-server/extensions/openai.chatgpt-26.825.51511-linux-x64/bin/linux-x86_64
+TMPDIR=/scratch/singhav
+USER=singhav
+end_utc=2026-09-03T19:53:05Z
+exit_status=0

@@ -1,0 +1,1602 @@
+diff --git a/jobs/jlab_ifarm/collect_performance_metrics.py b/jobs/jlab_ifarm/collect_performance_metrics.py
+index d63247c..db22498 100755
+--- a/jobs/jlab_ifarm/collect_performance_metrics.py
++++ b/jobs/jlab_ifarm/collect_performance_metrics.py
+@@ -94,16 +94,27 @@ def number(value: str) -> float | None:
+     value = value.strip()
+     if value in {"", "N/A", "[N/A]", "Not Supported"}:
+         return None
++    # ``nounits`` is requested from nvidia-smi, but older drivers and test
++    # fixtures can still include a separated or attached unit.  Accept one
++    # finite leading numeric token and reject trailing non-unit garbage.
++    match = re.fullmatch(
++        r"([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)"
++        r"(?:\s*(?:%|MiB|GiB|W))?",
++        value,
++        flags=re.IGNORECASE,
++    )
++    if match is None:
++        return None
++    try:
++        parsed = float(match.group(1))
++    except ValueError:
++        return None
++    return parsed if math.isfinite(parsed) else None
+ 
+ 
+ def node_family(hostname: str) -> str:
+     match = re.match(r"(farm(?:19|23|25)|sciml[0-9]+)", hostname.lower())
+     return match.group(1) if match else "other"
+-    try:
+-        parsed = float(value)
+-    except ValueError:
+-        return None
+-    return parsed if math.isfinite(parsed) else None
+ 
+ 
+ def gpu_sample(enabled: bool) -> dict[str, Any]:
+diff --git a/src/extract_dvcs_cff/cli/user.py b/src/extract_dvcs_cff/cli/user.py
+index 86c1d63..5e22fdd 100755
+--- a/src/extract_dvcs_cff/cli/user.py
++++ b/src/extract_dvcs_cff/cli/user.py
+@@ -60,6 +60,7 @@ from extract_dvcs_cff.data.gpddatabase import (
+     require_physical_fixed_target_kinematics,
+     select_native_scale_points,
+ )
++from extract_dvcs_cff.model_registry import model_family_registry, require_model_stage
+ 
+ 
+ PROJECT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*\Z")
+@@ -1469,6 +1470,14 @@ def _parser() -> argparse.ArgumentParser:
+         help="advanced override for the exact native bridge executable",
+     )
+     commands = parser.add_subparsers(dest="command", required=True)
++    model_smoke = commands.add_parser(
++        "model-smoke",
++        help="tiny synthetic DeepSets+MAF smoke (neural support is experimental)",
++    )
++    model_smoke.add_argument(
++        "--model-family", choices=tuple(sorted(model_family_registry())),
++        default="dd_deepsets_maf",
++    )
+     initialize = commands.add_parser(
+         "init", help="create a new isolated editable project"
+     )
+@@ -1524,6 +1533,12 @@ def _parser() -> argparse.ArgumentParser:
+     )
+     corpus_verify.add_argument("corpus")
+     corpus_verify.add_argument("--deep", action="store_true")
++    corpus_audit = commands.add_parser(
++        "corpus-audit-failures",
++        help="audit recorded native rejection rates and effective-prior distortion",
++    )
++    corpus_audit.add_argument("corpus")
++    corpus_audit.add_argument("--bins", type=int, default=5)
+     corpus_export = commands.add_parser(
+         "corpus-export", help="deep-verify and write a portable corpus archive"
+     )
+@@ -1604,6 +1619,16 @@ def _parser() -> argparse.ArgumentParser:
+                         "disabled when stderr is not an interactive terminal)"
+                     ),
+                 )
++        if command in {
++            "materialize", "train", "evaluate", "exact-reevaluate",
++            "compare", "plot", "holdout", "optimize",
++        }:
++            subparser.add_argument(
++                "--model-family", choices=tuple(sorted(model_family_registry())),
++                default="dd_deepsets_maf",
++                help=("explicit inference family; DD remains the compatibility "
++                      "default, neural production stages fail closed until ready"),
++            )
+         if command == "optimize":
+             subparser.add_argument(
+                 "--trials",
+@@ -1657,7 +1682,10 @@ def main() -> int:
+     try:
+         args = _parser().parse_args()
+         repository = _repository_root(args.repository_root)
+-        if args.command == "init":
++        if args.command == "model-smoke":
++            from extract_dvcs_cff.inference.family_smoke import run_family_smoke
++            result = run_family_smoke(args.model_family)
++        elif args.command == "init":
+             result = initialize_project(repository, args.project)
+         elif args.command == "list":
+             root = _user_root(repository)
+@@ -1677,6 +1705,12 @@ def main() -> int:
+                 corpus=_corpus_path(repository, args.corpus, existing=True),
+                 deep=args.deep,
+             )
++        elif args.command == "corpus-audit-failures":
++            from extract_dvcs_cff.scientific_validation import audit_native_failures
++            result = audit_native_failures(
++                _corpus_path(repository, args.corpus, existing=True),
++                bin_count=args.bins,
++            )
+         elif args.command == "corpus-export":
+             result = export_corpus(
+                 corpus=_corpus_path(repository, args.corpus, existing=True),
+@@ -1864,6 +1898,12 @@ def main() -> int:
+                     )
+                 else:
+                     profile = args.profile
++                    if hasattr(args, "model_family"):
++                        stage = (
++                            "model_view" if args.command == "materialize"
++                            else args.command.replace("-", "_")
++                        )
++                        require_model_stage(args.model_family, stage)
+                     workspace = project / "results" / profile
+                     common = {
+                         "configuration_path": configuration,
+diff --git a/src/extract_dvcs_cff/corpus.py b/src/extract_dvcs_cff/corpus.py
+index cc922cc..7e80613 100644
+--- a/src/extract_dvcs_cff/corpus.py
++++ b/src/extract_dvcs_cff/corpus.py
+@@ -284,6 +284,20 @@ def _core_identity(config: Mapping[str, Any], physics: Mapping[str, Any],
+             "generator_family": "dd",
+             "generator_representation": config["representation"],
+             "generator_prior_id": "full_independent_dd_uniform_v1",
++            "generator_metadata": {
++                "representation_class": "double_distribution",
++                "named_model_family": "internal_full_independent_dd",
++                "implementation_version": config["representation"],
++                "parameterization_variant": "independent_type_channel_shapes_v1",
++                "physics_configuration": hashlib.sha256(
++                    canonical(physics_core).encode("utf-8")
++                ).hexdigest(),
++                "D_term_policy": (
++                    "omitted" if "D_term" in physics.get("gpd_content", {}).get("omitted", [])
++                    else "declared_in_physics_configuration"
++                ),
++                "source_backend": "PARTONS",
++            },
+             "gpd_truth_request": deepcopy(gpd_truth_request),
+         })
+     return result
+diff --git a/src/extract_dvcs_cff/inference/stage10.py b/src/extract_dvcs_cff/inference/stage10.py
+index a0fe53e..28d612d 100755
+--- a/src/extract_dvcs_cff/inference/stage10.py
++++ b/src/extract_dvcs_cff/inference/stage10.py
+@@ -187,8 +187,8 @@ class GroupedValidationNPE(NPE):
+         }
+         validation_kwargs = {
+             "batch_size": min(training_batch_size, len(validation_indices)),
+-            "drop_last": True,
+-            "sampler": SubsetRandomSampler(validation_indices.tolist()),
++            "drop_last": False,
++            "sampler": _SubsetSequentialSampler(validation_indices.tolist()),
+             **additions,
+         }
+         return (
+@@ -196,6 +196,54 @@ class GroupedValidationNPE(NPE):
+             data.DataLoader(dataset, **validation_kwargs),
+         )
+ 
++    def _validate_epoch(self, val_loader: data.DataLoader, loss_args: Any) -> float:
++        """Return exact per-row validation NLD, including a partial last batch.
++
++        SBI 0.26.1 divides its accumulated loss by ``len(loader) * batch_size``.
++        That denominator is too large when ``drop_last=False`` and the final batch
++        is partial.  Keep SBI's loss implementation while counting the evaluated
++        rows directly.  The sequential validation sampler makes repeated scoring
++        of an unchanged checkpoint deterministic.
++        """
++
++        loss_sum = 0.0
++        sample_count = 0
++        with torch.no_grad():
++            for batch in val_loader:
++                losses = (
++                    self._get_losses(batch=batch)
++                    if loss_args is None
++                    else self._get_losses(batch=batch, loss_args=loss_args)
++                )
++                if losses.ndim == 0:
++                    raise RuntimeError(
++                        "validation loss must retain one value per synthetic row"
++                    )
++                if not torch.isfinite(losses).all():
++                    raise RuntimeError("validation produced non-finite losses")
++                loss_sum += float(losses.double().sum().item())
++                sample_count += int(losses.numel())
++        if sample_count != len(self._grouped_validation_indices):
++            raise RuntimeError(
++                "validation loader did not evaluate every frozen row exactly once: "
++                f"expected {len(self._grouped_validation_indices)}, "
++                f"observed {sample_count}"
++            )
++        return loss_sum / sample_count
++
++
++class _SubsetSequentialSampler(data.Sampler[int]):
++    """Iterate an explicit row subset once in its declared frozen order."""
++
++    def __init__(self, indices: Sequence[int]) -> None:
++        self.indices = tuple(int(index) for index in indices)
++
++    def __iter__(self):
++        return iter(self.indices)
++
++    def __len__(self) -> int:
++        return len(self.indices)
++
+ 
+ def stage10_physical_to_latent(theta: Tensor) -> Tensor:
+     """Map 80 independent DD controls and two nuisances to normal space.
+diff --git a/src/extract_dvcs_cff/literature.py b/src/extract_dvcs_cff/literature.py
+index cd78ca3..fa7a46b 100644
+--- a/src/extract_dvcs_cff/literature.py
++++ b/src/extract_dvcs_cff/literature.py
+@@ -18,6 +18,48 @@ STATUSES = {
+     "awaiting_external_numerical_data", "not_scientifically_comparable",
+ }
+ 
++COMPARATOR_FIELDS = {
++    "id", "citation", "sources", "inferred_object", "generator_truth_model",
++    "representation_class", "named_model_family", "model_variant",
++    "D_term_assumptions", "observables", "input_level", "kinematic_support",
++    "perturbative_evolution_settings", "parameter_dimension", "prior_bounds",
++    "uncertainty_generation", "covariance_assumptions",
++    "uncertainties_as_model_inputs", "nuisance_treatment", "replica_count",
++    "data_split", "evaluation_points_seen_during_training", "optimizer_stopping",
++    "reported_metrics", "uncertainty_band_definition", "calibration_coverage_tested",
++    "family_or_kinematic_holdout", "source_code", "unresolved_details",
++    "comparability_grade",
++}
++COMPARABILITY_GRADES = {"exact", "high", "partial", "conceptual", "not_comparable"}
++
++
++def load_comparator_registry(path: Path) -> dict[str, Any]:
++    """Validate the publication comparator registry without filling unknowns."""
++
++    value = json.loads(path.resolve(strict=True).read_text(encoding="utf-8"))
++    if value.get("schema_version") != 1 or not isinstance(value.get("comparators"), list):
++        raise ValueError("comparator registry must have schema_version 1 and comparators")
++    identifiers = set()
++    for index, comparator in enumerate(value["comparators"]):
++        if set(comparator) != COMPARATOR_FIELDS:
++            raise ValueError(
++                f"comparator {index} key mismatch: "
++                f"missing={sorted(COMPARATOR_FIELDS - set(comparator))}, "
++                f"unknown={sorted(set(comparator) - COMPARATOR_FIELDS)}"
++            )
++        if comparator["id"] in identifiers:
++            raise ValueError(f"duplicate comparator ID {comparator['id']!r}")
++        identifiers.add(comparator["id"])
++        if comparator["comparability_grade"] not in COMPARABILITY_GRADES:
++            raise ValueError(f"invalid comparability grade for {comparator['id']}")
++        if not comparator["sources"] or not all(
++            str(source).startswith("https://") for source in comparator["sources"]
++        ):
++            raise ValueError(f"comparator {comparator['id']} needs HTTPS primary sources")
++        if not isinstance(comparator["unresolved_details"], list):
++            raise ValueError(f"comparator {comparator['id']} unresolved_details must be a list")
++    return value
++
+ 
+ def load_registry(path: Path) -> dict[str, Any]:
+     value = json.loads(path.resolve(strict=True).read_text(encoding="utf-8"))
+diff --git a/src/extract_dvcs_cff/model_registry.py b/src/extract_dvcs_cff/model_registry.py
+index ee96a80..e4ee73c 100644
+--- a/src/extract_dvcs_cff/model_registry.py
++++ b/src/extract_dvcs_cff/model_registry.py
+@@ -32,6 +32,29 @@ _FAMILIES = {
+     ),
+ }
+ 
++MODEL_STAGES = {
++    "model_view", "train", "evaluate", "exact_reevaluate", "compare",
++    "holdout", "plot", "result_assembly", "optimize", "smoke",
++}
++
++# This table is intentionally honest about executable maturity.  A central
++# dispatcher is preferable to commands silently falling through the DD path.
++_STAGE_STATUS = {
++    "dd_deepsets_maf": {stage: "production" for stage in MODEL_STAGES},
++    "neural_gpd_deepsets_maf": {
++        "model_view": "experimental",
++        "smoke": "experimental",
++        "train": "blocked",
++        "evaluate": "blocked",
++        "exact_reevaluate": "blocked",
++        "compare": "blocked",
++        "holdout": "blocked",
++        "plot": "blocked",
++        "result_assembly": "blocked",
++        "optimize": "blocked",
++    },
++}
++
+ 
+ def model_family(identifier: str) -> ModelFamily:
+     try:
+@@ -43,7 +66,27 @@ def model_family(identifier: str) -> ModelFamily:
+ 
+ 
+ def model_family_registry() -> dict[str, dict[str, Any]]:
+-    return {name: asdict(value) for name, value in _FAMILIES.items()}
++    return {
++        name: {**asdict(value), "stage_maturity": deepcopy(_STAGE_STATUS[name])}
++        for name, value in _FAMILIES.items()
++    }
++
++
++def require_model_stage(identifier: str, stage: str) -> ModelFamily:
++    """Resolve a family/stage pair or fail before a DD-specific code path."""
++
++    family = model_family(identifier)
++    if stage not in MODEL_STAGES:
++        raise ValueError(f"unknown model stage {stage!r}; choose one of {sorted(MODEL_STAGES)}")
++    status = _STAGE_STATUS[identifier][stage]
++    if status == "blocked":
++        raise RuntimeError(
++            f"{identifier} {stage} is not yet production-executable: publish a "
++            "schema-2 canonical-GPD-truth model view, fit and freeze its decoder "
++            "and latent whitening, then use the dedicated neural checkpoint path. "
++            "The command will not silently dispatch to DD."
++        )
++    return family
+ 
+ 
+ def _walk_keys(value: Any, prefix: str = ""):
+diff --git a/src/extract_dvcs_cff/neural_gpd.py b/src/extract_dvcs_cff/neural_gpd.py
+index dfbb7ae..255844f 100644
+--- a/src/extract_dvcs_cff/neural_gpd.py
++++ b/src/extract_dvcs_cff/neural_gpd.py
+@@ -18,6 +18,141 @@ from typing import Any, Mapping, Sequence
+ import numpy as np
+ 
+ 
++COORDINATE_SCHEMA_VERSION = 1
++COORDINATE_GPD_TYPES = ("H", "E", "Htilde", "Etilde")
++COORDINATE_CHANNELS = (
++    "u", "u_plus", "u_minus", "d", "d_plus", "d_minus",
++    "s", "s_plus", "s_minus", "gluon",
++    "charge_squared_weighted_c_even_quark_sum",
++)
++COORDINATE_PARITIES = ("native", "plus", "minus", "not_applicable")
++
++
++def canonical_coordinate_table(
++    coordinates: Sequence[Mapping[str, Any]], *, Q2_GeV2: float,
++    coordinate_normalization: Mapping[str, Any] | None = None,
++    value_normalization: Mapping[str, Any] | None = None,
++    channel_weights: Mapping[str, float] | None = None,
++) -> dict[str, Any]:
++    """Encode typed GPD coordinates without imposing accidental ordinality."""
++
++    if not np.isfinite(Q2_GeV2) or Q2_GeV2 <= 0:
++        raise ValueError("Q2_GeV2 must be finite and positive")
++    feature_names = (
++        "x", "xi", "t_GeV2", "Q2_GeV2", "mask",
++        *(f"gpd_is_{name}" for name in COORDINATE_GPD_TYPES),
++        *(f"channel_is_{name}" for name in COORDINATE_CHANNELS),
++        *(f"charge_parity_is_{name}" for name in COORDINATE_PARITIES),
++    )
++    rows = []
++    normalized_records = []
++    for index, raw in enumerate(coordinates):
++        required = {"x", "xi", "t_GeV2", "gpd_type", "channel", "charge_parity"}
++        if set(raw) != required:
++            raise ValueError(f"coordinate {index} must contain exactly {sorted(required)}")
++        gpd_type = str(raw["gpd_type"]); channel = str(raw["channel"])
++        parity = str(raw["charge_parity"])
++        if gpd_type not in COORDINATE_GPD_TYPES or channel not in COORDINATE_CHANNELS:
++            raise ValueError(f"coordinate {index} has unknown GPD/channel category")
++        if parity not in COORDINATE_PARITIES:
++            raise ValueError(f"coordinate {index} has unknown charge parity")
++        x, xi, t = float(raw["x"]), float(raw["xi"]), float(raw["t_GeV2"])
++        if not all(np.isfinite((x, xi, t))) or not -1 <= x <= 1 or not 0 <= xi < 1 or t > 0:
++            raise ValueError(f"coordinate {index} has invalid continuous values")
++        rows.append((
++            x, xi, t, float(Q2_GeV2), 1.0,
++            *(float(gpd_type == name) for name in COORDINATE_GPD_TYPES),
++            *(float(channel == name) for name in COORDINATE_CHANNELS),
++            *(float(parity == name) for name in COORDINATE_PARITIES),
++        ))
++        normalized_records.append({**dict(raw), "Q2_GeV2": float(Q2_GeV2), "mask": True})
++    if not rows:
++        raise ValueError("canonical coordinate table must not be empty")
++    table = np.asarray(rows, dtype=np.float64)
++    coordinate_normalization = dict(coordinate_normalization or {
++        "identifier": "native_coordinate_units_v1",
++        "x": "dimensionless", "xi": "dimensionless",
++        "t_GeV2": "GeV2", "Q2_GeV2": "GeV2",
++    })
++    value_normalization = dict(value_normalization or {"identifier": "none_v1"})
++    weights = dict(channel_weights or {name: 1.0 for name in COORDINATE_CHANNELS})
++    if set(weights) != set(COORDINATE_CHANNELS) or not all(
++        np.isfinite(value) and value > 0 for value in weights.values()
++    ):
++        raise ValueError("channel_weights must define one positive value per channel")
++    identity = {
++        "schema_version": COORDINATE_SCHEMA_VERSION,
++        "categorical_encoding": "fixed_one_hot_v1", "feature_names": list(feature_names),
++        "coordinate_normalization": coordinate_normalization,
++        "value_normalization": value_normalization,
++        "channel_weights": weights, "records": normalized_records,
++    }
++    identifier = "gpd-coordinate-table-" + hashlib.sha256(
++        json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()
++    ).hexdigest()
++    return {"identifier": identifier, "identity": identity, "values": table}
++
++
++def expand_group_targets(
++    group_targets: np.ndarray, parameter_indices: np.ndarray,
++) -> np.ndarray:
++    """Lazily align group-level neural targets with realization rows."""
++
++    targets = np.asarray(group_targets)
++    indices = np.asarray(parameter_indices)
++    if targets.ndim != 2 or indices.ndim != 1 or not np.issubdtype(indices.dtype, np.integer):
++        raise ValueError("targets must be [group,target] and parameter_indices must be integer [row]")
++    if len(indices) == 0 or np.any(indices < 0) or np.any(indices >= len(targets)):
++        raise ValueError("parameter_indices contain an invalid group reference")
++    return targets[indices]
++
++
++def fit_full_covariance_whitening(
++    latent: np.ndarray, training_groups: Sequence[int], *, shrinkage: float = 1e-6,
++    relative_eigenvalue_floor: float = 1e-8,
++) -> dict[str, Any]:
++    """Fit a stable full-covariance whitening map on training groups only."""
++
++    values = np.asarray(latent, dtype=np.float64)
++    groups = np.asarray(training_groups, dtype=np.int64)
++    if values.ndim != 2 or not len(groups) or np.any(groups < 0) or np.any(groups >= len(values)):
++        raise ValueError("whitening requires [group,latent] values and valid training groups")
++    if not 0 <= shrinkage < 1 or not 0 < relative_eigenvalue_floor < 1:
++        raise ValueError("invalid whitening shrinkage or eigenvalue floor")
++    selected = values[groups]
++    mean = selected.mean(axis=0)
++    centered = selected - mean
++    covariance = centered.T @ centered / max(1, len(selected) - 1)
++    trace_scale = float(np.trace(covariance) / len(mean))
++    eigenvalues, eigenvectors = np.linalg.eigh(covariance)
++    maximum = float(eigenvalues[-1]) if len(eigenvalues) else 0.0
++    retained = eigenvalues > max(maximum * relative_eigenvalue_floor, np.finfo(float).eps)
++    if not np.any(retained):
++        raise ValueError("all latent dimensions collapsed on the training split")
++    basis = eigenvectors[:, retained]
++    kept = (1 - shrinkage) * eigenvalues[retained] + shrinkage * trace_scale
++    whiten = basis / np.sqrt(kept)
++    inverse = basis * np.sqrt(kept)
++    return {
++        "schema_version": 1, "identifier": "full_covariance_shrinkage_whitening_v1",
++        "fit_scope": "training_groups_only", "mean": mean,
++        "whitening_matrix": whiten, "inverse_matrix": inverse,
++        "eigenvalues": eigenvalues, "retained_mask": retained,
++        "retained_dimensions": int(np.count_nonzero(retained)),
++        "condition_number": float(kept[-1] / kept[0]),
++        "shrinkage": float(shrinkage), "relative_eigenvalue_floor": float(relative_eigenvalue_floor),
++        "training_group_sha256": hashlib.sha256(groups.tobytes()).hexdigest(),
++    }
++
++
++def apply_whitening(latent: np.ndarray, transform: Mapping[str, Any]) -> np.ndarray:
++    return (np.asarray(latent, dtype=np.float64) - transform["mean"]) @ transform["whitening_matrix"]
++
++
++def invert_whitening(whitened: np.ndarray, transform: Mapping[str, Any]) -> np.ndarray:
++    return np.asarray(whitened, dtype=np.float64) @ np.asarray(transform["inverse_matrix"]).T + transform["mean"]
++
++
+ def coordinate_table_hash(coordinates: np.ndarray) -> str:
+     array = np.ascontiguousarray(coordinates, dtype=np.float64)
+     return hashlib.sha256(array.tobytes()).hexdigest()
+@@ -263,7 +398,7 @@ def publish_neural_model_view(
+ 
+     required = {
+         "contexts", "pseudodata_context", "train_indices",
+-        "validation_indices", "test_indices",
++        "validation_indices", "test_indices", "parameter_indices",
+     }
+     if set(observation_arrays) != required:
+         raise ValueError(
+@@ -290,6 +425,18 @@ def publish_neural_model_view(
+         locked_holdout_groups=locked_holdout_groups, output=candidate,
+         **configuration,
+     )
++    whitening = fit_full_covariance_whitening(
++        result["latent_targets"], training_groups
++    )
++    whitened_targets = apply_whitening(result["latent_targets"], whitening)
++    latent_transform_id = "latent-whitening-" + hashlib.sha256(
++        json.dumps({
++            "mean": whitening["mean"].tolist(),
++            "matrix": whitening["whitening_matrix"].tolist(),
++            "retained_mask": whitening["retained_mask"].tolist(),
++            "training_group_sha256": whitening["training_group_sha256"],
++        }, sort_keys=True, separators=(",", ":")).encode()
++    ).hexdigest()
+     decoder_contract = {
+         "identifier": "coordinate_conditioned_mlp_v1",
+         "architecture": configuration,
+@@ -302,8 +449,10 @@ def publish_neural_model_view(
+         model_family="neural_gpd_deepsets_maf",
+         observation_contract={"encoder": "deepsets", "arrays": sorted(required)},
+         target_transform={
+-            "identifier": "neural_gpd_latent_standardization_v1",
+-            "latent_prior_id": result["latent_prior"]["identifier"],
++            "identifier": "neural_gpd_full_covariance_whitening_v1",
++            "latent_transform_id": latent_transform_id,
++            "fit_scope": "training_groups_only",
++            "retained_dimensions": whitening["retained_dimensions"],
+         },
+         decoder_contract=decoder_contract,
+         normalization_contract={"fit_scope": "training_groups_only"},
+@@ -320,7 +469,7 @@ def publish_neural_model_view(
+     latent_path = view_root / "latent_targets.npy"
+     with tempfile.NamedTemporaryFile(dir=view_root, delete=False) as stream:
+         temporary = Path(stream.name)
+-        np.save(stream, result["latent_targets"], allow_pickle=False)
++        np.save(stream, whitened_targets, allow_pickle=False)
+         stream.flush()
+         os.fsync(stream.fileno())
+     os.replace(temporary, latent_path)
+@@ -328,8 +477,8 @@ def publish_neural_model_view(
+         "latent_targets": {
+             "path": latent_path.name,
+             "sha256": hashlib.sha256(latent_path.read_bytes()).hexdigest(),
+-            "shape": list(result["latent_targets"].shape),
+-            "dtype": str(result["latent_targets"].dtype),
++            "shape": list(whitened_targets.shape),
++            "dtype": str(whitened_targets.dtype),
+         }
+     }
+     for name, source_value in observation_arrays.items():
+@@ -349,12 +498,42 @@ def publish_neural_model_view(
+         "observation_encoder": "deepsets", "density_estimator": "maf",
+         "density_estimator_implementation": "zuko_maf",
+         "physics_backend": "partons", "arrays": arrays,
+-        "decoder": decoder_contract, "latent_prior": result["latent_prior"],
++        "decoder": decoder_contract,
++        "latent_prior": {
++            "schema_version": 1,
++            "identifier": "standard_normal_after_full_whitening_v1",
++            "family": "standard_normal",
++            "dimension": whitening["retained_dimensions"],
++            "fit_scope": "induced_by_training_groups_only_whitening",
++        },
++        "latent_transform": {
++            "identifier": latent_transform_id,
++            "method": whitening["identifier"],
++            "fit_scope": whitening["fit_scope"],
++            "mean": whitening["mean"].tolist(),
++            "whitening_matrix": whitening["whitening_matrix"].tolist(),
++            "inverse_matrix": whitening["inverse_matrix"].tolist(),
++            "eigenvalues": whitening["eigenvalues"].tolist(),
++            "retained_mask": whitening["retained_mask"].tolist(),
++            "retained_dimensions": whitening["retained_dimensions"],
++            "condition_number": whitening["condition_number"],
++            "shrinkage": whitening["shrinkage"],
++            "relative_eigenvalue_floor": whitening["relative_eigenvalue_floor"],
++            "training_group_sha256": whitening["training_group_sha256"],
++            "legacy_diagonal_prior": result["latent_prior"],
++        },
+         "reconstruction": {
+             "validation_mse": result["validation_mse"],
+             "rmse_by_group": result["reconstruction_rmse_by_group"].tolist(),
+             "holdout_used_for_tuning": False,
+-        }, "truth_fields_in_context": [],
++        },
++        "target_alignment": {
++            "target_granularity": "native_truth_group",
++            "context_granularity": "pseudodata_realization_row",
++            "row_to_group_array": "parameter_indices",
++            "expansion_policy": "lazy_indexed_v1",
++        },
++        "truth_fields_in_context": [],
+     }
+     atomic_json(view_root / "model_view.json", manifest)
+     return manifest
+diff --git a/tests/run.sh b/tests/run.sh
+index bfe1ada..d828ec4 100755
+--- a/tests/run.sh
++++ b/tests/run.sh
+@@ -14,7 +14,7 @@ case "${mode}" in
+     PYTHONPATH="${root}/src" python3 -m unittest \
+       tests.test_reusable_corpus tests.test_result_contract \
+       tests.test_architecture_contracts tests.test_masked_design \
+-      tests.test_physical_kinematics
++      tests.test_physical_kinematics tests.test_scientific_contracts
+     "${root}/tests/verify_jlab_gpu_launcher.sh"
+     "${root}/tests/verify_jlab_batch_submission.sh"
+     "${root}/tests/verify_jlab_progress_logging.sh"
+
+===== UNTRACKED src/extract_dvcs_cff/data/uncertainty.py =====
+"""Factorized uncertainty contracts and corpus-reusing realization helpers."""
+
+from __future__ import annotations
+
+from copy import deepcopy
+from dataclasses import asdict, dataclass, replace
+import hashlib
+import os
+from pathlib import Path
+import tempfile
+from typing import Any, Callable, Mapping
+
+import numpy as np
+
+from .covariance import validate_covariance
+from ..contracts import atomic_json, content_id
+
+
+OBSERVATION_REALIZATIONS = {"central", "sampled"}
+UNCERTAINTY_MODELS = {
+    "full_covariance", "diagonal", "fixed_relative", "equal_weight_point_fit",
+}
+UNCERTAINTY_EXPOSURES = {"full_descriptors", "values_and_kinematics_only"}
+NUISANCE_POLICIES = {
+    "sampled_and_inferred", "nominal_fixed", "covariance_misspecified",
+}
+OUTPUT_KINDS = {"posterior", "point_estimate"}
+COVARIANCE_POLICIES = {
+    "training_reference", "external_fixed", "holdout_truth_derived",
+}
+
+
+@dataclass(frozen=True)
+class UncertaintyContract:
+    name: str
+    observation_realization: str
+    uncertainty_model: str
+    uncertainty_exposure: str
+    nuisance_policy: str
+    physical_noise_scale: float
+    numerical_jitter: float
+    output_kind: str
+    covariance_policy: str
+    fixed_relative_sigma: float | None = None
+
+    def validate(self) -> "UncertaintyContract":
+        choices = (
+            (self.observation_realization, OBSERVATION_REALIZATIONS, "observation_realization"),
+            (self.uncertainty_model, UNCERTAINTY_MODELS, "uncertainty_model"),
+            (self.uncertainty_exposure, UNCERTAINTY_EXPOSURES, "uncertainty_exposure"),
+            (self.nuisance_policy, NUISANCE_POLICIES, "nuisance_policy"),
+            (self.output_kind, OUTPUT_KINDS, "output_kind"),
+            (self.covariance_policy, COVARIANCE_POLICIES, "covariance_policy"),
+        )
+        for value, allowed, label in choices:
+            if value not in allowed:
+                raise ValueError(f"unknown {label} {value!r}; choose one of {sorted(allowed)}")
+        if not np.isfinite(self.physical_noise_scale) or self.physical_noise_scale < 0:
+            raise ValueError("physical_noise_scale must be finite and nonnegative")
+        if not np.isfinite(self.numerical_jitter) or self.numerical_jitter < 0:
+            raise ValueError("numerical_jitter must be finite and nonnegative")
+        if self.uncertainty_model == "fixed_relative":
+            if self.fixed_relative_sigma is None or not (
+                np.isfinite(self.fixed_relative_sigma) and self.fixed_relative_sigma > 0
+            ):
+                raise ValueError("fixed_relative requires a positive fixed_relative_sigma")
+        elif self.fixed_relative_sigma is not None:
+            raise ValueError("fixed_relative_sigma is valid only for fixed_relative")
+        if self.output_kind == "posterior" and self.physical_noise_scale <= 0:
+            raise ValueError(
+                "ordinary full-dimensional MAF posterior requires positive physical noise; "
+                "use a positive near-noiseless floor or point_estimate"
+            )
+        if self.uncertainty_model == "equal_weight_point_fit" and self.output_kind != "point_estimate":
+            raise ValueError("equal_weight_point_fit cannot make a posterior claim")
+        if self.output_kind == "point_estimate" and self.uncertainty_exposure != "values_and_kinematics_only":
+            raise ValueError("point benchmarks must not expose uncertainty descriptors")
+        return self
+
+    def as_dict(self) -> dict[str, Any]:
+        self.validate()
+        return {"schema_version": 1, **asdict(self)}
+
+    @property
+    def identifier(self) -> str:
+        return content_id("uncertainty-contract", self.as_dict())
+
+
+_PRESETS = {
+    "full_uncertainty_posterior": UncertaintyContract(
+        "full_uncertainty_posterior", "sampled", "full_covariance",
+        "full_descriptors", "sampled_and_inferred", 1.0, 1e-10,
+        "posterior", "training_reference",
+    ),
+    "central_observation_full_likelihood": UncertaintyContract(
+        "central_observation_full_likelihood", "central", "full_covariance",
+        "full_descriptors", "sampled_and_inferred", 1.0, 1e-10,
+        "posterior", "training_reference",
+    ),
+    "literature_fixed_relative_replica": UncertaintyContract(
+        "literature_fixed_relative_replica", "sampled", "fixed_relative",
+        "values_and_kinematics_only", "nominal_fixed", 1.0, 1e-10,
+        "point_estimate", "external_fixed", fixed_relative_sigma=0.10,
+    ),
+    "near_noiseless_posterior": UncertaintyContract(
+        "near_noiseless_posterior", "sampled", "full_covariance",
+        "full_descriptors", "sampled_and_inferred", 0.1, 1e-10,
+        "posterior", "training_reference",
+    ),
+    "uncertainty_blind_point_benchmark": UncertaintyContract(
+        "uncertainty_blind_point_benchmark", "central", "equal_weight_point_fit",
+        "values_and_kinematics_only", "nominal_fixed", 0.0, 0.0,
+        "point_estimate", "external_fixed",
+    ),
+}
+
+
+def uncertainty_preset(name: str, **updates: Any) -> UncertaintyContract:
+    try:
+        contract = _PRESETS[name]
+    except KeyError as error:
+        raise ValueError(f"unknown uncertainty preset {name!r}") from error
+    return replace(contract, **updates).validate()
+
+
+def resolve_covariance(
+    *, policy: str, training_reference: np.ndarray,
+    external_fixed: np.ndarray | None = None,
+    holdout_truth: np.ndarray | None = None,
+    truth_derived: Callable[[np.ndarray], np.ndarray] | None = None,
+) -> np.ndarray:
+    """Resolve covariance independently of generator identity."""
+
+    if policy not in COVARIANCE_POLICIES:
+        raise ValueError(f"unknown covariance policy {policy!r}")
+    if policy == "training_reference":
+        selected = training_reference
+    elif policy == "external_fixed":
+        if external_fixed is None:
+            raise ValueError("external_fixed covariance policy requires a matrix")
+        selected = external_fixed
+    else:
+        if holdout_truth is None or truth_derived is None:
+            raise ValueError("holdout_truth_derived requires truth and a declared builder")
+        selected = truth_derived(np.asarray(holdout_truth, dtype=np.float64))
+    matrix = np.asarray(selected, dtype=np.float64)
+    validated, _, _ = validate_covariance(matrix, len(matrix))
+    return np.array(validated, copy=True)
+
+
+def materialize_observation(
+    *, central: np.ndarray, covariance: np.ndarray,
+    contract: UncertaintyContract, standard_normal: np.ndarray,
+) -> dict[str, Any]:
+    """Materialize one paired realization without invoking the native backend."""
+
+    contract.validate()
+    mean = np.asarray(central, dtype=np.float64)
+    z = np.asarray(standard_normal, dtype=np.float64)
+    if mean.ndim != 1 or z.shape != mean.shape or not np.all(np.isfinite(z)):
+        raise ValueError("central and standard_normal must be finite equal-length vectors")
+    reference = np.asarray(covariance, dtype=np.float64)
+    if contract.uncertainty_model == "fixed_relative":
+        sigma = contract.fixed_relative_sigma * np.abs(mean)
+        reference = np.diag(sigma**2)
+    elif contract.uncertainty_model == "diagonal":
+        reference = np.diag(np.diag(reference))
+    elif contract.uncertainty_model == "equal_weight_point_fit":
+        reference = np.eye(len(mean), dtype=np.float64)
+    reference, _, _ = validate_covariance(reference, len(mean))
+    physical_covariance = contract.physical_noise_scale**2 * reference
+    stabilized_covariance = physical_covariance + contract.numerical_jitter * np.eye(len(mean))
+    if contract.observation_realization == "central":
+        observed = mean.copy()
+    else:
+        factor = np.linalg.cholesky(reference)
+        observed = mean + contract.physical_noise_scale * factor @ z
+    return {
+        "schema_version": 1,
+        "uncertainty_contract": deepcopy(contract.as_dict()),
+        "uncertainty_contract_id": contract.identifier,
+        "observed": observed,
+        "reference_covariance": np.array(reference, copy=True),
+        "physical_covariance": physical_covariance,
+        "stabilized_covariance": stabilized_covariance,
+        "standard_normal": z.copy(),
+        "physical_noise_and_numerical_jitter_separate": True,
+        "native_physics_executed": False,
+    }
+
+
+def materialize_uncertainty_variant(
+    *, artifact_root: Path, master_corpus_id: str, selection_id: str,
+    central: np.ndarray, training_reference_covariance: np.ndarray,
+    standard_normal_draws: np.ndarray, contract: UncertaintyContract,
+    external_fixed_covariance: np.ndarray | None = None,
+    holdout_truth: np.ndarray | None = None,
+    truth_derived_covariance: Callable[[np.ndarray], np.ndarray] | None = None,
+) -> dict[str, Any]:
+    """Publish a realization-only uncertainty variant with immutable ancestry."""
+
+    contract.validate()
+    mean = np.asarray(central, dtype=np.float64)
+    draws = np.asarray(standard_normal_draws, dtype=np.float64)
+    if mean.ndim != 1 or draws.ndim != 2 or draws.shape[1] != len(mean):
+        raise ValueError("standard_normal_draws must have shape [replica, observation]")
+    covariance = resolve_covariance(
+        policy=contract.covariance_policy,
+        training_reference=training_reference_covariance,
+        external_fixed=external_fixed_covariance,
+        holdout_truth=holdout_truth,
+        truth_derived=truth_derived_covariance,
+    )
+    realizations = [
+        materialize_observation(
+            central=mean, covariance=covariance, contract=contract,
+            standard_normal=draw,
+        )
+        for draw in draws
+    ]
+    identity = {
+        "schema_version": 1, "master_corpus_id": master_corpus_id,
+        "selection_id": selection_id, "uncertainty_contract": contract.as_dict(),
+        "central_sha256": hashlib.sha256(mean.tobytes()).hexdigest(),
+        "reference_covariance_sha256": hashlib.sha256(covariance.tobytes()).hexdigest(),
+        "standard_normal_draws_sha256": hashlib.sha256(draws.tobytes()).hexdigest(),
+        "replica_count": len(draws),
+        "native_predictions_reused": True, "native_physics_executed": False,
+    }
+    realization_id = content_id("uncertainty-realization", identity)
+    destination = artifact_root / "realizations" / realization_id
+    destination.mkdir(parents=True, exist_ok=True)
+    arrays_path = destination / "uncertainty_realizations.npz"
+    payload = {
+        "observed": np.stack([item["observed"] for item in realizations]),
+        "standard_normal": draws,
+        "reference_covariance": covariance,
+        "physical_covariance": realizations[0]["physical_covariance"],
+        "stabilized_covariance": realizations[0]["stabilized_covariance"],
+    }
+    with tempfile.NamedTemporaryFile(dir=destination, delete=False) as stream:
+        temporary = Path(stream.name)
+        np.savez_compressed(stream, **payload)
+        stream.flush()
+        os.fsync(stream.fileno())
+    if arrays_path.exists():
+        with np.load(arrays_path, allow_pickle=False) as existing, np.load(
+            temporary, allow_pickle=False
+        ) as candidate:
+            same = set(existing.files) == set(candidate.files) and all(
+                np.array_equal(existing[name], candidate[name]) for name in existing.files
+            )
+        temporary.unlink()
+        if not same:
+            raise RuntimeError("immutable uncertainty realization collision")
+    else:
+        os.replace(temporary, arrays_path)
+    manifest = {
+        "schema_version": 1, "realization_id": realization_id,
+        "identity": identity, "master_corpus_id": master_corpus_id,
+        "selection_id": selection_id, "uncertainty_contract_id": contract.identifier,
+        "uncertainty_contract": contract.as_dict(),
+        "arrays": {
+            "path": arrays_path.name,
+            "sha256": hashlib.sha256(arrays_path.read_bytes()).hexdigest(),
+            "shapes": {name: list(array.shape) for name, array in payload.items()},
+        },
+        "paired_standard_normal_draws": True,
+        "physical_noise_and_numerical_jitter_separate": True,
+        "native_predictions_reused": True, "native_physics_executed": False,
+    }
+    atomic_json(destination / "realization.json", manifest)
+    return manifest
+
+===== UNTRACKED src/extract_dvcs_cff/inference/family_smoke.py =====
+"""Tiny synthetic end-to-end checks for the shared DeepSets+MAF mechanics."""
+
+from __future__ import annotations
+
+from typing import Any
+
+import numpy as np
+
+from ..model_registry import require_model_stage
+
+
+def run_family_smoke(model_family: str, *, seed: int = 73129) -> dict[str, Any]:
+    """Train and sample a tiny family-shaped NPE without native physics calls."""
+
+    family = require_model_stage(model_family, "smoke")
+    import torch
+    from sbi.utils import MultipleIndependent
+    from torch.distributions import Normal
+
+    from .stage10 import (
+        GroupedValidationNPE,
+        STAGE10_GLOBAL_FEATURE_NAMES,
+        STAGE10_POINT_FEATURE_NAMES,
+        stage10_density_builder,
+    )
+
+    torch.set_num_threads(1)
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    torch.use_deterministic_algorithms(True)
+    target_dimension = 3 if model_family == "dd_deepsets_maf" else 2
+    group_count, replicates = 6, 2
+    group_targets = torch.randn(group_count, target_dimension)
+    parameter_indices = torch.arange(group_count).repeat_interleave(replicates)
+    targets = group_targets[parameter_indices]
+    token_width = len(STAGE10_POINT_FEATURE_NAMES)
+    context_width = token_width + len(STAGE10_GLOBAL_FEATURE_NAMES)
+    contexts = torch.randn(group_count * replicates, context_width)
+    contexts[:, token_width - 1] = 1.0
+    contexts[:, token_width:] = 1.0
+    train_indices = torch.arange(0, 8)
+    validation_indices = torch.arange(8, 10)
+    test_indices = torch.arange(10, 12)
+    configuration = {
+        "kinematics": [{}], "observables": [{}],
+        "context_contract": {
+            "point_features": list(STAGE10_POINT_FEATURE_NAMES),
+            "global_features": list(STAGE10_GLOBAL_FEATURE_NAMES),
+        },
+        "network": {
+            "flow": "zuko_maf", "point_hidden": 8, "point_layers": 1,
+            "dataset_hidden": 8, "dataset_layers": 1,
+            "embedding_features": 8, "point_layer_norm": False,
+            "flow_hidden_features": 8, "num_transforms": 2,
+            "z_score_theta": "none", "z_score_x": "none",
+        },
+    }
+    prior = MultipleIndependent([
+        Normal(torch.tensor([0.0]), torch.tensor([1.0]))
+        for _ in range(target_dimension)
+    ], device="cpu")
+    inference = GroupedValidationNPE(
+        prior=prior, density_estimator=stage10_density_builder(configuration),
+        device="cpu", show_progress_bars=False,
+        grouped_train_indices=train_indices,
+        grouped_validation_indices=validation_indices,
+    )
+    estimator = inference.append_simulations(
+        targets[:10], contexts[:10], data_device="cpu"
+    ).train(
+        training_batch_size=4, learning_rate=1e-3,
+        validation_fraction=0.2, stop_after_epochs=2, max_num_epochs=2,
+        show_train_summary=False,
+    )
+    posterior = inference.build_posterior(estimator)
+    torch.manual_seed(seed + 1)
+    samples = posterior.sample((4,), x=contexts[test_indices[0]], show_progress_bars=False)
+    finite = bool(torch.isfinite(samples).all())
+    if samples.shape != (4, target_dimension) or not finite:
+        raise RuntimeError("family smoke posterior produced invalid samples")
+    return {
+        "schema_version": 1, "status": "pass", "model_family": family.identifier,
+        "representation_class": family.gpd_inference_representation,
+        "observation_encoder": family.observation_encoder,
+        "density_estimator": family.density_estimator,
+        "target_dimension": target_dimension, "native_physics_called": False,
+        "group_count": group_count, "replicates_per_group": replicates,
+        "training_group_count": 4, "validation_group_count": 1,
+        "test_group_count": 1, "posterior_sample_count": 4,
+        "posterior_samples_finite": finite, "seed": seed,
+        "maturity": "synthetic_mechanics_smoke_only",
+    }
+
+===== UNTRACKED src/extract_dvcs_cff/scientific_validation.py =====
+"""Evaluation roles, generator semantics, projection floors, and provenance."""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+import getpass
+import hashlib
+import json
+from pathlib import Path
+import platform
+from typing import Any, Callable, Mapping, Sequence
+
+import numpy as np
+
+from .contracts import atomic_json, canonical_json, content_id
+
+
+EVALUATION_ROLES = {
+    "training", "validation", "development_ood", "benchmark_visible", "sealed_final",
+}
+COMPARABILITY_GRADES = {"exact", "high", "partial", "conceptual", "not_comparable"}
+
+
+@dataclass(frozen=True)
+class GeneratorMetadata:
+    representation_class: str
+    named_model_family: str
+    implementation_version: str
+    parameterization_variant: str
+    physics_configuration: str
+    D_term_policy: str
+    source_backend: str
+
+    def validate(self) -> "GeneratorMetadata":
+        for name, value in asdict(self).items():
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"generator metadata {name} must be a nonempty string")
+        return self
+
+    def as_dict(self) -> dict[str, str]:
+        self.validate()
+        return asdict(self)
+
+
+def classify_holdout(
+    training: GeneratorMetadata,
+    evaluation: GeneratorMetadata,
+    *, parameter_relation: str | None = None,
+    numerical_backend_shift: bool = False,
+) -> str:
+    training.validate()
+    evaluation.validate()
+    if numerical_backend_shift:
+        return "numerical_backend_holdout"
+    if training.named_model_family == evaluation.named_model_family:
+        if parameter_relation not in {"interpolation", "extrapolation"}:
+            raise ValueError("same-family holdout requires an explicit parameter_relation")
+        return f"same_family_parameter_{parameter_relation}"
+    if training.representation_class == evaluation.representation_class:
+        return "same_representation_named_family_holdout"
+    return "cross_representation_class_holdout"
+
+
+def require_foreign_model_metrics(
+    *, common_parameter_truth: bool, requested_metrics: Sequence[str]
+) -> None:
+    forbidden = {"parameter_recovery", "parameter_rmse", "parameter_coverage"}
+    if not common_parameter_truth and forbidden.intersection(requested_metrics):
+        raise ValueError(
+            "foreign model has no internal-DD coordinate truth; report observables, "
+            "CFFs, common functionals/functions, and a DD-compatible projection floor"
+        )
+
+
+def best_dd_projection(
+    *, objective: Callable[[np.ndarray], float], bounds: np.ndarray,
+    restarts: int = 8, seed: int = 73129, iterations: int = 100,
+) -> dict[str, Any]:
+    """Deterministic bounded multi-start coordinate search; not a global proof."""
+
+    limits = np.asarray(bounds, dtype=np.float64)
+    if limits.ndim != 2 or limits.shape[1] != 2 or np.any(limits[:, 0] >= limits[:, 1]):
+        raise ValueError("bounds must have shape [parameter,2] with lower < upper")
+    if restarts < 1 or iterations < 1:
+        raise ValueError("restarts and iterations must be positive")
+    rng = np.random.Generator(np.random.PCG64(seed))
+    starts = rng.uniform(limits[:, 0], limits[:, 1], size=(restarts, len(limits)))
+    records = []
+    best: tuple[float, np.ndarray] | None = None
+    initial_step = 0.25 * (limits[:, 1] - limits[:, 0])
+    for restart, start in enumerate(starts):
+        point = start.copy()
+        value = float(objective(point))
+        evaluations = 1
+        step = initial_step.copy()
+        for _ in range(iterations):
+            improved = False
+            for axis in range(len(point)):
+                for direction in (-1.0, 1.0):
+                    candidate = point.copy()
+                    candidate[axis] = np.clip(
+                        candidate[axis] + direction * step[axis], limits[axis, 0], limits[axis, 1]
+                    )
+                    candidate_value = float(objective(candidate))
+                    evaluations += 1
+                    if np.isfinite(candidate_value) and candidate_value < value:
+                        point, value, improved = candidate, candidate_value, True
+            if not improved:
+                step *= 0.5
+            if float(np.max(step)) <= 1e-10:
+                break
+        boundary = np.isclose(point, limits[:, 0]) | np.isclose(point, limits[:, 1])
+        record = {
+            "restart": restart, "initialization": start.tolist(),
+            "coordinates": point.tolist(), "objective": value,
+            "evaluations": evaluations, "converged": bool(np.max(step) <= 1e-6),
+            "boundary_hit_indices": np.flatnonzero(boundary).tolist(),
+        }
+        records.append(record)
+        if best is None or value < best[0]:
+            best = value, point.copy()
+    assert best is not None
+    objectives = np.asarray([record["objective"] for record in records])
+    payload = {
+        "schema_version": 1,
+        "optimizer": "deterministic_bounded_coordinate_search_v1",
+        "seed": seed, "restart_count": restarts, "iteration_limit": iterations,
+        "best_coordinates": best[1].tolist(), "best_objective": best[0],
+        "restart_objective_min": float(np.min(objectives)),
+        "restart_objective_max": float(np.max(objectives)),
+        "restart_objective_std": float(np.std(objectives)),
+        "restarts": records, "global_optimum_claimed": False,
+    }
+    payload["projection_id"] = content_id("dd-projection", payload)
+    return payload
+
+
+def publish_best_dd_projection(
+    *, output: Path, optimization_result: Mapping[str, Any],
+    foreign_generator: GeneratorMetadata, covariance_policy: str,
+    discrepancy: str, parameter_transform_id: str,
+) -> dict[str, Any]:
+    """Publish a labelled projection floor without implying parameter truth."""
+
+    if optimization_result.get("global_optimum_claimed") is not False:
+        raise ValueError("projection artifact must explicitly disclaim a global optimum")
+    if covariance_policy not in {
+        "training_reference", "external_fixed", "holdout_truth_derived"
+    }:
+        raise ValueError("projection artifact requires a declared covariance policy")
+    artifact = {
+        "schema_version": 1,
+        "projection_id": optimization_result["projection_id"],
+        "interpretation": "best_discovered_internal_DD_compatibility_floor",
+        "foreign_generator": foreign_generator.as_dict(),
+        "common_parameter_truth": False,
+        "DD_parameter_recovery_metric_permitted": False,
+        "covariance_policy": covariance_policy,
+        "discrepancy": discrepancy,
+        "parameter_transform_id": parameter_transform_id,
+        "optimization": dict(optimization_result),
+    }
+    atomic_json(output, artifact)
+    return artifact
+
+
+REQUIRED_PROVENANCE = {
+    "git_commit", "git_dirty", "image_digest", "dependency_identity",
+    "native_backend_identity", "master_corpus_id", "selection_id",
+    "realization_id", "model_view_id", "resolved_configuration_hash",
+    "checkpoint_hash", "model_family", "representation_class",
+    "normalization_id", "target_transform_id", "uncertainty_mode",
+    "covariance_policy", "evaluation_role",
+}
+
+
+def validate_production_provenance(
+    provenance: Mapping[str, Any], *, profile: str
+) -> list[str]:
+    missing = sorted(
+        key for key in REQUIRED_PROVENANCE
+        if provenance.get(key) in {None, "", "unrecorded", "unknown"}
+    )
+    if profile in {"production", "publication"} and missing:
+        raise RuntimeError("production provenance is incomplete: " + ", ".join(missing))
+    return missing
+
+
+def require_evaluation_access(
+    *, role: str, artifact_id: str, unseal_ledger: Path | None = None
+) -> None:
+    if role not in EVALUATION_ROLES:
+        raise ValueError(f"unknown evaluation role {role!r}")
+    if role != "sealed_final":
+        return
+    if unseal_ledger is None or not unseal_ledger.is_file():
+        raise PermissionError("sealed_final evaluation requires an explicit unseal record")
+    records = json.loads(unseal_ledger.read_text(encoding="utf-8"))
+    if not any(record.get("artifact_id") == artifact_id for record in records.get("records", [])):
+        raise PermissionError(f"sealed_final artifact {artifact_id!r} has not been unsealed")
+
+
+def unseal_evaluation(
+    *, ledger: Path, artifact_id: str, reason: str, git_commit: str,
+    configuration: Mapping[str, Any], artifact_identities: Mapping[str, Any],
+) -> dict[str, Any]:
+    if not artifact_id or not reason.strip() or not git_commit:
+        raise ValueError("unseal requires artifact_id, commit, and a nonempty reason")
+    existing = (
+        json.loads(ledger.read_text(encoding="utf-8"))
+        if ledger.is_file() else {"schema_version": 1, "records": []}
+    )
+    if any(record.get("artifact_id") == artifact_id for record in existing["records"]):
+        raise FileExistsError(f"artifact version {artifact_id!r} was already unsealed")
+    record = {
+        "artifact_id": artifact_id,
+        "unsealed_at_utc": datetime.now(timezone.utc).isoformat(),
+        "git_commit": git_commit,
+        "user": getpass.getuser(), "hostname": platform.node(),
+        "configuration": dict(configuration),
+        "configuration_sha256": hashlib.sha256(canonical_json(configuration).encode()).hexdigest(),
+        "artifact_identities": dict(artifact_identities), "reason": reason,
+        "sealed_after_operation": False,
+    }
+    existing["records"].append(record)
+    atomic_json(ledger, existing)
+    return record
+
+
+def audit_native_failures(corpus: Path, *, bin_count: int = 5) -> dict[str, Any]:
+    """Measure accepted/rejected proposal distortion from recorded corpus evidence."""
+
+    if bin_count < 2:
+        raise ValueError("bin_count must be at least two")
+    manifest = json.loads((corpus / "corpus.json").read_text(encoding="utf-8"))
+    accepted_blocks = []
+    for record in manifest.get("core_shards", []):
+        with np.load(corpus / record["path"], allow_pickle=False) as arrays:
+            accepted_blocks.append(np.asarray(arrays["native_parameters"], dtype=np.float64))
+    if not accepted_blocks:
+        raise RuntimeError("native-failure audit requires generated core shards")
+    accepted = np.concatenate(accepted_blocks)
+    rejected_rows = []
+    shard_rates = []
+    failure_types: dict[str, int] = {}
+    for path in sorted((corpus / "rejections").glob("shard-*.json")):
+        record = json.loads(path.read_text(encoding="utf-8"))
+        rejected = record.get("rejected", [])
+        shard_rates.append({
+            "shard_index": int(record["shard_index"]),
+            "proposal_count": int(record["attempted"]),
+            "accepted_count": int(record["accepted"]),
+            "rejected_count": len(rejected),
+            "acceptance_rate": float(record["accepted"] / record["attempted"]),
+        })
+        for item in rejected:
+            rejected_rows.append(np.asarray(item["parameters"], dtype=np.float64))
+            message = str(item.get("native_error", "unclassified")).strip().splitlines()[0]
+            failure_type = message.split(":", 1)[0][:160] or "unclassified"
+            failure_types[failure_type] = failure_types.get(failure_type, 0) + 1
+    rejected_array = (
+        np.stack(rejected_rows) if rejected_rows else np.empty((0, accepted.shape[1]))
+    )
+    combined = np.concatenate((accepted, rejected_array))
+    dimensions = []
+    localized = False
+    for index in range(combined.shape[1]):
+        edges = np.unique(np.quantile(combined[:, index], np.linspace(0, 1, bin_count + 1)))
+        if len(edges) < 2:
+            continue
+        accepted_hist, _ = np.histogram(accepted[:, index], bins=edges)
+        rejected_hist, _ = np.histogram(rejected_array[:, index], bins=edges)
+        proposals = accepted_hist + rejected_hist
+        rates = np.divide(
+            rejected_hist, proposals, out=np.zeros_like(rejected_hist, dtype=float), where=proposals > 0
+        )
+        spread = float(rates.max() - rates.min()) if len(rates) else 0.0
+        localized = localized or spread > 0.05
+        dimensions.append({
+            "parameter_index": index, "bin_edges": edges.tolist(),
+            "accepted_counts": accepted_hist.tolist(),
+            "rejected_counts": rejected_hist.tolist(),
+            "rejection_rates": rates.tolist(), "rejection_rate_spread": spread,
+        })
+    proposal_count = int(len(accepted) + len(rejected_array))
+    rejection_rate = float(len(rejected_array) / proposal_count)
+    status = (
+        "negligible" if rejection_rate < 1e-3
+        else "localized" if localized
+        else "non_negligible_not_localized_by_marginal_bins"
+    )
+    return {
+        "schema_version": 1, "corpus_manifest_sha256": manifest.get("manifest_sha256"),
+        "proposal_count": proposal_count, "accepted_count": len(accepted),
+        "rejected_count": len(rejected_array), "acceptance_rate": 1.0 - rejection_rate,
+        "failure_types": failure_types, "acceptance_by_shard": shard_rates,
+        "parameter_region_diagnostics": dimensions, "assessment": status,
+        "accepted_distribution_is_original_prior": len(rejected_array) == 0,
+        "inference_semantics_if_used": "conditional_on_simulator_validity",
+    }
+
+===== UNTRACKED tests/test_scientific_contracts.py =====
+"""Focused regressions for the scientific-validity contracts."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+from pathlib import Path
+import tempfile
+import unittest
+
+import numpy as np
+
+from extract_dvcs_cff.data.uncertainty import (
+    materialize_observation,
+    materialize_uncertainty_variant,
+    resolve_covariance,
+    uncertainty_preset,
+)
+from extract_dvcs_cff.literature import load_comparator_registry
+from extract_dvcs_cff.neural_gpd import (
+    apply_whitening,
+    canonical_coordinate_table,
+    expand_group_targets,
+    fit_full_covariance_whitening,
+    invert_whitening,
+    require_exact_coordinate_support,
+)
+from extract_dvcs_cff.scientific_validation import (
+    GeneratorMetadata,
+    audit_native_failures,
+    best_dd_projection,
+    classify_holdout,
+    publish_best_dd_projection,
+    require_evaluation_access,
+    require_foreign_model_metrics,
+    unseal_evaluation,
+    validate_production_provenance,
+)
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class UncertaintyContractTests(unittest.TestCase):
+    def test_paired_noise_scaling_does_not_reexecute_native_physics(self) -> None:
+        central = np.array([2.0, -1.0])
+        covariance = np.array([[4.0, 1.0], [1.0, 2.0]])
+        z = np.array([0.5, -0.25])
+        full = materialize_observation(
+            central=central, covariance=covariance,
+            contract=uncertainty_preset("full_uncertainty_posterior"),
+            standard_normal=z,
+        )
+        half = materialize_observation(
+            central=central, covariance=covariance,
+            contract=uncertainty_preset(
+                "full_uncertainty_posterior", physical_noise_scale=0.5
+            ), standard_normal=z,
+        )
+        np.testing.assert_allclose(
+            half["observed"] - central, 0.5 * (full["observed"] - central)
+        )
+        np.testing.assert_allclose(half["physical_covariance"], 0.25 * covariance)
+        self.assertFalse(half["native_physics_executed"])
+        self.assertGreater(half["stabilized_covariance"][0, 0],
+                           half["physical_covariance"][0, 0])
+
+    def test_central_observation_and_zero_noise_policy(self) -> None:
+        central = np.array([1.0, 2.0])
+        result = materialize_observation(
+            central=central, covariance=np.eye(2),
+            contract=uncertainty_preset("central_observation_full_likelihood"),
+            standard_normal=np.ones(2),
+        )
+        np.testing.assert_array_equal(result["observed"], central)
+        with self.assertRaisesRegex(ValueError, "positive physical noise"):
+            uncertainty_preset("full_uncertainty_posterior", physical_noise_scale=0.0)
+
+    def test_fixed_relative_replica_is_diagonal_point_estimate(self) -> None:
+        contract = uncertainty_preset("literature_fixed_relative_replica")
+        result = materialize_observation(
+            central=np.array([2.0, -4.0]), covariance=np.eye(2),
+            contract=contract, standard_normal=np.zeros(2),
+        )
+        np.testing.assert_allclose(np.diag(result["reference_covariance"]), [0.04, 0.16])
+        self.assertEqual(contract.output_kind, "point_estimate")
+        self.assertEqual(contract.uncertainty_exposure, "values_and_kinematics_only")
+
+    def test_covariance_policy_is_independent_of_generator_label(self) -> None:
+        covariance = np.array([[2.0, 0.25], [0.25, 1.0]])
+        first = resolve_covariance(policy="training_reference", training_reference=covariance)
+        second = resolve_covariance(policy="training_reference", training_reference=covariance)
+        np.testing.assert_array_equal(first, second)
+
+    def test_variants_reuse_native_ancestry_and_paired_draws(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            arguments = {
+                "artifact_root": Path(temporary), "master_corpus_id": "corpus-1",
+                "selection_id": "selection-1", "central": np.array([1.0, 2.0]),
+                "training_reference_covariance": np.eye(2),
+                "standard_normal_draws": np.array([[0.25, -0.5], [-0.2, 0.1]]),
+            }
+            full = materialize_uncertainty_variant(
+                **arguments, contract=uncertainty_preset("full_uncertainty_posterior")
+            )
+            repeated = materialize_uncertainty_variant(
+                **arguments, contract=uncertainty_preset("full_uncertainty_posterior")
+            )
+            reduced = materialize_uncertainty_variant(
+                **arguments, contract=uncertainty_preset(
+                    "near_noiseless_posterior", physical_noise_scale=0.25
+                )
+            )
+            self.assertEqual(full["master_corpus_id"], reduced["master_corpus_id"])
+            self.assertEqual(full["realization_id"], repeated["realization_id"])
+            self.assertNotEqual(full["realization_id"], reduced["realization_id"])
+            self.assertTrue(full["native_predictions_reused"])
+            self.assertFalse(full["native_physics_executed"])
+
+
+class NeuralTargetContractTests(unittest.TestCase):
+    def test_group_targets_expand_to_replicas(self) -> None:
+        targets = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        indices = np.array([2, 0, 2, 1, 0], dtype=np.int64)
+        np.testing.assert_array_equal(expand_group_targets(targets, indices), targets[indices])
+
+    def test_full_covariance_whitening_round_trip(self) -> None:
+        latent = np.array([
+            [1.0, 2.0], [2.0, 0.0], [3.0, 4.0], [4.0, 1.0], [5.0, 3.0]
+        ])
+        transform = fit_full_covariance_whitening(latent, [0, 1, 2, 3, 4])
+        reconstructed = invert_whitening(apply_whitening(latent, transform), transform)
+        np.testing.assert_allclose(reconstructed, latent, atol=1e-9)
+        self.assertEqual(transform["fit_scope"], "training_groups_only")
+
+    def test_collapsed_latent_dimension_is_removed(self) -> None:
+        latent = np.array([[1.0, 7.0], [2.0, 7.0], [3.0, 7.0], [4.0, 7.0]])
+        transform = fit_full_covariance_whitening(
+            latent, [0, 1, 2, 3], shrinkage=0.0
+        )
+        self.assertEqual(transform["retained_dimensions"], 1)
+        np.testing.assert_allclose(
+            invert_whitening(apply_whitening(latent, transform), transform), latent
+        )
+
+    def test_coordinate_identity_and_support_are_strict(self) -> None:
+        coordinate = {
+            "x": 0.2, "xi": 0.1, "t_GeV2": -0.2,
+            "gpd_type": "H", "channel": "u", "charge_parity": "native",
+        }
+        table = canonical_coordinate_table([coordinate], Q2_GeV2=2.0)
+        self.assertIn("gpd_is_H", table["identity"]["feature_names"])
+        require_exact_coordinate_support(table["values"], table["values"],
+                                         "exact_coordinates_only")
+        with self.assertRaisesRegex(RuntimeError, "refuses extrapolation"):
+            require_exact_coordinate_support(
+                table["values"] + 1e-12, table["values"], "exact_coordinates_only"
+            )
+
+
+class ScientificValidationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.training = GeneratorMetadata(
+            "double_distribution", "internal_dd", "v1", "full", "physics-a",
+            "omitted", "PARTONS",
+        )
+
+    def test_generator_holdout_classification_and_metric_guard(self) -> None:
+        gk = GeneratorMetadata(
+            "double_distribution", "GK", "published", "GK", "physics-b",
+            "present", "PARTONS",
+        )
+        self.assertEqual(
+            classify_holdout(self.training, gk),
+            "same_representation_named_family_holdout",
+        )
+        with self.assertRaisesRegex(ValueError, "no internal-DD coordinate truth"):
+            require_foreign_model_metrics(
+                common_parameter_truth=False, requested_metrics=["parameter_rmse"]
+            )
+        self.assertEqual(set(self.training.as_dict()), {
+            "representation_class", "named_model_family", "implementation_version",
+            "parameterization_variant", "physics_configuration", "D_term_policy",
+            "source_backend",
+        })
+
+    def test_native_failure_audit_uses_recorded_proposals(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            corpus = Path(temporary)
+            (corpus / "core/shards").mkdir(parents=True)
+            (corpus / "rejections").mkdir()
+            np.savez(
+                corpus / "core/shards/shard-000000.npz",
+                native_parameters=np.array([[0.1, 0.2], [0.8, 0.9]]),
+            )
+            (corpus / "corpus.json").write_text(json.dumps({
+                "manifest_sha256": "manifest-1",
+                "core_shards": [{"path": "core/shards/shard-000000.npz"}],
+            }), encoding="utf-8")
+            (corpus / "rejections/shard-000000.json").write_text(json.dumps({
+                "shard_index": 0, "attempted": 3, "accepted": 2,
+                "rejected": [{
+                    "parameters": [0.95, 0.95],
+                    "native_error": "domain_error: invalid point",
+                }],
+            }), encoding="utf-8")
+            report = audit_native_failures(corpus, bin_count=2)
+            self.assertEqual(report["proposal_count"], 3)
+            self.assertEqual(report["failure_types"], {"domain_error": 1})
+            self.assertFalse(report["accepted_distribution_is_original_prior"])
+
+    def test_projection_is_reproducible_and_records_restarts(self) -> None:
+        answer = best_dd_projection(
+            objective=lambda x: float(np.sum((x - np.array([0.25, -0.4])) ** 2)),
+            bounds=np.array([[-1.0, 1.0], [-1.0, 1.0]]), restarts=4,
+            iterations=80, seed=11,
+        )
+        self.assertLess(answer["best_objective"], 1e-14)
+        self.assertEqual(len(answer["restarts"]), 4)
+        self.assertFalse(answer["global_optimum_claimed"])
+        with tempfile.TemporaryDirectory() as temporary:
+            artifact = publish_best_dd_projection(
+                output=Path(temporary) / "projection.json",
+                optimization_result=answer,
+                foreign_generator=GeneratorMetadata(
+                    "double_distribution", "GK", "published", "GK", "physics-b",
+                    "present", "PARTONS",
+                ),
+                covariance_policy="external_fixed",
+                discrepancy="fixed_covariance_weighted_noiseless_observables",
+                parameter_transform_id="dd_uniform_probit_v1",
+            )
+            self.assertFalse(artifact["DD_parameter_recovery_metric_permitted"])
+
+    def test_production_provenance_fails_closed(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "checkpoint_hash"):
+            validate_production_provenance({}, profile="production")
+        self.assertIn("checkpoint_hash", validate_production_provenance({}, profile="quick"))
+
+    def test_family_dispatch_never_falls_through_to_dd(self) -> None:
+        from extract_dvcs_cff.model_registry import require_model_stage
+        self.assertEqual(
+            require_model_stage("dd_deepsets_maf", "train").identifier,
+            "dd_deepsets_maf",
+        )
+        with self.assertRaisesRegex(RuntimeError, "will not silently dispatch to DD"):
+            require_model_stage("neural_gpd_deepsets_maf", "train")
+
+    def test_sealed_artifact_requires_explicit_audited_unseal(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            ledger = Path(temporary) / "ledger.json"
+            with self.assertRaises(PermissionError):
+                require_evaluation_access(
+                    role="sealed_final", artifact_id="final-v1", unseal_ledger=ledger
+                )
+            record = unseal_evaluation(
+                ledger=ledger, artifact_id="final-v1", reason="frozen paper table",
+                git_commit="abc123", configuration={"seed": 7},
+                artifact_identities={"realization_id": "realization-1"},
+            )
+            self.assertEqual(record["artifact_id"], "final-v1")
+            require_evaluation_access(
+                role="sealed_final", artifact_id="final-v1", unseal_ledger=ledger
+            )
+
+
+class TelemetryAndRegistryTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        path = ROOT / "jobs/jlab_ifarm/collect_performance_metrics.py"
+        spec = importlib.util.spec_from_file_location("collect_performance_metrics", path)
+        assert spec is not None and spec.loader is not None
+        cls.telemetry = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.telemetry)
+
+    def test_gpu_number_parser(self) -> None:
+        cases = {
+            "12": 12.0, " 12.5 ": 12.5, "-1.25e2": -125.0,
+            "42 %": 42.0, "1024 MiB": 1024.0, "": None,
+            "N/A": None, "nan": None, "12 parsecs": None,
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(self.telemetry.number(text), expected)
+
+    def test_comparator_registry_is_schema_complete(self) -> None:
+        registry = load_comparator_registry(
+            ROOT / "benchmarks/literature/comparators_v1.json"
+        )
+        self.assertGreaterEqual(len(registry["comparators"]), 10)
+
+
+class ValidationBatchTests(unittest.TestCase):
+    def test_partial_validation_batch_is_counted_exactly(self) -> None:
+        try:
+            import torch
+            from torch.utils.data import DataLoader, TensorDataset
+            from extract_dvcs_cff.inference.stage10 import (
+                GroupedValidationNPE, _SubsetSequentialSampler,
+            )
+        except ImportError as error:
+            self.skipTest(str(error))
+        estimator = object.__new__(GroupedValidationNPE)
+        estimator._grouped_validation_indices = torch.arange(5)
+        estimator._get_losses = lambda batch: batch[0]
+        loader = DataLoader(
+            TensorDataset(torch.arange(5, dtype=torch.float64)), batch_size=2,
+            sampler=_SubsetSequentialSampler([0, 1, 2, 3, 4]), drop_last=False,
+        )
+        observed = GroupedValidationNPE._validate_epoch(estimator, loader, None)
+        first_order = [batch[0].tolist() for batch in loader]
+        second_order = [batch[0].tolist() for batch in loader]
+        self.assertEqual([len(batch) for batch in first_order], [2, 2, 1])
+        self.assertEqual(first_order, second_order)
+        self.assertEqual([item for batch in first_order for item in batch], [0, 1, 2, 3, 4])
+        self.assertAlmostEqual(observed, 2.0)
+
+
+if __name__ == "__main__":
+    unittest.main()

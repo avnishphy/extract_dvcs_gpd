@@ -1,0 +1,23 @@
+test_collapsed_latent_dimension_is_removed (test_scientific_contracts.NeuralTargetContractTests.test_collapsed_latent_dimension_is_removed) ... ok
+test_coordinate_identity_and_support_are_strict (test_scientific_contracts.NeuralTargetContractTests.test_coordinate_identity_and_support_are_strict) ... ok
+test_full_covariance_whitening_round_trip (test_scientific_contracts.NeuralTargetContractTests.test_full_covariance_whitening_round_trip) ... ok
+test_group_targets_expand_to_replicas (test_scientific_contracts.NeuralTargetContractTests.test_group_targets_expand_to_replicas) ... ok
+test_family_dispatch_never_falls_through_to_dd (test_scientific_contracts.ScientificValidationTests.test_family_dispatch_never_falls_through_to_dd) ... ok
+test_generator_holdout_classification_and_metric_guard (test_scientific_contracts.ScientificValidationTests.test_generator_holdout_classification_and_metric_guard) ... ok
+test_native_failure_audit_uses_recorded_proposals (test_scientific_contracts.ScientificValidationTests.test_native_failure_audit_uses_recorded_proposals) ... ok
+test_production_provenance_fails_closed (test_scientific_contracts.ScientificValidationTests.test_production_provenance_fails_closed) ... ok
+test_projection_is_reproducible_and_records_restarts (test_scientific_contracts.ScientificValidationTests.test_projection_is_reproducible_and_records_restarts) ... ok
+test_sealed_artifact_requires_explicit_audited_unseal (test_scientific_contracts.ScientificValidationTests.test_sealed_artifact_requires_explicit_audited_unseal) ... ok
+test_comparator_registry_is_schema_complete (test_scientific_contracts.TelemetryAndRegistryTests.test_comparator_registry_is_schema_complete) ... ok
+test_gpu_number_parser (test_scientific_contracts.TelemetryAndRegistryTests.test_gpu_number_parser) ... ok
+test_central_observation_and_zero_noise_policy (test_scientific_contracts.UncertaintyContractTests.test_central_observation_and_zero_noise_policy) ... ok
+test_covariance_policy_is_independent_of_generator_label (test_scientific_contracts.UncertaintyContractTests.test_covariance_policy_is_independent_of_generator_label) ... ok
+test_fixed_relative_replica_is_diagonal_point_estimate (test_scientific_contracts.UncertaintyContractTests.test_fixed_relative_replica_is_diagonal_point_estimate) ... ok
+test_paired_noise_scaling_does_not_reexecute_native_physics (test_scientific_contracts.UncertaintyContractTests.test_paired_noise_scaling_does_not_reexecute_native_physics) ... ok
+test_variants_reuse_native_ancestry_and_paired_draws (test_scientific_contracts.UncertaintyContractTests.test_variants_reuse_native_ancestry_and_paired_draws) ... ok
+test_partial_validation_batch_is_counted_exactly (test_scientific_contracts.ValidationBatchTests.test_partial_validation_batch_is_counted_exactly) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 4.881s
+
+OK

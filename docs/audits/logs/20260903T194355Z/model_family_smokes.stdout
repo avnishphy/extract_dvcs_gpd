@@ -1,0 +1,38 @@
+ Neural network successfully converged after 3 epochs.{
+    "density_estimator": "maf",
+    "group_count": 6,
+    "maturity": "synthetic_mechanics_smoke_only",
+    "model_family": "dd_deepsets_maf",
+    "native_physics_called": false,
+    "observation_encoder": "deepsets",
+    "posterior_sample_count": 4,
+    "posterior_samples_finite": true,
+    "replicates_per_group": 2,
+    "representation_class": "double_distribution_coordinates",
+    "schema_version": 1,
+    "seed": 73129,
+    "status": "pass",
+    "target_dimension": 3,
+    "test_group_count": 1,
+    "training_group_count": 4,
+    "validation_group_count": 1
+}
+{
+    "density_estimator": "maf",
+    "group_count": 6,
+    "maturity": "synthetic_mechanics_smoke_only",
+    "model_family": "neural_gpd_deepsets_maf",
+    "native_physics_called": false,
+    "observation_encoder": "deepsets",
+    "posterior_sample_count": 4,
+    "posterior_samples_finite": true,
+    "replicates_per_group": 2,
+    "representation_class": "nngpd_inspired_latent_function",
+    "schema_version": 1,
+    "seed": 73129,
+    "status": "pass",
+    "target_dimension": 2,
+    "test_group_count": 1,
+    "training_group_count": 4,
+    "validation_group_count": 1
+}

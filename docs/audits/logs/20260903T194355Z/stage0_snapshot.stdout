@@ -1,0 +1,110 @@
+## pwd
+/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd
+## git status
+## main...origin/main
+ M README.md
+ M docs/ARCHITECTURE.md
+ M docs/CLI_REFERENCE.md
+ M docs/DEVELOPMENT_AND_TESTING.md
+ M docs/INDEX.md
+ M docs/KNOWN_LIMITATIONS.md
+ M jobs/jlab_ifarm/collect_performance_metrics.py
+ M src/extract_dvcs_cff/cli/user.py
+ M src/extract_dvcs_cff/corpus.py
+ M src/extract_dvcs_cff/inference/stage10.py
+ M src/extract_dvcs_cff/literature.py
+ M src/extract_dvcs_cff/model_registry.py
+ M src/extract_dvcs_cff/neural_gpd.py
+ M tests/run.sh
+?? benchmarks/
+?? docs/CLAIMS_LEDGER.md
+?? docs/UNCERTAINTY_CONTRACTS.md
+?? docs/audits/
+?? docs/literature/
+?? provenance/dd-baseline-2026-09-03.json
+?? scripts/audit_stage0_snapshot.sh
+?? scripts/run_audited_command.sh
+?? src/extract_dvcs_cff/data/uncertainty.py
+?? src/extract_dvcs_cff/inference/family_smoke.py
+?? src/extract_dvcs_cff/scientific_validation.py
+?? tests/test_scientific_contracts.py
+## branch
+main
+## HEAD
+22f45e94d424e2a73c57d6b2504869a2eebb35f4
+## full diff stat
+ README.md                                      |  13 ++
+ docs/ARCHITECTURE.md                           |  22 ++-
+ docs/CLI_REFERENCE.md                          |  16 ++
+ docs/DEVELOPMENT_AND_TESTING.md                |   4 +
+ docs/INDEX.md                                  |   6 +
+ docs/KNOWN_LIMITATIONS.md                      |  25 +++-
+ jobs/jlab_ifarm/collect_performance_metrics.py |  21 ++-
+ src/extract_dvcs_cff/cli/user.py               |  42 +++++-
+ src/extract_dvcs_cff/corpus.py                 |  14 ++
+ src/extract_dvcs_cff/inference/stage10.py      |  52 ++++++-
+ src/extract_dvcs_cff/literature.py             |  42 ++++++
+ src/extract_dvcs_cff/model_registry.py         |  45 +++++-
+ src/extract_dvcs_cff/neural_gpd.py             | 195 ++++++++++++++++++++++++-
+ tests/run.sh                                   |   2 +-
+ 14 files changed, 473 insertions(+), 26 deletions(-)
+## changed tracked paths
+M	README.md
+M	docs/ARCHITECTURE.md
+M	docs/CLI_REFERENCE.md
+M	docs/DEVELOPMENT_AND_TESTING.md
+M	docs/INDEX.md
+M	docs/KNOWN_LIMITATIONS.md
+M	jobs/jlab_ifarm/collect_performance_metrics.py
+M	src/extract_dvcs_cff/cli/user.py
+M	src/extract_dvcs_cff/corpus.py
+M	src/extract_dvcs_cff/inference/stage10.py
+M	src/extract_dvcs_cff/literature.py
+M	src/extract_dvcs_cff/model_registry.py
+M	src/extract_dvcs_cff/neural_gpd.py
+M	tests/run.sh
+## untracked files
+benchmarks/literature/comparators_v1.json
+benchmarks/literature/moffat_qgt_2024_partial_v1.json
+docs/CLAIMS_LEDGER.md
+docs/UNCERTAINTY_CONTRACTS.md
+docs/audits/CURRENT_HEAD_AUDIT.md
+docs/audits/IMPLEMENTATION_REPORT_2026-09-03.md
+docs/audits/logs/20260903T194355Z/stage0_snapshot.meta
+docs/audits/logs/20260903T194355Z/stage0_snapshot.stderr
+docs/audits/logs/20260903T194355Z/stage0_snapshot.stdout
+docs/literature/BENCHMARK_AUDIT.md
+provenance/dd-baseline-2026-09-03.json
+scripts/audit_stage0_snapshot.sh
+scripts/run_audited_command.sh
+src/extract_dvcs_cff/data/uncertainty.py
+src/extract_dvcs_cff/inference/family_smoke.py
+src/extract_dvcs_cff/scientific_validation.py
+tests/test_scientific_contracts.py
+## staged files
+## configured image identities
+{
+  "schema_version": 1,
+  "registry": "ghcr.io/OWNER/extract-dvcs-gpd",
+  "published": false,
+  "images": {
+    "cpu": {"tag": "0.3.0-cpu", "digest": null},
+    "cuda": {"tag": "0.3.0-cuda12.6", "digest": null},
+    "jlab_ifarm": {"tag": "jlab_ifarm-0.3.0", "digest": null}
+  },
+  "policy": "Installer builds from the locked sources while published=false or digest is null. Maintainers must replace OWNER and record the registry digest after CI publication."
+}
+## SIF candidates in repository
+./.dvcs/extract-dvcs-gpd-jlab_ifarm-0.2.0-test-josh-swif2-parallel-materialize.sif
+./.dvcs/extract-dvcs-gpd-jlab_ifarm-0.2.0-test-josh-swif2.sif
+./.dvcs/extract-dvcs-gpd-jlab_ifarm-0.2.0-test-josh-swif2-compare-v4.sif
+./.dvcs/extract-dvcs-gpd-jlab_ifarm-0.2.0-test-josh-swif2-collapse-v3.sif
+./.dvcs/extract-dvcs-gpd-jlab_ifarm-0.2.0-test-josh-swif2-membatch.sif
+./.dvcs/extract-dvcs-gpd-jlab_ifarm-0.2.0.sif
+./.dvcs/extract-dvcs-gpd-jlab_ifarm-0.2.0-test-josh-swif2-contract-v2.sif
+./.dvcs/extract-dvcs-gpd-jlab_ifarm-0.2.0-test-josh.sif
+./.dvcs/extract-dvcs-gpd-jlab_ifarm-0.3.0.sif
+## relevant environment
+PATH=/home/singhav/.codex/tmp/arg0/codex-arg08OcLxI:/u/group/nps/singhav/.vscode-server/bin/a44adf7f53e00964ab890f9f8758a334f1fc15bc/bin/remote-cli:/usr/share/Modules/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/opt/puppetlabs/bin:/opt/puppetlabs/bin:/u/group/nps/singhav/.vscode-server/extensions/openai.chatgpt-26.825.51511-linux-x64/bin/linux-x86_64
+TMPDIR=/scratch/singhav
+USER=singhav

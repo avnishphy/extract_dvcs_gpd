@@ -1,0 +1,15 @@
+start_utc=2026-09-03T20:15:11Z
+host=ifarm2402.jlab.org
+working_directory=/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd
+invocation=bash -lc mkdir\ -p\ /tmp/extract-dvcs-covariance-20260903T194355Z/partons-logs\ /tmp/extract-dvcs-covariance-work\;\ apptainer\ exec\ --bind\ \"\$PWD\":/src\,/tmp/extract-dvcs-covariance-20260903T194355Z:/cache\ .dvcs/extract-dvcs-gpd-jlab_ifarm-0.3.0.sif\ env\ TMPDIR=/tmp\ PYTHONPATH=/src/src\ python3\ /src/tools/audit_production_covariance.py\ --configuration\ /src/workspace/experiment_josh/.engine/workflow.json\ --bridge\ /opt/dvcs/bin/partons_bridge\ --workspace\ /tmp/extract-dvcs-covariance-work\ --output\ /src/docs/audits/PRODUCTION_COVARIANCE_VALIDATION_2026-09-03.json\ --replicas\ 4096\ --seed\ 20260903 
+user=singhav
+shell=/bin/tcsh
+git_head=c0ba0f4fe2c0ede07b66e6ad5175d12cd186870c
+git_branch=codex/physics-production-readiness
+HOME=/home/singhav
+HOST=ifarm2402.jlab.org
+PATH=/home/singhav/.codex/tmp/arg0/codex-arg08OcLxI:/u/group/nps/singhav/.vscode-server/bin/a44adf7f53e00964ab890f9f8758a334f1fc15bc/bin/remote-cli:/usr/share/Modules/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/opt/puppetlabs/bin:/opt/puppetlabs/bin:/u/group/nps/singhav/.vscode-server/extensions/openai.chatgpt-26.825.51511-linux-x64/bin/linux-x86_64
+TMPDIR=/scratch/singhav
+USER=singhav
+end_utc=2026-09-03T20:20:55Z
+exit_status=0

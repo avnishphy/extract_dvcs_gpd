@@ -1,0 +1,15 @@
+start_utc=2026-09-03T21:11:01Z
+host=ifarm2402.jlab.org
+working_directory=/w/hallc-scshelf2102/nps/singhav/extract_dvcs_gpd
+invocation=git add .gitignore tests/run.sh tests/test_production_readiness.py scripts/audit_stage0_snapshot.sh scripts/run_audited_command.sh tools/audit_production_covariance.py tools/production_preflight.py tools/render_physics_assumptions.py provenance/production-native-assumptions.json provenance/production-submission-manifest.json provenance/regeneration-impact-matrix.json docs/audits/PRODUCTION_NATIVE_ASSUMPTIONS.md docs/audits/PRODUCTION_COVARIANCE_VALIDATION_2026-09-03.json docs/audits/PRODUCTION_PREFLIGHT_2026-09-03.json docs/audits/PRODUCTION_REHEARSAL_2026-09-03.json 
+user=singhav
+shell=/bin/tcsh
+git_head=c0ba0f4fe2c0ede07b66e6ad5175d12cd186870c
+git_branch=codex/physics-production-readiness
+HOME=/home/singhav
+HOST=ifarm2402.jlab.org
+PATH=/home/singhav/.codex/tmp/arg0/codex-arg08OcLxI:/u/group/nps/singhav/.vscode-server/bin/a44adf7f53e00964ab890f9f8758a334f1fc15bc/bin/remote-cli:/usr/share/Modules/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/opt/puppetlabs/bin:/opt/puppetlabs/bin:/u/group/nps/singhav/.vscode-server/extensions/openai.chatgpt-26.825.51511-linux-x64/bin/linux-x86_64
+TMPDIR=/scratch/singhav
+USER=singhav
+end_utc=2026-09-03T21:11:01Z
+exit_status=0
