@@ -60,6 +60,7 @@ from extract_dvcs_cff.data.gpddatabase import (
     require_physical_fixed_target_kinematics,
     select_native_scale_points,
 )
+from extract_dvcs_cff.model_registry import model_family_registry, require_model_stage
 
 
 PROJECT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*\Z")
@@ -1469,6 +1470,14 @@ def _parser() -> argparse.ArgumentParser:
         help="advanced override for the exact native bridge executable",
     )
     commands = parser.add_subparsers(dest="command", required=True)
+    model_smoke = commands.add_parser(
+        "model-smoke",
+        help="tiny synthetic DeepSets+MAF smoke (neural support is experimental)",
+    )
+    model_smoke.add_argument(
+        "--model-family", choices=tuple(sorted(model_family_registry())),
+        default="dd_deepsets_maf",
+    )
     initialize = commands.add_parser(
         "init", help="create a new isolated editable project"
     )
@@ -1524,6 +1533,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     corpus_verify.add_argument("corpus")
     corpus_verify.add_argument("--deep", action="store_true")
+    corpus_audit = commands.add_parser(
+        "corpus-audit-failures",
+        help="audit recorded native rejection rates and effective-prior distortion",
+    )
+    corpus_audit.add_argument("corpus")
+    corpus_audit.add_argument("--bins", type=int, default=5)
     corpus_export = commands.add_parser(
         "corpus-export", help="deep-verify and write a portable corpus archive"
     )
@@ -1604,6 +1619,16 @@ def _parser() -> argparse.ArgumentParser:
                         "disabled when stderr is not an interactive terminal)"
                     ),
                 )
+        if command in {
+            "materialize", "train", "evaluate", "exact-reevaluate",
+            "compare", "plot", "holdout", "optimize",
+        }:
+            subparser.add_argument(
+                "--model-family", choices=tuple(sorted(model_family_registry())),
+                default="dd_deepsets_maf",
+                help=("explicit inference family; DD remains the compatibility "
+                      "default, neural production stages fail closed until ready"),
+            )
         if command == "optimize":
             subparser.add_argument(
                 "--trials",
@@ -1657,7 +1682,10 @@ def main() -> int:
     try:
         args = _parser().parse_args()
         repository = _repository_root(args.repository_root)
-        if args.command == "init":
+        if args.command == "model-smoke":
+            from extract_dvcs_cff.inference.family_smoke import run_family_smoke
+            result = run_family_smoke(args.model_family)
+        elif args.command == "init":
             result = initialize_project(repository, args.project)
         elif args.command == "list":
             root = _user_root(repository)
@@ -1676,6 +1704,12 @@ def main() -> int:
             result = verify_corpus(
                 corpus=_corpus_path(repository, args.corpus, existing=True),
                 deep=args.deep,
+            )
+        elif args.command == "corpus-audit-failures":
+            from extract_dvcs_cff.scientific_validation import audit_native_failures
+            result = audit_native_failures(
+                _corpus_path(repository, args.corpus, existing=True),
+                bin_count=args.bins,
             )
         elif args.command == "corpus-export":
             result = export_corpus(
@@ -1864,6 +1898,12 @@ def main() -> int:
                     )
                 else:
                     profile = args.profile
+                    if hasattr(args, "model_family"):
+                        stage = (
+                            "model_view" if args.command == "materialize"
+                            else args.command.replace("-", "_")
+                        )
+                        require_model_stage(args.model_family, stage)
                     workspace = project / "results" / profile
                     common = {
                         "configuration_path": configuration,

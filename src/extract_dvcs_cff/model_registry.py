@@ -32,6 +32,29 @@ _FAMILIES = {
     ),
 }
 
+MODEL_STAGES = {
+    "model_view", "train", "evaluate", "exact_reevaluate", "compare",
+    "holdout", "plot", "result_assembly", "optimize", "smoke",
+}
+
+# This table is intentionally honest about executable maturity.  A central
+# dispatcher is preferable to commands silently falling through the DD path.
+_STAGE_STATUS = {
+    "dd_deepsets_maf": {stage: "production" for stage in MODEL_STAGES},
+    "neural_gpd_deepsets_maf": {
+        "model_view": "experimental",
+        "smoke": "experimental",
+        "train": "blocked",
+        "evaluate": "blocked",
+        "exact_reevaluate": "blocked",
+        "compare": "blocked",
+        "holdout": "blocked",
+        "plot": "blocked",
+        "result_assembly": "blocked",
+        "optimize": "blocked",
+    },
+}
+
 
 def model_family(identifier: str) -> ModelFamily:
     try:
@@ -43,7 +66,27 @@ def model_family(identifier: str) -> ModelFamily:
 
 
 def model_family_registry() -> dict[str, dict[str, Any]]:
-    return {name: asdict(value) for name, value in _FAMILIES.items()}
+    return {
+        name: {**asdict(value), "stage_maturity": deepcopy(_STAGE_STATUS[name])}
+        for name, value in _FAMILIES.items()
+    }
+
+
+def require_model_stage(identifier: str, stage: str) -> ModelFamily:
+    """Resolve a family/stage pair or fail before a DD-specific code path."""
+
+    family = model_family(identifier)
+    if stage not in MODEL_STAGES:
+        raise ValueError(f"unknown model stage {stage!r}; choose one of {sorted(MODEL_STAGES)}")
+    status = _STAGE_STATUS[identifier][stage]
+    if status == "blocked":
+        raise RuntimeError(
+            f"{identifier} {stage} is not yet production-executable: publish a "
+            "schema-2 canonical-GPD-truth model view, fit and freeze its decoder "
+            "and latent whitening, then use the dedicated neural checkpoint path. "
+            "The command will not silently dispatch to DD."
+        )
+    return family
 
 
 def _walk_keys(value: Any, prefix: str = ""):

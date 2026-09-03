@@ -18,6 +18,48 @@ STATUSES = {
     "awaiting_external_numerical_data", "not_scientifically_comparable",
 }
 
+COMPARATOR_FIELDS = {
+    "id", "citation", "sources", "inferred_object", "generator_truth_model",
+    "representation_class", "named_model_family", "model_variant",
+    "D_term_assumptions", "observables", "input_level", "kinematic_support",
+    "perturbative_evolution_settings", "parameter_dimension", "prior_bounds",
+    "uncertainty_generation", "covariance_assumptions",
+    "uncertainties_as_model_inputs", "nuisance_treatment", "replica_count",
+    "data_split", "evaluation_points_seen_during_training", "optimizer_stopping",
+    "reported_metrics", "uncertainty_band_definition", "calibration_coverage_tested",
+    "family_or_kinematic_holdout", "source_code", "unresolved_details",
+    "comparability_grade",
+}
+COMPARABILITY_GRADES = {"exact", "high", "partial", "conceptual", "not_comparable"}
+
+
+def load_comparator_registry(path: Path) -> dict[str, Any]:
+    """Validate the publication comparator registry without filling unknowns."""
+
+    value = json.loads(path.resolve(strict=True).read_text(encoding="utf-8"))
+    if value.get("schema_version") != 1 or not isinstance(value.get("comparators"), list):
+        raise ValueError("comparator registry must have schema_version 1 and comparators")
+    identifiers = set()
+    for index, comparator in enumerate(value["comparators"]):
+        if set(comparator) != COMPARATOR_FIELDS:
+            raise ValueError(
+                f"comparator {index} key mismatch: "
+                f"missing={sorted(COMPARATOR_FIELDS - set(comparator))}, "
+                f"unknown={sorted(set(comparator) - COMPARATOR_FIELDS)}"
+            )
+        if comparator["id"] in identifiers:
+            raise ValueError(f"duplicate comparator ID {comparator['id']!r}")
+        identifiers.add(comparator["id"])
+        if comparator["comparability_grade"] not in COMPARABILITY_GRADES:
+            raise ValueError(f"invalid comparability grade for {comparator['id']}")
+        if not comparator["sources"] or not all(
+            str(source).startswith("https://") for source in comparator["sources"]
+        ):
+            raise ValueError(f"comparator {comparator['id']} needs HTTPS primary sources")
+        if not isinstance(comparator["unresolved_details"], list):
+            raise ValueError(f"comparator {comparator['id']} unresolved_details must be a list")
+    return value
+
 
 def load_registry(path: Path) -> dict[str, Any]:
     value = json.loads(path.resolve(strict=True).read_text(encoding="utf-8"))

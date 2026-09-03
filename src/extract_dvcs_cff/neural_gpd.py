@@ -18,6 +18,141 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 
 
+COORDINATE_SCHEMA_VERSION = 1
+COORDINATE_GPD_TYPES = ("H", "E", "Htilde", "Etilde")
+COORDINATE_CHANNELS = (
+    "u", "u_plus", "u_minus", "d", "d_plus", "d_minus",
+    "s", "s_plus", "s_minus", "gluon",
+    "charge_squared_weighted_c_even_quark_sum",
+)
+COORDINATE_PARITIES = ("native", "plus", "minus", "not_applicable")
+
+
+def canonical_coordinate_table(
+    coordinates: Sequence[Mapping[str, Any]], *, Q2_GeV2: float,
+    coordinate_normalization: Mapping[str, Any] | None = None,
+    value_normalization: Mapping[str, Any] | None = None,
+    channel_weights: Mapping[str, float] | None = None,
+) -> dict[str, Any]:
+    """Encode typed GPD coordinates without imposing accidental ordinality."""
+
+    if not np.isfinite(Q2_GeV2) or Q2_GeV2 <= 0:
+        raise ValueError("Q2_GeV2 must be finite and positive")
+    feature_names = (
+        "x", "xi", "t_GeV2", "Q2_GeV2", "mask",
+        *(f"gpd_is_{name}" for name in COORDINATE_GPD_TYPES),
+        *(f"channel_is_{name}" for name in COORDINATE_CHANNELS),
+        *(f"charge_parity_is_{name}" for name in COORDINATE_PARITIES),
+    )
+    rows = []
+    normalized_records = []
+    for index, raw in enumerate(coordinates):
+        required = {"x", "xi", "t_GeV2", "gpd_type", "channel", "charge_parity"}
+        if set(raw) != required:
+            raise ValueError(f"coordinate {index} must contain exactly {sorted(required)}")
+        gpd_type = str(raw["gpd_type"]); channel = str(raw["channel"])
+        parity = str(raw["charge_parity"])
+        if gpd_type not in COORDINATE_GPD_TYPES or channel not in COORDINATE_CHANNELS:
+            raise ValueError(f"coordinate {index} has unknown GPD/channel category")
+        if parity not in COORDINATE_PARITIES:
+            raise ValueError(f"coordinate {index} has unknown charge parity")
+        x, xi, t = float(raw["x"]), float(raw["xi"]), float(raw["t_GeV2"])
+        if not all(np.isfinite((x, xi, t))) or not -1 <= x <= 1 or not 0 <= xi < 1 or t > 0:
+            raise ValueError(f"coordinate {index} has invalid continuous values")
+        rows.append((
+            x, xi, t, float(Q2_GeV2), 1.0,
+            *(float(gpd_type == name) for name in COORDINATE_GPD_TYPES),
+            *(float(channel == name) for name in COORDINATE_CHANNELS),
+            *(float(parity == name) for name in COORDINATE_PARITIES),
+        ))
+        normalized_records.append({**dict(raw), "Q2_GeV2": float(Q2_GeV2), "mask": True})
+    if not rows:
+        raise ValueError("canonical coordinate table must not be empty")
+    table = np.asarray(rows, dtype=np.float64)
+    coordinate_normalization = dict(coordinate_normalization or {
+        "identifier": "native_coordinate_units_v1",
+        "x": "dimensionless", "xi": "dimensionless",
+        "t_GeV2": "GeV2", "Q2_GeV2": "GeV2",
+    })
+    value_normalization = dict(value_normalization or {"identifier": "none_v1"})
+    weights = dict(channel_weights or {name: 1.0 for name in COORDINATE_CHANNELS})
+    if set(weights) != set(COORDINATE_CHANNELS) or not all(
+        np.isfinite(value) and value > 0 for value in weights.values()
+    ):
+        raise ValueError("channel_weights must define one positive value per channel")
+    identity = {
+        "schema_version": COORDINATE_SCHEMA_VERSION,
+        "categorical_encoding": "fixed_one_hot_v1", "feature_names": list(feature_names),
+        "coordinate_normalization": coordinate_normalization,
+        "value_normalization": value_normalization,
+        "channel_weights": weights, "records": normalized_records,
+    }
+    identifier = "gpd-coordinate-table-" + hashlib.sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return {"identifier": identifier, "identity": identity, "values": table}
+
+
+def expand_group_targets(
+    group_targets: np.ndarray, parameter_indices: np.ndarray,
+) -> np.ndarray:
+    """Lazily align group-level neural targets with realization rows."""
+
+    targets = np.asarray(group_targets)
+    indices = np.asarray(parameter_indices)
+    if targets.ndim != 2 or indices.ndim != 1 or not np.issubdtype(indices.dtype, np.integer):
+        raise ValueError("targets must be [group,target] and parameter_indices must be integer [row]")
+    if len(indices) == 0 or np.any(indices < 0) or np.any(indices >= len(targets)):
+        raise ValueError("parameter_indices contain an invalid group reference")
+    return targets[indices]
+
+
+def fit_full_covariance_whitening(
+    latent: np.ndarray, training_groups: Sequence[int], *, shrinkage: float = 1e-6,
+    relative_eigenvalue_floor: float = 1e-8,
+) -> dict[str, Any]:
+    """Fit a stable full-covariance whitening map on training groups only."""
+
+    values = np.asarray(latent, dtype=np.float64)
+    groups = np.asarray(training_groups, dtype=np.int64)
+    if values.ndim != 2 or not len(groups) or np.any(groups < 0) or np.any(groups >= len(values)):
+        raise ValueError("whitening requires [group,latent] values and valid training groups")
+    if not 0 <= shrinkage < 1 or not 0 < relative_eigenvalue_floor < 1:
+        raise ValueError("invalid whitening shrinkage or eigenvalue floor")
+    selected = values[groups]
+    mean = selected.mean(axis=0)
+    centered = selected - mean
+    covariance = centered.T @ centered / max(1, len(selected) - 1)
+    trace_scale = float(np.trace(covariance) / len(mean))
+    eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+    maximum = float(eigenvalues[-1]) if len(eigenvalues) else 0.0
+    retained = eigenvalues > max(maximum * relative_eigenvalue_floor, np.finfo(float).eps)
+    if not np.any(retained):
+        raise ValueError("all latent dimensions collapsed on the training split")
+    basis = eigenvectors[:, retained]
+    kept = (1 - shrinkage) * eigenvalues[retained] + shrinkage * trace_scale
+    whiten = basis / np.sqrt(kept)
+    inverse = basis * np.sqrt(kept)
+    return {
+        "schema_version": 1, "identifier": "full_covariance_shrinkage_whitening_v1",
+        "fit_scope": "training_groups_only", "mean": mean,
+        "whitening_matrix": whiten, "inverse_matrix": inverse,
+        "eigenvalues": eigenvalues, "retained_mask": retained,
+        "retained_dimensions": int(np.count_nonzero(retained)),
+        "condition_number": float(kept[-1] / kept[0]),
+        "shrinkage": float(shrinkage), "relative_eigenvalue_floor": float(relative_eigenvalue_floor),
+        "training_group_sha256": hashlib.sha256(groups.tobytes()).hexdigest(),
+    }
+
+
+def apply_whitening(latent: np.ndarray, transform: Mapping[str, Any]) -> np.ndarray:
+    return (np.asarray(latent, dtype=np.float64) - transform["mean"]) @ transform["whitening_matrix"]
+
+
+def invert_whitening(whitened: np.ndarray, transform: Mapping[str, Any]) -> np.ndarray:
+    return np.asarray(whitened, dtype=np.float64) @ np.asarray(transform["inverse_matrix"]).T + transform["mean"]
+
+
 def coordinate_table_hash(coordinates: np.ndarray) -> str:
     array = np.ascontiguousarray(coordinates, dtype=np.float64)
     return hashlib.sha256(array.tobytes()).hexdigest()
@@ -263,7 +398,7 @@ def publish_neural_model_view(
 
     required = {
         "contexts", "pseudodata_context", "train_indices",
-        "validation_indices", "test_indices",
+        "validation_indices", "test_indices", "parameter_indices",
     }
     if set(observation_arrays) != required:
         raise ValueError(
@@ -290,6 +425,18 @@ def publish_neural_model_view(
         locked_holdout_groups=locked_holdout_groups, output=candidate,
         **configuration,
     )
+    whitening = fit_full_covariance_whitening(
+        result["latent_targets"], training_groups
+    )
+    whitened_targets = apply_whitening(result["latent_targets"], whitening)
+    latent_transform_id = "latent-whitening-" + hashlib.sha256(
+        json.dumps({
+            "mean": whitening["mean"].tolist(),
+            "matrix": whitening["whitening_matrix"].tolist(),
+            "retained_mask": whitening["retained_mask"].tolist(),
+            "training_group_sha256": whitening["training_group_sha256"],
+        }, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
     decoder_contract = {
         "identifier": "coordinate_conditioned_mlp_v1",
         "architecture": configuration,
@@ -302,8 +449,10 @@ def publish_neural_model_view(
         model_family="neural_gpd_deepsets_maf",
         observation_contract={"encoder": "deepsets", "arrays": sorted(required)},
         target_transform={
-            "identifier": "neural_gpd_latent_standardization_v1",
-            "latent_prior_id": result["latent_prior"]["identifier"],
+            "identifier": "neural_gpd_full_covariance_whitening_v1",
+            "latent_transform_id": latent_transform_id,
+            "fit_scope": "training_groups_only",
+            "retained_dimensions": whitening["retained_dimensions"],
         },
         decoder_contract=decoder_contract,
         normalization_contract={"fit_scope": "training_groups_only"},
@@ -320,7 +469,7 @@ def publish_neural_model_view(
     latent_path = view_root / "latent_targets.npy"
     with tempfile.NamedTemporaryFile(dir=view_root, delete=False) as stream:
         temporary = Path(stream.name)
-        np.save(stream, result["latent_targets"], allow_pickle=False)
+        np.save(stream, whitened_targets, allow_pickle=False)
         stream.flush()
         os.fsync(stream.fileno())
     os.replace(temporary, latent_path)
@@ -328,8 +477,8 @@ def publish_neural_model_view(
         "latent_targets": {
             "path": latent_path.name,
             "sha256": hashlib.sha256(latent_path.read_bytes()).hexdigest(),
-            "shape": list(result["latent_targets"].shape),
-            "dtype": str(result["latent_targets"].dtype),
+            "shape": list(whitened_targets.shape),
+            "dtype": str(whitened_targets.dtype),
         }
     }
     for name, source_value in observation_arrays.items():
@@ -349,12 +498,42 @@ def publish_neural_model_view(
         "observation_encoder": "deepsets", "density_estimator": "maf",
         "density_estimator_implementation": "zuko_maf",
         "physics_backend": "partons", "arrays": arrays,
-        "decoder": decoder_contract, "latent_prior": result["latent_prior"],
+        "decoder": decoder_contract,
+        "latent_prior": {
+            "schema_version": 1,
+            "identifier": "standard_normal_after_full_whitening_v1",
+            "family": "standard_normal",
+            "dimension": whitening["retained_dimensions"],
+            "fit_scope": "induced_by_training_groups_only_whitening",
+        },
+        "latent_transform": {
+            "identifier": latent_transform_id,
+            "method": whitening["identifier"],
+            "fit_scope": whitening["fit_scope"],
+            "mean": whitening["mean"].tolist(),
+            "whitening_matrix": whitening["whitening_matrix"].tolist(),
+            "inverse_matrix": whitening["inverse_matrix"].tolist(),
+            "eigenvalues": whitening["eigenvalues"].tolist(),
+            "retained_mask": whitening["retained_mask"].tolist(),
+            "retained_dimensions": whitening["retained_dimensions"],
+            "condition_number": whitening["condition_number"],
+            "shrinkage": whitening["shrinkage"],
+            "relative_eigenvalue_floor": whitening["relative_eigenvalue_floor"],
+            "training_group_sha256": whitening["training_group_sha256"],
+            "legacy_diagonal_prior": result["latent_prior"],
+        },
         "reconstruction": {
             "validation_mse": result["validation_mse"],
             "rmse_by_group": result["reconstruction_rmse_by_group"].tolist(),
             "holdout_used_for_tuning": False,
-        }, "truth_fields_in_context": [],
+        },
+        "target_alignment": {
+            "target_granularity": "native_truth_group",
+            "context_granularity": "pseudodata_realization_row",
+            "row_to_group_array": "parameter_indices",
+            "expansion_policy": "lazy_indexed_v1",
+        },
+        "truth_fields_in_context": [],
     }
     atomic_json(view_root / "model_view.json", manifest)
     return manifest

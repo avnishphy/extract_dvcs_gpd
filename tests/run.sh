@@ -14,7 +14,7 @@ case "${mode}" in
     PYTHONPATH="${root}/src" python3 -m unittest \
       tests.test_reusable_corpus tests.test_result_contract \
       tests.test_architecture_contracts tests.test_masked_design \
-      tests.test_physical_kinematics
+      tests.test_physical_kinematics tests.test_scientific_contracts
     "${root}/tests/verify_jlab_gpu_launcher.sh"
     "${root}/tests/verify_jlab_batch_submission.sh"
     "${root}/tests/verify_jlab_progress_logging.sh"
